@@ -28,13 +28,14 @@ theorem support_arbLabel : support arbLabel = fun _ => True := by
 
 namespace CorrectGen
 
-@[reducible]
 def s_arbLabel : @CorrectGen Label (fun _ => True) :=
   Subtype.mk arbLabel <| by
     funext v
     simp
 
-@[reducible]
+@[extract]
+theorem s_arbLabel_val : s_arbLabel.val = arbLabel := rfl
+
 def s_arbAtom
     {P : Atom → Prop}
     (g : CorrectGen (fun (a : Atom) => ∃ (n : Nat) (l : Label), P (.atm n l) ∧ a = .atm n l)) :
@@ -42,6 +43,12 @@ def s_arbAtom
   Subtype.mk g.val <| by
     funext (.atm n l)
     simp_all [g.property]
+
+@[extract]
+theorem s_arbAtom_val
+    {P : Atom → Prop}
+    (g : CorrectGen (fun (a : Atom) => ∃ (n : Nat) (l : Label), P (.atm n l) ∧ a = .atm n l)) :
+    (s_arbAtom g).val = g.val := rfl
 
 end CorrectGen
 

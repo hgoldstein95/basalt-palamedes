@@ -8,11 +8,12 @@ def arbBool : Gen Bool := pick (pure true) (pure false)
 
 namespace CorrectGen
 
-@[reducible]
 def s_arbBool : @CorrectGen Bool (fun _ => True) :=
   Subtype.mk arbBool (by simp [arbBool])
 
-@[reducible]
+@[extract]
+theorem s_arbBool_val : s_arbBool.val = arbBool := rfl
+
 def s_caseBool
     {Q : α → Prop}
     {P : α → Bool → Prop}
@@ -25,6 +26,16 @@ def s_caseBool
     match b with
     | true => simp [gt.property, h]
     | false => simp [gf.property, h]
+
+@[extract]
+theorem s_caseBool_val
+    {Q : α → Prop}
+    {P : α → Bool → Prop}
+    (b : Bool)
+    (h : ∀ {a}, P a b = Q a)
+    (gt : CorrectGen (fun a => P a true))
+    (gf : CorrectGen (fun a => P a false)) :
+    (s_caseBool b h gt gf).val = if _h : b then gt.val else gf.val := rfl
 
 end CorrectGen
 

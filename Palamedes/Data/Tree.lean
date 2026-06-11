@@ -410,7 +410,6 @@ namespace Gen
 
 namespace CorrectGen
 
-@[reducible]
 def Tree.s_unfold
     {α β σ : Type}
     {st : α → σ → σ × σ}
@@ -454,6 +453,24 @@ def Tree.s_unfold
           simp_all [(g b s).property]
           exists x, bl, br
         . simp_all
+
+@[extract]
+theorem Tree.s_unfold_val
+    {α β σ : Type}
+    {st : α → σ → σ × σ}
+    {f : β → α → β → σ → Option β}
+    {z : σ → Option β}
+    {s : σ}
+    {b : β}
+    (g : (b : β) → (s : σ) → CorrectGen
+      (fun (t : TreeF α β) =>
+        (z s = some b ∧ t = .leaf) ∨
+        (∃ a bl br, f bl a br s = some b ∧ t = .node bl a br))) :
+    (Tree.s_unfold (st := st) (s := s) (b := b) g).val
+      = Tree.unfold (fun (b, s) => do
+          match (← (g b s).val) with
+          | .leaf => pure .leaf
+          | .node bl x br => pure (.node (bl, (st x s).1) x (br, (st x s).2))) (b, s) := rfl
 
 end CorrectGen
 

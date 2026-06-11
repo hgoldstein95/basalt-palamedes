@@ -29,12 +29,16 @@ theorem support_elements
 
 namespace CorrectGen
 
-@[reducible]
 def s_elements_partial [DecidableEq α] (xs : List α) : CorrectGen (fun v => List.elem v xs) :=
   Subtype.mk (assume (xs.length > 0) (fun h => elements xs (by aesop))) <| by
     funext v
     simp [support_elements]
     cases xs <;> simp_all
+
+@[extract]
+theorem s_elements_partial_val [DecidableEq α] (xs : List α) :
+    (s_elements_partial xs).val
+      = assume (xs.length > 0) (fun h => elements xs (of_decide_eq_true h)) := rfl
 
 end CorrectGen
 

@@ -626,7 +626,6 @@ namespace Gen
 
 namespace CorrectGen
 
-@[reducible]
 def Term.s_unfold
     {α σ : Type}
     {st_abs : Ty → σ → σ}
@@ -690,6 +689,31 @@ def Term.s_unfold
         . exists TermF.app b₁ b₂
           simp_all [(g b s).property]
         . simp_all
+
+@[extract]
+theorem Term.s_unfold_val
+    {α σ : Type}
+    {st_abs : Ty → σ → σ}
+    {st_app : σ → σ × σ}
+    {z : σ → Option α}
+    {zn : Nat → σ → Option α}
+    {f_abs : Ty → α → σ → Option α}
+    {f_app : α → α → σ → Option α}
+    {s : σ}
+    {b : α}
+    (g : (b : α) → (s : σ) → CorrectGen
+      (fun (t : TermF α) =>
+        (z s = some b ∧ t = .unit) ∨
+        (∃ n, zn n s = some b ∧ t = .var n) ∨
+        (∃ τ b', f_abs τ b' s = some b ∧ t = .abs τ b') ∨
+        (∃ b₁ b₂, f_app b₁ b₂ s = some b ∧ t = .app b₁ b₂))) :
+    (Term.s_unfold (st_abs := st_abs) (st_app := st_app) (s := s) (b := b) g).val
+      = Term.unfold (fun (b, s) => do
+          match (← (g b s).val) with
+          | .unit => pure .unit
+          | .var n => pure (.var n)
+          | .abs τ b' => pure (.abs τ (b', st_abs τ s) )
+          | .app b₁ b₂ => pure (.app (b₁, (st_app s).1) (b₂, (st_app s).2))) (b, s) := rfl
 
 end CorrectGen
 

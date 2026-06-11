@@ -464,7 +464,6 @@ namespace Gen
 
 namespace CorrectGen
 
-@[reducible]
 def Stack.s_unfold
     {α σ : Type}
     {st_c : Atom → σ → σ}
@@ -517,6 +516,28 @@ def Stack.s_unfold
         . exists StackF.ret_cons pc b'
           simp_all [(g b s).property]
         . simp_all
+
+@[extract]
+theorem Stack.s_unfold_val
+    {α σ : Type}
+    {st_c : Atom → σ → σ}
+    {st_rc : Atom → σ → σ}
+    {z : σ → Option α}
+    {f_c : Atom → α → σ → Option α}
+    {f_rc : Atom → α → σ → Option α}
+    {s : σ}
+    {b : α}
+    (g : (b : α) → (s : σ) → CorrectGen
+      (fun (x : StackF α) =>
+        (z s = some b ∧ x = .mty) ∨
+        (∃ a b', f_c a b' s = some b ∧ x = .cons a b') ∨
+        (∃ pc b', f_rc pc b' s = some b ∧ x = .ret_cons pc b'))) :
+    (Stack.s_unfold (st_c := st_c) (st_rc := st_rc) (s := s) (b := b) g).val
+      = Stack.unfold (fun (b, s) => do
+          match (← (g b s).val) with
+          | .mty => pure .mty
+          | .cons a b' => pure (.cons a (b', (st_c a s)))
+          | .ret_cons pc b' => pure (.ret_cons pc (b', (st_rc pc s)))) (b, s) := rfl
 
 end CorrectGen
 

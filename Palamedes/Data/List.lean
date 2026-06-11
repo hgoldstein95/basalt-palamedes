@@ -349,7 +349,6 @@ namespace Gen
 
 namespace CorrectGen
 
-@[reducible]
 def List.s_unfold
     {α β σ : Type}
     {st : α → σ → σ}
@@ -387,6 +386,24 @@ def List.s_unfold
         . exists ListF.cons x b'
           simp_all [(g b s).property]
         . assumption
+
+@[extract]
+theorem List.s_unfold_val
+    {α β σ : Type}
+    {st : α → σ → σ}
+    {f : α → β → σ → Option β}
+    {z : σ → Option β}
+    {s : σ}
+    {b : β}
+    (g : (b : β) → (s : σ) → CorrectGen
+      (fun (t : ListF α β) =>
+        (z s = some b ∧ t = .nil) ∨
+        (∃ a b', f a b' s = some b ∧ t = .cons a b'))) :
+    (List.s_unfold (st := st) (s := s) (b := b) g).val
+      = List.unfold (fun (b, s) => do
+          match (← (g b s).val) with
+          | .nil => pure .nil
+          | .cons x b' => pure (.cons x (b', st x s))) (b, s) := rfl
 
 end CorrectGen
 

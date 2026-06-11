@@ -386,7 +386,6 @@ namespace Gen
 
 namespace CorrectGen
 
-@[reducible]
 def Ty.s_unfold
     {α σ : Type}
     {st : σ → σ × σ}
@@ -426,6 +425,24 @@ def Ty.s_unfold
         . exists TyF.arrow b₁ b₂
           simp_all [(g b s).property]
         . simp_all
+
+@[extract]
+theorem Ty.s_unfold_val
+    {α σ : Type}
+    {st : σ → σ × σ}
+    {f : α → α → σ → Option α}
+    {z : σ → Option α}
+    {s : σ}
+    {b : α}
+    (g : (b : α) → (s : σ) → CorrectGen
+      (fun (τ : TyF α) =>
+        (z s = some b ∧ τ = .unit) ∨
+        (∃ b₁ b₂, f b₁ b₂ s = some b ∧ τ = .arrow b₁ b₂))) :
+    (Ty.s_unfold (st := st) (s := s) (b := b) g).val
+      = Ty.unfold (fun (b, s) => do
+          match (← (g b s).val) with
+          | .unit => pure .unit
+          | .arrow b₁ b₂ => pure (.arrow (b₁, (st s).1) (b₂, (st s).2))) (b, s) := rfl
 
 end CorrectGen
 
@@ -503,13 +520,14 @@ theorem support_caseTy_congr
 
 namespace CorrectGen
 
-@[reducible]
 def s_arbTy : @CorrectGen Ty (fun _ => True) :=
   Subtype.mk arbTy <| by
     funext v
     simp
 
-@[reducible]
+@[extract]
+theorem s_arbTy_val : s_arbTy.val = arbTy := rfl
+
 def s_caseTy
     {Q : α → Prop}
     {P : α → Ty → Prop}
@@ -526,6 +544,17 @@ def s_caseTy
     match τ with
     | .unit => simp [gu.property, h]
     | .arrow τ₁ τ₂ => simp [(ga τ₁ τ₂).property, h, caseTy]
+
+@[extract]
+theorem s_caseTy_val
+    {Q : α → Prop}
+    {P : α → Ty → Prop}
+    (τ : Ty)
+    (h : ∀ {a}, P a τ = Q a)
+    (gu : CorrectGen (fun a => P a .unit))
+    (ga : (τ₁ τ₂ : Ty) → CorrectGen (fun a => P a (.arrow τ₁ τ₂))) :
+    (s_caseTy τ h gu ga).val
+      = caseTy τ (fun _ => gu.val) (fun τ₁ τ₂ _ => (ga τ₁ τ₂).val) := rfl
 
 end CorrectGen
 

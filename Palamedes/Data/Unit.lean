@@ -9,9 +9,11 @@ def arbUnit : Gen Unit := pure ()
 
 namespace CorrectGen
 
-@[reducible]
 def s_arbUnit : @CorrectGen Unit (fun _ => True) :=
   Subtype.mk arbUnit (by simp [arbUnit])
+
+@[extract]
+theorem s_arbUnit_val : s_arbUnit.val = pure () := rfl
 
 end CorrectGen
 

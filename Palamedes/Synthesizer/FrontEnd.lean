@@ -15,12 +15,28 @@ register_option palamedes.debug : Bool := {
   descr := "enable debug messages from palamedes"
 }
 
+/--
+Pull the raw `Gen` out of a synthesized `CorrectGen` term by rewriting with the `extract` simp
+set, which holds one `.val` equation per synthesis combinator. Unlike delta-reduction via
+`withReducible (reduce ·)`, this unfolds exactly the combinator wrappers and nothing else, so
+the combinators don't need to be `@[reducible]`.
+-/
+def extractGen (e : Expr) : MetaM Expr := do
+  let some ext ← getSimpExtension? `extract
+    | throwError "simp extension `extract` not found"
+  let ctx ← Simp.mkContext
+    (config := { zetaDelta := true })
+    (simpTheorems := #[← ext.getTheorems])
+    (congrTheorems := ← getSimpCongrTheorems)
+  let (result, _) ← simp e ctx
+  return result.expr
+
 /-- This is just a utility tactic for debugging. We don't call it in the real synthesizer. -/
 elab "optimize_gen " t:term : tactic =>
   withMainContext do
     let m ← mkFreshExprMVar (some (.sort 0))
     let gen ← elabTerm t (some (.app (.const ``Gen []) m))
-    let gen' ← withReducible (reduce gen)
+    let gen' ← extractGen gen
     let gen'' ← optimizeGen gen'
     let gen''' ← withReducible (reduce gen'')
     closeMainGoal `optimize_gen gen'''
@@ -78,7 +94,7 @@ def generatorSearchElab
       let cgen ← solveGoalWithTactic
         (mkAppN (.const ``CorrectGen []) #[α, mpred])
         (← `(tactic| cgenerator_search))
-      withReducible (reduce (← mkAppM ``Subtype.val #[cgen]))
+      extractGen (← mkAppM ``Subtype.val #[cgen])
     catch e =>
       throwError m!"Failed during generator synthesis.\n{e.toMessageData}"
   if verbose then do
