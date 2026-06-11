@@ -56,31 +56,8 @@ theorem getElem?_eq_some_iff_indexesOf_getElem?_eq_some
     {xs : List α}
     {i : Nat}
     {a : α} :
-    xs[i]? = some a ↔ i ∈ (xs.indexesOf a) := by
-  induction xs generalizing a i with
-  | nil => simp [List.indexesOf_nil]
-  | cons x xs ih =>
-    simp [List.indexesOf_cons, List.getElem?_cons]
-    apply Iff.intro
-    . intro h
-      match i with
-      | 0 => simp_all
-      | i' + 1 =>
-        simp_all
-        by_cases hxa : x == a
-        . simp_all
-        . have : (x == a) = false := by aesop
-          simpa [this]
-    . intro h
-      by_cases hxa : x == a
-      . simp_all
-        match h with
-        | .inl h => simp_all
-        | .inr h =>
-          simp_all
-          intro h'
-          aesop
-      . simp_all
-        aesop
+    xs[i]? = some a ↔ i ∈ (xs.idxsOf a) := by
+  rw [List.getElem?_eq_some_iff, List.mem_idxsOf_iff_exists_getElem_pos]
+  simp
 
 end Gen

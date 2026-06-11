@@ -12,7 +12,6 @@ initialize
 
 register_option palamedes.debug : Bool := {
   defValue := false
-  group := "palamedes"
   descr := "enable debug messages from palamedes"
 }
 
