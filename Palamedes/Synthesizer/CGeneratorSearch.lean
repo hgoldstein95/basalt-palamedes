@@ -12,6 +12,7 @@ import Palamedes.Data.Unit
 import Palamedes.Data.Nat
 import Palamedes.Data.Bool
 import Palamedes.Data.Color
+import Palamedes.Data.Tuple
 import Palamedes.Util
 
 open Gen CorrectGen
@@ -352,7 +353,6 @@ add_aesop_rules safe (rule_sets := [synthesis]) [
   (by (repeat apply duncurry); intro),
   (by apply s_arbUnit),
   (by apply s_arbBool),
-  (by apply s_arbTuple),
   (by apply s_arbColor),
   (by apply s_arbNat),
   (by apply s_arbTy),
@@ -370,6 +370,10 @@ add_aesop_rules 99% (rule_sets := [synthesis]) [
   (by apply s_between_partial),
   (by apply (s_between (by first | aesop | omega))),
   (by goal_is_eq; apply convert (by norm_for_elements) (s_elements_partial _)),
+]
+
+add_aesop_rules 50% (rule_sets := [synthesis]) [
+  (by apply s_arbTuple),
 ]
 
 add_aesop_rules 5% (rule_sets := [synthesis]) [

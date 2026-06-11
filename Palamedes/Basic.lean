@@ -4,6 +4,8 @@ import Palamedes.Examples.Simple.Eq2Or5
 import Palamedes.Examples.Simple.Eq2Or5'
 import Palamedes.Examples.Simple.ThreePlusOne
 
+import Palamedes.Examples.Tuple.Pairs
+
 import Palamedes.Examples.Range.Between5And10
 import Palamedes.Examples.Range.BetweenLoAndHi
 import Palamedes.Examples.Range.Gt5
