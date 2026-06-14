@@ -91,16 +91,6 @@ elab "unfold_matches" : tactic =>
     for m in ms do
       unfoldTarget m
 
-open LibrarySearch
-elab "library_search" : tactic =>
-  withMainContext do
-    let g ← getMainGoal
-    let tactic := fun g =>
-      solveByElim [] (exfalso := false) (maxDepth := 6) g
-    match ← librarySearch g tactic (fun _ => pure false) with
-    | none => pure ()
-    | some _ => throwError "library_search failed"
-
 /-- Extracts the conjuncts of an ∧-expression.
 
     NOTE: This needs to be in `MetaM`, although I'm not 100% sure why. I think it may have

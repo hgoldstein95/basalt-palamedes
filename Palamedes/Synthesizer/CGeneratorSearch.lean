@@ -188,46 +188,55 @@ end Coercions
 
 section ConvertToAccuM
 
+/- Unifier tactic for handling the covert_to_accuM sub-goals.  -/
+macro "accu_unify" : tactic =>
+  `(tactic|
+    (intros; first
+      | rfl
+      | rflm
+      | (simp_bexp; (first | rfl | rflm))
+      | (simp_all [guard, Option.bind_eq_some_iff, -beq_iff_eq, -Bool.true_and]; (first | rfl | rflm))))
+
 macro "list_convert_to_accuM" : tactic =>
   `(tactic|
     (first
-      | rw [← List.fold_accu_Option_true] <;> (try library_search); done
-      | rw [← List.fold_accu_Option_function]; (try library_search); done
-      | rw [← List.fold_accu_Option_function_true] <;> simp_bexp <;> (try library_search); done
+      | rw [← List.fold_accu_Option_true] <;> accu_unify; done
+      | rw [← List.fold_accu_Option_function]; accu_unify; done
+      | rw [← List.fold_accu_Option_function_true] <;> simp_bexp <;> accu_unify; done
       | rw [← List.fold_accu_Option_basic]; done
       | rw_true_and_list; rw [← List.fold_accu_cond]; (try aesop); done))
 
 macro "tree_convert_to_accuM" : tactic =>
   `(tactic|
     (first
-      | rw [← Tree.fold_accu_Option_true]; (try library_search); done
-      | rw [← Tree.fold_accu_Option_function]; (try library_search); done
-      | rw [← Tree.fold_accu_Option_function_true]; (try intros; simp_bexp; library_search); done
-      | rw [← Tree.fold_accu_Option_basic]; (try library_search); done
+      | rw [← Tree.fold_accu_Option_true] <;> accu_unify; done
+      | rw [← Tree.fold_accu_Option_function] <;> accu_unify; done
+      | rw [← Tree.fold_accu_Option_function_true] <;> accu_unify; done
+      | rw [← Tree.fold_accu_Option_basic] <;> accu_unify; done
       | rw_true_and_tree; rw [← Tree.fold_accu_cond]; (try aesop); done))
 
 macro "stack_convert_to_accuM" : tactic =>
   `(tactic|
     (first
-      | rw [← Stack.fold_accu_Option_true (by library_search) (by library_search)]; done
-      | rw [← Stack.fold_accu_Option_function (by library_search) (by library_search)]; done
-      | rw [← Stack.fold_accu_Option_function_true] <;> (simp_bexp; library_search); done
-      | rw [← Stack.fold_accu_Option_basic]; (try library_search); done))
+      | rw [← Stack.fold_accu_Option_true (by accu_unify) (by accu_unify)]; done
+      | rw [← Stack.fold_accu_Option_function (by accu_unify) (by accu_unify)]; done
+      | rw [← Stack.fold_accu_Option_function_true] <;> accu_unify; done
+      | rw [← Stack.fold_accu_Option_basic] <;> accu_unify; done))
 
 macro "ty_convert_to_accuM" : tactic =>
   `(tactic|
     (first
-      | rw [← Ty.fold_accu_Option_true] <;> (try library_search); done
-      | rw [← Ty.fold_accu_Option_function]; (try library_search); done
-      | rw [← Ty.fold_accu_Option_function_true]; (simp_bexp; library_search); done
+      | rw [← Ty.fold_accu_Option_true] <;> accu_unify; done
+      | rw [← Ty.fold_accu_Option_function] <;> accu_unify; done
+      | rw [← Ty.fold_accu_Option_function_true] <;> accu_unify; done
       | rw [← Ty.fold_accu_Option_basic]; done))
 
 macro "term_convert_to_accuM" : tactic =>
   `(tactic|
     (first
-      | rw [← Term.fold_accu_Option_true]; (try library_search); done
-      | rw [← Term.fold_accu_Option_function]; (try library_search); done
-      | rw [← Term.fold_accu_Option_function_true] <;> (intros; simp_bexp; library_search); done
+      | rw [← Term.fold_accu_Option_true] <;> accu_unify; done
+      | rw [← Term.fold_accu_Option_function] <;> accu_unify; done
+      | rw [← Term.fold_accu_Option_function_true] <;> accu_unify; done
       | rw [← Term.fold_accu_Option_function_Option] <;> (try aesop); done
       | rw [← Term.fold_accu_Option_basic]; done))
 
