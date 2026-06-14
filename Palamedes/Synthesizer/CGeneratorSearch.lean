@@ -194,8 +194,8 @@ macro "accu_unify" : tactic =>
     (intros; first
       | rfl
       | rflm
-      | (simp_bexp; (first | rfl | rflm))
-      | (simp_all [guard, Option.bind_eq_some_iff, -beq_iff_eq, -Bool.true_and]; (first | rfl | rflm))))
+      | (simp_bexp; (first | rfl | rflm | exact (Bool.true_and _).symm | exact (Bool.and_true _).symm))
+      | (simp_all [guard, Option.bind_eq_some_iff, -beq_iff_eq, -Bool.true_and]; (first | rfl | rflm | exact (Bool.true_and _).symm | exact (Bool.and_true _).symm))))
 
 macro "list_convert_to_accuM" : tactic =>
   `(tactic|
