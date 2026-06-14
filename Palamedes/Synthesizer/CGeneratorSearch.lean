@@ -60,9 +60,6 @@ macro "goal_is_not_fold_term" : tactic =>
         | change _ ↔ Term.fold _ _ _ _ _ = _
         | change _ ↔ @Term.fold (_ → _ : Type) _ _ _ _ _ _ = _)))
 
-macro "goal_is_or" : tactic =>
-  `(tactic| guard_target = CorrectGen (fun _ => _ ∨ _))
-
 macro "goal_is_eq" : tactic =>
   `(tactic| guard_target = CorrectGen (fun _ => _ = _))
 
@@ -336,6 +333,81 @@ macro "normalize_and_apply_unfold" : tactic =>
 
 end Normalizers
 
+section CaseSplit
+
+open Lean Lean.Meta Lean.Elab.Tactic Aesop Gen.CorrectGen
+
+/- The datatypes the case-split rule can scrutinise, each paired with its `s_case*` lemma. Every
+   such lemma has the shape `(scrut) (h : ∀ {a}, P a scrut = Q a) (cases…)`, so one routine drives
+   them all regardless of how many constructors the datatype has.
+
+   TODO: We should do this via an annotation, not hard-coded. -/
+private def caseSplitLemmas : List (Name × Name) :=
+  [(``Nat, ``s_caseNat),
+   (``Bool, ``s_caseBool),
+   (``Color, ``s_caseColor),
+   (``Ty, ``s_caseTy)]
+
+private def isCorrectGenOr (tgt : Expr) : MetaM Bool := do
+  match (← instantiateMVars tgt).getAppFnArgs with
+  | (``CorrectGen, #[_, p]) => lambdaTelescope p fun _ body => pure (body.isAppOf ``Or)
+  | _ => pure false
+
+/-- Apply `lemmaName` with `scrut` as the scrutinee: assign the scrutinee subgoal, discharge the
+    `∀ {a}, P a scrut = Q a` premise with `intros; rflm` (which synthesises `P` by generalising
+    `scrut` out of the goal predicate), and return the remaining case subgoals. Throws if `scrut`
+    is not usable here (e.g. `rflm` can't close the premise). -/
+private def caseSplitWith (goal : MVarId) (scrut : Expr) (lemmaName : Name) :
+    MetaM (List MVarId) := do
+  let newGoals ← goal.apply (← mkConstWithFreshMVarLevels lemmaName)
+  let scrutTy ← inferType scrut
+  let some scrutGoal ← newGoals.findM? (fun g => do isDefEq (← g.getType) scrutTy)
+    | throwError "caseSplitWith: no scrutinee subgoal"
+  scrutGoal.assign scrut
+  let mut caseGoals := #[]
+  for g in newGoals.filter (· != scrutGoal) do
+    let ty ← g.getType
+    if ← forallTelescopeReducing ty (fun _ b => pure (b.isAppOf ``Eq)) then
+      -- the `h : ∀ {a}, P a scrut = Q a` premise; `rflm` also assigns the predicate mvar `P`
+      let remaining ← Lean.Elab.Tactic.run g (evalTactic (← `(tactic| (intros; rflm)))) |>.run'
+      unless remaining.isEmpty do throwError "caseSplitWith: rflm left goals open"
+    else if ← forallTelescopeReducing ty (fun _ b => pure (b.isAppOf ``CorrectGen)) then
+      caseGoals := caseGoals.push g
+    -- else: an inferred metavariable (e.g. the predicate `P`), discharged by `rflm` above; skip it.
+  return caseGoals.toList
+
+/-- For `CorrectGen (fun a => _ ∨ _)` goal it offers one rule application per candidate scrutinee — each
+    local hypothesis that occurs in the predicate and whose type is a supported datatype — and lets
+    Aesop's own search pick the one whose case subgoals close. This subsumes the old
+    `clear_unused_assumptions; nth_assumption k` brute-force enumeration. -/
+@[aesop unsafe 5% (rule_sets := [synthesis]) tactic]
+def caseSplitRuleTac : RuleTac := fun input => do
+  input.goal.withContext do
+    let tgt ← input.goal.getType
+    unless ← isCorrectGenOr tgt do
+      throwError "caseSplitRuleTac: goal is not a CorrectGen of a disjunction"
+    let initialState ← saveState
+    let mut apps := #[]
+    for decl? in (← getLCtx).decls.toList do
+      let some decl := decl? | continue
+      if decl.isImplementationDetail then continue
+      unless tgt.containsFVar decl.fvarId do continue
+      let declTy ← instantiateMVars (← inferType decl.toExpr)
+      let some lemmaName := (caseSplitLemmas.find? (declTy.isConstOf ·.1)).map (·.2) | continue
+      try
+        let caseGoals ← caseSplitWith input.goal decl.toExpr lemmaName
+        let subgoals ← caseGoals.toArray.mapM (mvarIdToSubgoal input.goal ·)
+        let postState ← saveState
+        apps := apps.push
+          { postState, goals := subgoals, scriptSteps? := none, successProbability? := none }
+      catch _ => pure ()
+      initialState.restore
+    if apps.isEmpty then
+      throwError "caseSplitRuleTac: no applicable scrutinee"
+    return ⟨apps⟩
+
+end CaseSplit
+
 section AesopRules
 
 /-
@@ -376,18 +448,8 @@ add_aesop_rules 50% (rule_sets := [synthesis]) [
   (by apply s_arbTuple),
 ]
 
-add_aesop_rules 5% (rule_sets := [synthesis]) [
-  (by goal_is_or; clear_unused_assumptions; apply s_caseBool (by nth_assumption 0) (by intros; rflm)),
-  (by goal_is_or; clear_unused_assumptions; apply s_caseBool (by nth_assumption 1) (by intros; rflm)),
-  (by goal_is_or; clear_unused_assumptions; apply s_caseColor (by nth_assumption 0) (by intros; rflm)),
-  (by goal_is_or; clear_unused_assumptions; apply s_caseColor (by nth_assumption 1) (by intros; rflm)),
-  (by goal_is_or; clear_unused_assumptions; apply s_caseTy (by nth_assumption 0) (by intros; rflm)),
-  (by goal_is_or; clear_unused_assumptions; apply s_caseTy (by nth_assumption 1) (by intros; rflm)),
-  (by goal_is_or; clear_unused_assumptions; apply s_caseNat (by nth_assumption 0) (by intros; rflm)),
-  (by goal_is_or; clear_unused_assumptions; apply s_caseNat (by nth_assumption 1) (by intros; rflm)),
-  (by goal_is_or; clear_unused_assumptions; apply s_caseNat (by nth_assumption 2) (by intros; rflm)),
-  (by goal_is_or; clear_unused_assumptions; apply s_caseNat (by nth_assumption 3) (by intros; rflm)),
-]
+-- The per-datatype/per-scrutinee `s_case*` enumeration that used to live here is now the single
+-- `caseSplitRuleTac` rule (see section `CaseSplit`), registered via `@[aesop]`.
 
 end AesopRules
 
