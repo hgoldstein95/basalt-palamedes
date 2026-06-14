@@ -25,40 +25,18 @@ macro "goal_is_mergeable" : tactic =>
       | change _ ↔ _ ∧ _
       | change _ ↔ (_ && _) = true)
 
-macro "goal_is_not_fold_list" : tactic =>
-  `(tactic|
-    (fail_if_success
-      (first
-        | change _ ↔ List.fold _ _ _ = _
-        | change _ ↔ @List.fold _ (_ → _ : Type) _ _ _ _ = _)))
-
-macro "goal_is_not_fold_tree" : tactic =>
-  `(tactic|
-    (fail_if_success
-      (first
-        | change _ ↔ Tree.fold _ _ _ = _
-        | change _ ↔ @Tree.fold _ (_ → _ : Type) _ _ _ _ = _)))
-
-macro "goal_is_not_fold_stack" : tactic =>
-  `(tactic|
-    (fail_if_success
-      (first
-        | change _ ↔ Stack.fold _ _ _ _ = _
-        | change _ ↔ @Stack.fold (_ → _ : Type) _ _ _ _ _ = _)))
-
-macro "goal_is_not_fold_ty" : tactic =>
-  `(tactic|
-    (fail_if_success
-      (first
-        | change _ ↔ Ty.fold _ _ _ = _
-        | change _ ↔ @Ty.fold (_ → _ : Type) _ _ _ _ = _)))
-
-macro "goal_is_not_fold_term" : tactic =>
-  `(tactic|
-    (fail_if_success
-      (first
-        | change _ ↔ Term.fold _ _ _ _ _ = _
-        | change _ ↔ @Term.fold (_ → _ : Type) _ _ _ _ _ _ = _)))
+open Lean Lean.Elab.Tactic in
+elab "goal_is_not_fold" f:ident : tactic => do
+  let fName ← resolveGlobalConstNoOverload f
+  let tgt ← instantiateMVars (← getMainTarget)
+  match tgt.getAppFnArgs with
+  | (``Iff, #[_, b]) =>
+    match b.eq? with
+    | some (_, lhs, _) =>
+      if lhs.getAppFn.isConstOf fName then
+        throwError "goal_is_not_fold: predicate is already a fold"
+    | none => pure ()
+  | _ => pure ()
 
 macro "goal_is_eq" : tactic =>
   `(tactic| guard_target = CorrectGen (fun _ => _ = _))
@@ -77,6 +55,16 @@ section Simplifiers
 macro "simp_bexp" : tactic => `(tactic|
   try simp only [bind, Option.bind, pure, Option.some_inj, ← Bool.eq_iff_iff])
 
+macro "accu_simp" : tactic =>
+  `(tactic| simp [guard, Option.bind_eq_some_iff, -beq_iff_eq, -Bool.true_and, *])
+
+macro "coerce_discharge" : tactic =>
+  `(tactic|
+    first
+      | rflm
+      | (intros; simp_all [- Bool.not_eq_eq_eq_not, -beq_iff_eq]; rflm)
+      | aesop)
+
 end Simplifiers
 
 section Normalizers
@@ -88,34 +76,10 @@ macro "preprocess" : tactic =>
 
 section Merges
 
-macro "rw_list_merge" : tactic =>
+macro "rw_merge" m:term : tactic =>
   `(tactic|
     (goal_is_mergeable
-     rw [← List.merge_accuM]
-     apply and_congr))
-
-macro "rw_tree_merge" : tactic =>
-  `(tactic|
-    (goal_is_mergeable
-     rw [← Tree.merge_accuM]
-     apply and_congr))
-
-macro "rw_stack_merge" : tactic =>
-  `(tactic|
-    (goal_is_mergeable
-     rw [← Stack.merge_accuM]
-     apply and_congr))
-
-macro "rw_ty_merge" : tactic =>
-  `(tactic|
-    (goal_is_mergeable
-     rw [← Ty.merge_accuM]
-     apply and_congr))
-
-macro "rw_term_merge" : tactic =>
-  `(tactic|
-    (goal_is_mergeable
-     rw [← Term.merge_accuM]
+     rw [← $m]
      apply and_congr))
 
 /-
@@ -144,44 +108,22 @@ macro "rw_true_and_tree" : tactic =>
         try conv =>
           arg 3; fail_if_success {guard_target = _ && _ && _}; apply (Bool.and_true ..).symm.trans ((Bool.and_comm ..).symm.trans (Bool.and_assoc ..).symm))
 
+macro "rw_true_and" : tactic =>
+  `(tactic| first | rw_true_and_tree | rw_true_and_list | skip)
+
 end Merges
 
 section Coercions
 
-macro "list_coerce_fold" : tactic =>
-  `(tactic|
-    -- todo: the bool lemma in List.coerce_to_fold (in Data.List) is overfitting to the evenLen example
-    (first
-      | goal_is_not_fold_list; conv => rhs; lhs; apply List.coerce_to_fold (by rflm) (by intros; simp_all [- Bool.not_eq_eq_eq_not, -beq_iff_eq]; rflm)
-      | goal_is_not_fold_list; conv => rhs; lhs; apply congrFun; apply List.coerce_to_fold (by rflm) (by intros; simp_all [- Bool.not_eq_eq_eq_not, -beq_iff_eq]; rflm)
-      | skip))
-
-macro "tree_coerce_fold" : tactic =>
+macro "coerce_fold" fh:ident co:term:max : tactic =>
   `(tactic|
     (first
-      | goal_is_not_fold_tree; conv => rhs; lhs; apply (Tree.coerce_to_fold (by rflm) (by intros; simp_all [-beq_iff_eq]; rflm))
-      | goal_is_not_fold_tree; conv => rhs; lhs; apply congrFun; apply (Tree.coerce_to_fold (by rflm) (by intros; simp_all [-beq_iff_eq]; rflm))
-      | skip))
-
-macro "stack_coerce_fold" : tactic =>
-  `(tactic|
-    (first
-      | goal_is_not_fold_stack; conv => rhs; lhs; apply (Stack.coerce_to_fold (by rflm) (by intros; simp_all; rflm) (by intros; simp_all; rflm))
-      | goal_is_not_fold_stack; conv => rhs; lhs; apply congrFun; apply (Stack.coerce_to_fold (by rflm) (by intros; simp_all; rflm) (by intros; simp_all; rflm))
-      | skip))
-
-macro "ty_coerce_fold" : tactic =>
-  `(tactic|
-    (first
-      | goal_is_not_fold_ty; conv => rhs; lhs; apply Ty.coerce_to_fold
-      | goal_is_not_fold_ty; conv => rhs; lhs; apply congrFun; apply Ty.coerce_to_fold
-      | skip ))
-
-macro "term_coerce_fold" : tactic =>
-  `(tactic|
-    (first
-      | goal_is_not_fold_term; conv => rhs; lhs; apply (Term.coerce_to_fold (by rflm) (by aesop) (by intros; simp_all; rflm) (by intros; simp_all; rflm))
-      | goal_is_not_fold_term; conv => rhs; lhs; apply congrFun; apply (Term.coerce_to_fold (by rflm) (by aesop) (by intros; simp_all; rflm) (by intros; simp_all; rflm))
+      | goal_is_not_fold $fh; conv => rhs; lhs; apply $co (by coerce_discharge) (by coerce_discharge) (by coerce_discharge) (by coerce_discharge)
+      | goal_is_not_fold $fh; conv => rhs; lhs; apply $co (by coerce_discharge) (by coerce_discharge) (by coerce_discharge)
+      | goal_is_not_fold $fh; conv => rhs; lhs; apply $co (by coerce_discharge) (by coerce_discharge)
+      | goal_is_not_fold $fh; conv => rhs; lhs; apply congrFun; apply $co (by coerce_discharge) (by coerce_discharge) (by coerce_discharge) (by coerce_discharge)
+      | goal_is_not_fold $fh; conv => rhs; lhs; apply congrFun; apply $co (by coerce_discharge) (by coerce_discharge) (by coerce_discharge)
+      | goal_is_not_fold $fh; conv => rhs; lhs; apply congrFun; apply $co (by coerce_discharge) (by coerce_discharge)
       | skip))
 
 end Coercions
@@ -197,79 +139,48 @@ macro "accu_unify" : tactic =>
       | (simp_bexp; (first | rfl | rflm | exact (Bool.true_and _).symm | exact (Bool.and_true _).symm))
       | (simp_all [guard, Option.bind_eq_some_iff, -beq_iff_eq, -Bool.true_and]; (first | rfl | rflm | exact (Bool.true_and _).symm | exact (Bool.and_true _).symm))))
 
-macro "list_convert_to_accuM" : tactic =>
+macro "accu_convert_one" L:term : tactic =>
   `(tactic|
-    (first
-      | rw [← List.fold_accu_Option_true] <;> accu_unify; done
-      | rw [← List.fold_accu_Option_function]; accu_unify; done
-      | rw [← List.fold_accu_Option_function_true] <;> simp_bexp <;> accu_unify; done
-      | rw [← List.fold_accu_Option_basic]; done
-      | rw_true_and_list; rw [← List.fold_accu_cond]; (try aesop); done))
-
-macro "tree_convert_to_accuM" : tactic =>
-  `(tactic|
-    (first
-      | rw [← Tree.fold_accu_Option_true] <;> accu_unify; done
-      | rw [← Tree.fold_accu_Option_function] <;> accu_unify; done
-      | rw [← Tree.fold_accu_Option_function_true] <;> accu_unify; done
-      | rw [← Tree.fold_accu_Option_basic] <;> accu_unify; done
-      | rw_true_and_tree; rw [← Tree.fold_accu_cond]; (try aesop); done))
-
-macro "stack_convert_to_accuM" : tactic =>
-  `(tactic|
-    (first
-      | rw [← Stack.fold_accu_Option_true (by accu_unify) (by accu_unify)]; done
-      | rw [← Stack.fold_accu_Option_function (by accu_unify) (by accu_unify)]; done
-      | rw [← Stack.fold_accu_Option_function_true] <;> accu_unify; done
-      | rw [← Stack.fold_accu_Option_basic] <;> accu_unify; done))
-
-macro "ty_convert_to_accuM" : tactic =>
-  `(tactic|
-    (first
-      | rw [← Ty.fold_accu_Option_true] <;> accu_unify; done
-      | rw [← Ty.fold_accu_Option_function] <;> accu_unify; done
-      | rw [← Ty.fold_accu_Option_function_true] <;> accu_unify; done
-      | rw [← Ty.fold_accu_Option_basic]; done))
-
-macro "term_convert_to_accuM" : tactic =>
-  `(tactic|
-    (first
-      | rw [← Term.fold_accu_Option_true] <;> accu_unify; done
-      | rw [← Term.fold_accu_Option_function] <;> accu_unify; done
-      | rw [← Term.fold_accu_Option_function_true] <;> accu_unify; done
-      | rw [← Term.fold_accu_Option_function_Option] <;> (try aesop); done
-      | rw [← Term.fold_accu_Option_basic]; done))
+    first
+      | rw [← $L] <;> accu_unify; done
+      | rw [← $L] <;> simp_bexp <;> accu_unify; done
+      | rw [← $L (by accu_unify) (by accu_unify)] <;> accu_unify; done
+      | rw [← $L (by accu_unify) (by accu_unify)]; done)
 
 end ConvertToAccuM
 
-macro "norm_for_List_unfold" : tactic =>
-  `(tactic|
-    (preprocess
-     (repeat' rw_list_merge) <;> (first
-                                  | list_coerce_fold; list_convert_to_accuM
-                                  | simp; list_coerce_fold; list_convert_to_accuM)))
+section UnfoldPipeline
 
-macro "norm_for_Tree_unfold" : tactic =>
-  `(tactic|
-    (preprocess
-     (repeat' rw_tree_merge) <;> (first
-                                  | tree_coerce_fold; tree_convert_to_accuM
-                                  | simp; tree_coerce_fold; tree_convert_to_accuM)))
+open Lean
 
-macro "norm_for_Stack_unfold" : tactic =>
-  `(tactic|
-    (preprocess
-     (repeat' rw_stack_merge) <;> (stack_coerce_fold; stack_convert_to_accuM)))
+/- The generic fold → accuM normalization pipeline. -/
+syntax "norm_for_unfold" ident term:max ("mergeVia " term:max)?
+  "convertVia " "[" term,* "]" ("condVia " term:max)? : tactic
 
-macro "norm_for_Ty_unfold" : tactic =>
-  `(tactic|
-    (preprocess
-     (repeat' rw_ty_merge) <;> (ty_coerce_fold; ty_convert_to_accuM)))
+macro_rules
+  | `(tactic| norm_for_unfold $fh:ident $co:term $[mergeVia $m:term]?
+        convertVia [ $ls:term,* ] $[condVia $cnd:term]?) => do
+      let mut alts : Array (TSyntax ``Lean.Parser.Tactic.tacticSeq) := #[]
+      for l in ls.getElems do
+        alts := alts.push (← `(tacticSeq| accu_convert_one $l))
+      if let some c := cnd then
+        alts := alts.push (← `(tacticSeq| rw_true_and; rw [← $c]; (try aesop); done))
+      let convertStep ← `(tactic| (first $[| $alts]*))
+      let core ← `(tactic|
+        (first
+          | (coerce_fold $fh $co; $convertStep)
+          | (simp; coerce_fold $fh $co; $convertStep)))
+      match m with
+      | some mlem =>
+          `(tactic|
+            (preprocess
+             (repeat' (rw_merge $mlem)) <;> $core))
+      | none =>
+          `(tactic|
+            (preprocess
+             $core))
 
-macro "norm_for_Term_unfold" : tactic =>
-  `(tactic|
-    (preprocess
-     (repeat' rw_term_merge) <;> (term_coerce_fold; term_convert_to_accuM)))
+end UnfoldPipeline
 
 macro "norm_for_pure" : tactic =>
   `(tactic| (
@@ -302,7 +213,7 @@ macro "norm_for_bind'" : tactic =>
 macro "norm_for_elements" : tactic =>
   `(tactic|
     (preprocess
-     simp [guard, Option.bind_eq_some_iff, -beq_iff_eq, -Bool.true_and, *]
+     accu_simp
      first
        | rfl
        | rw [getElem?_eq_some_iff_indexesOf_getElem?_eq_some]))
@@ -312,7 +223,7 @@ macro "normalize_and_apply" : tactic =>
       apply convert ?pf ?arg
       /- simplify the predicate before attempting to normalize it.
          this way we don't repeat simplification for each different normalization strategy -/
-      case' pf => unfold_matches; try simp [guard, Option.bind_eq_some_iff, -beq_iff_eq, -Bool.true_and, *]
+      case' pf => unfold_matches; try accu_simp
       first
       | case' arg => apply s_pure _
         case pf => norm_for_pure
@@ -328,16 +239,35 @@ macro "normalize_and_apply_unfold" : tactic =>
    `(tactic| (
       goal_is_eq_or_and
       apply convert ?pf ?arg
-      case' pf => try simp [guard, Option.bind_eq_some_iff, -beq_iff_eq, -Bool.true_and, *]
+      case' pf => try accu_simp
       first
       | case' arg => apply List.s_unfold _
-        case pf => norm_for_List_unfold
+        case pf =>
+          norm_for_unfold List.fold List.coerce_to_fold
+            mergeVia List.merge_accuM
+            convertVia [List.fold_accu_Option_true, List.fold_accu_Option_function,
+                        List.fold_accu_Option_function_true, List.fold_accu_Option_basic]
+            condVia List.fold_accu_cond
       | case' arg => apply Tree.s_unfold _
-        case pf => norm_for_Tree_unfold
+        case pf =>
+          norm_for_unfold Tree.fold Tree.coerce_to_fold
+            mergeVia Tree.merge_accuM
+            convertVia [Tree.fold_accu_Option_true, Tree.fold_accu_Option_function,
+                        Tree.fold_accu_Option_function_true, Tree.fold_accu_Option_basic]
+            condVia Tree.fold_accu_cond
       | case' arg => apply Stack.s_unfold _
-        case pf => norm_for_Stack_unfold
+        case pf =>
+          norm_for_unfold Stack.fold Stack.coerce_to_fold
+            mergeVia Stack.merge_accuM
+            convertVia [Stack.fold_accu_Option_true, Stack.fold_accu_Option_function,
+                        Stack.fold_accu_Option_function_true, Stack.fold_accu_Option_basic]
       | case' arg => apply Term.s_unfold _
-        case pf => norm_for_Term_unfold
+        case pf =>
+          norm_for_unfold Term.fold Term.coerce_to_fold
+            mergeVia Term.merge_accu_Option
+            convertVia [Term.fold_accu_Option_true, Term.fold_accu_Option_function,
+                        Term.fold_accu_Option_function_true, Term.fold_accu_Option_function_Option,
+                        Term.fold_accu_Option_basic]
     ))
 
 end Normalizers
