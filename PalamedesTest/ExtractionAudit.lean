@@ -1,9 +1,9 @@
-import Palamedes.Basic
+import PalamedesTest.Examples
 
 /-!
 # Extraction audit
 
-Every example in `Palamedes/Examples/` synthesizes a generator at elaboration time, but a
+Every example in `PalamedesTest/Examples/` synthesizes a generator at elaboration time, but a
 silent extraction failure does not break the build: if the `extract` simp set fails to
 strip the `CorrectGen` combinator wrappers, the generator is left unchanged, so the optimizer's
 support-preservation proof still holds trivially, and a `totality` failure is only a warning. The
@@ -16,7 +16,7 @@ synthesis residue survives in a compiled term.
 
 open Lean Meta Elab Command
 
-namespace Palamedes.ExtractionAudit
+namespace PalamedesTest.ExtractionAudit
 
 /-- Constants that should never survive extraction into a synthesized generator: the
 `CorrectGen` combinators themselves, the `Subtype.val` projection that extraction is supposed
@@ -34,7 +34,7 @@ run_cmd liftTermElabM do
   let mut total := 0
   for i in [0:env.header.moduleData.size] do
     let modName := env.header.moduleNames[i]!
-    unless (`Palamedes.Examples).isPrefixOf modName do continue
+    unless (`PalamedesTest.Examples).isPrefixOf modName do continue
     for n in env.header.moduleData[i]!.constNames do
       let some ci := env.find? n | continue
       let some val := ci.value? | continue
@@ -48,4 +48,4 @@ run_cmd liftTermElabM do
   if total == 0 then
     logError "extraction audit found no generators to check; is the example corpus imported?"
 
-end Palamedes.ExtractionAudit
+end PalamedesTest.ExtractionAudit

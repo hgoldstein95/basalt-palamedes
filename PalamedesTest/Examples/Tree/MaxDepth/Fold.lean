@@ -2,7 +2,7 @@ import Palamedes.Synthesizer
 
 open Gen CorrectGen
 
-namespace CompleteFold
+namespace MaxDepthFold
 
 @[simp]
 def isMaxDepthFold (t : Tree Nat) (n : Nat) : Bool :=
@@ -11,4 +11,4 @@ def isMaxDepthFold (t : Tree Nat) (n : Nat) : Bool :=
 def genMaxDepthFold (n : Nat) : Gen (Tree Nat) := by
   generator_search (fun t => isMaxDepthFold t n = true)
 
-end CompleteFold
+end MaxDepthFold

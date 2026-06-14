@@ -1,13 +1,26 @@
 name = "palamedes"
 version = "0.1.0"
-defaultTargets = ["palamedes"]
+defaultTargets = ["Palamedes", "PalamedesTest"]
 
+# The library: the `generator_search` tactic, synthesis rules, supported datatypes, and sampler.
+# `Palamedes.*` globs every library module so a plain `lake build` compiles all of them, not just
+# the import closure of the `Palamedes` root.
 [[lean_lib]]
 name = "Palamedes"
+globs = ["Palamedes", "Palamedes.+"]
 
-[[lean_exe]]
-name = "palamedes"
-root = "Main"
+# The test corpus: every module synthesizes a generator at elaboration time and fails to compile if
+# synthesis fails, plus `PalamedesTest.ExtractionAudit`, which guards against silent extraction
+# residue. Built by `lake build` (it is a default target), which is what CI runs.
+[[lean_lib]]
+name = "PalamedesTest"
+globs = ["PalamedesTest.+"]
+
+# Work-in-progress examples that do not yet synthesize. Deliberately excluded from the default
+# build (and therefore from CI); build on demand with `lake build InProgress`.
+[[lean_lib]]
+name = "InProgress"
+globs = ["InProgress.+"]
 
 [[require]]
 name = "mathlib"

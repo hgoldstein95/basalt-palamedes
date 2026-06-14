@@ -1,4 +1,5 @@
--- This module serves as the root of the `Palamedes` library.
--- Import modules here that should be built as part of the library.
-import Palamedes.Basic
-import Palamedes.ExtractionAudit
+-- This module is the root of the `Palamedes` library: importing it brings the full public API
+-- into scope — the `generator_search` tactic (via `Synthesizer`) and the runnable sampler
+-- (`Sample`). The example corpus and the extraction audit live in the `PalamedesTest` library.
+import Palamedes.Synthesizer
+import Palamedes.Sample

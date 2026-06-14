@@ -2,7 +2,7 @@ import Palamedes.Synthesizer
 
 open Gen CorrectGen
 
-namespace Complete
+namespace MaxDepth
 
 @[simp]
 def isMaxDepth (t : Tree α) (n : Nat) : Bool :=
@@ -16,4 +16,4 @@ def isMaxDepth (t : Tree α) (n : Nat) : Bool :=
 def genComplete (n : Nat) : Gen (Tree Nat) := by
   generator_search (fun t => isMaxDepth t n = true)
 
-end Complete
+end MaxDepth

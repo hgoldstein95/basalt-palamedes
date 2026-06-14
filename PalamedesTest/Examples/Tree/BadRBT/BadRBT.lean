@@ -3,7 +3,7 @@ import Palamedes.Data.Color
 
 open Gen CorrectGen
 
-namespace RBT
+namespace BadRBT
 
 @[simp]
 def isRRAux : Tree (Color × α) → Bool → Bool := λ t isRedChild =>
@@ -30,4 +30,4 @@ def isBadRBT : Tree (Color × Nat) → Nat → Bool := λ t height =>
 def genBadRBT (height : Nat) : Gen (Tree (Color × Nat)) := by
   generator_search (fun t => isBadRBT t height)
 
-end RBT
+end BadRBT

@@ -146,7 +146,7 @@ Differences:
 - Nicer match on height to reduce some duplication.
 - Generator is technically total now; this requires insight about the total number of values that
 can appear in a tree of height k.
--/
+
 def genAVL_manual' (height lo hi : Nat) : Gen (Tree Nat) :=
   -- Guarantee that there are enough values in the range, given the height.
   assume (hi - lo > 2 ^ height) fun _ =>
@@ -167,3 +167,4 @@ def genAVL_manual' (height lo hi : Nat) : Gen (Tree Nat) :=
             let a <- choose (lo + 2 ^ (height - 1)) (hi - 2 ^ (height - 1)) (by aesop)
             pure (TreeF.node (lo, a - 1, height - 1) a (a + 1, hi, height - 1)))
       (lo, hi, height)
+-/

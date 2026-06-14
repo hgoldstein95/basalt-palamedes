@@ -3,7 +3,7 @@ import Palamedes.Sample
 
 open Gen CorrectGen
 
-namespace RBTFold
+namespace BadRBTFold
 
 @[simp]
 def isRRFold (t : Tree (Color × α)) : Bool :=
@@ -31,4 +31,4 @@ def isRBTFold (height : Nat) (t : Tree (Color × Nat)) : Bool :=
 def genRBTFold (height : Nat) : Gen (Tree (Color × Nat)) := by
   generator_search (fun t => isRBTFold height t = true)
 
-end RBTFold
+end BadRBTFold
