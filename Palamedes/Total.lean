@@ -15,14 +15,14 @@ namespace Total
 @[simp, aesop safe (rule_sets := [totality])]
 theorem total_pure :
     total (pure a) := by
-  simp [total]
+  trivial
 
 @[simp, aesop safe (rule_sets := [totality])]
 theorem total_bind
     (hx : total x)
     (hf : ∀ {v}, v ∈ 〚x〛 → total (f v)) :
     total (x >>= f) := by
-  simp_all [total]
+  exact ⟨hx, fun _ h => hf h⟩
 
 @[simp, aesop safe (rule_sets := [totality])]
 theorem total_pick
@@ -49,7 +49,7 @@ theorem total_indexed
 theorem total_map
     (hx : total x) :
     total (f <$> x) := by
-  simp_all [total]
+  exact ⟨hx, fun _ _ => trivial⟩
 
 @[simp, aesop safe (rule_sets := [totality])]
 theorem total_dite

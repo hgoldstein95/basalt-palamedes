@@ -1,5 +1,7 @@
 import Palamedes.Synthesizer
 
+set_option linter.auxLemma false
+
 open Gen CorrectGen
 
 def genOneOrInRange (lo hi : Nat) : Gen Nat :=

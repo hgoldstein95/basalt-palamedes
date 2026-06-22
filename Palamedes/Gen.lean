@@ -59,12 +59,12 @@ namespace Support
 @[simp]
 theorem support_pure :
     support (pure a) = (· = a) := by
-  simp [support]
+  rfl
 
 @[simp]
 theorem support_bind :
     support (x >>= f) = fun b => ∃ a, support x a ∧ support (f a) b := by
-  simp [support]
+  rfl
 
 @[simp]
 theorem support_pick :
