@@ -2,7 +2,7 @@ import Palamedes.Synthesizer
 
 set_option maxHeartbeats 1000000
 
-open Gen CorrectGen
+open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
 
 namespace LengthKAllTwos
 

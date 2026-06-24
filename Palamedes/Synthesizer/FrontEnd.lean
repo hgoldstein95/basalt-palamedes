@@ -35,9 +35,9 @@ def extractGen (e : Expr) : MetaM Expr := do
 elab "optimize_gen " t:term : tactic =>
   withMainContext do
     let m ← mkFreshExprMVar (some (.sort 0))
-    let gen ← elabTerm t (some (.app (.const ``Gen []) m))
+    let gen ← elabTerm t (some (.app (.const ``Palamedes.Gen []) m))
     let gen' ← extractGen gen
-    let (gen'', _) ← optimizeGen gen'
+    let (gen'', _) ← Palamedes.optimizeGen gen'
     let gen''' ← withReducible (reduce gen'')
     closeMainGoal `optimize_gen gen'''
 
@@ -58,7 +58,7 @@ def generatorSearchElab
   let verbose := palamedes.debug.get opts
 
   let g ← getMainGoal
-  let .app (.const ``Gen []) α ← g.getType
+  let .app (.const ``Palamedes.Gen []) α ← g.getType
     | throwError "goal type must be Gen α for some α"
   let ty := .forallE `α α (.sort 0) .default
   let mpred ← elabTerm t (some ty)
@@ -90,7 +90,7 @@ def generatorSearchElab
   let gen ← do
     try
       let cgen ← solveGoalWithTactic
-        (mkAppN (.const ``CorrectGen []) #[α, mpred])
+        (mkAppN (.const ``Palamedes.CorrectGen []) #[α, mpred])
         (← `(tactic| cgenerator_search))
       extractGen (← mkAppM ``Subtype.val #[cgen])
     catch e =>
@@ -99,7 +99,7 @@ def generatorSearchElab
     logInfo m!"Synthesized generator:\n{(← ppExpr gen)}"
   let gen' ←
     try
-      let (gen', proof) ← optimizeGen gen
+      let (gen', proof) ← Palamedes.optimizeGen gen
       Lean.Meta.check proof
       withReducible (reduce gen')
     catch e =>
@@ -111,7 +111,7 @@ def generatorSearchElab
   if checkTotal then do
     try
       let _ ← solveGoalWithTactic
-        (← mkAppM ``Gen.total #[gen'])
+        (← mkAppM ``Palamedes.Gen.total #[gen'])
         (← `(tactic| totality))
     catch e =>
       logWarning m!"Failed during totality checking.

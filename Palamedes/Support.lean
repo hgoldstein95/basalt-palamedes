@@ -1,6 +1,8 @@
 import Palamedes.Gen
 import Palamedes.OptimizeCongr
 
+namespace Palamedes
+
 open Gen
 
 theorem support_assume_pick :
@@ -78,13 +80,6 @@ theorem support_assume_congr
     support (assume b f) = support (assume b f') := by
   aesop
 
-@[gen_congr]
-theorem support_indexed_congr
-    {f f' : Nat → Gen (Option α)}
-    (hf : ∀ n, support (f n) = support (f' n)) :
-    support (indexed f) = support (indexed f') := by
-  simp only [Gen.Support.support_indexed, hf]
-
 theorem support_ite_bind
     {P : Prop} [Decidable P] {a b : Gen α} {f : α → Gen β} :
     support ((if P then a else b) >>= f) = support (if P then a >>= f else b >>= f) := by
@@ -101,3 +96,13 @@ theorem support_pick_assume_same
     support (pick (assume b f) (assume b g))
       = support (assume b fun h => pick (f h) (g h)) := by
   aesop
+
+/-- When the guard `b` holds, `assume b f` is its then-branch `f h`, with the dead `empty` else-branch
+removed. The twin lemma for the optimizer's assume-discharge rewrite (`optimizeAssume?`); eliminating
+the `empty` is what keeps a satisfiable-guarded generator `Fail`-free for the totality check. -/
+theorem support_assume_true
+    {b : Bool} {f : b → Gen α} (h : b = true) :
+    support (assume b f) = support (f h) := by
+  simp only [assume, dif_pos h]
+
+end Palamedes

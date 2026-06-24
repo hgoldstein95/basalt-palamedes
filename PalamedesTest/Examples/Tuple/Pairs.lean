@@ -1,6 +1,6 @@
 import Palamedes.Synthesizer
 
-open Gen CorrectGen
+open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
 
 def genFstIsTwo : Gen (Nat × Nat) := by
   generator_search (fun p => p.fst = 2)

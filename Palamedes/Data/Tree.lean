@@ -4,6 +4,10 @@ import Palamedes.CorrectGen
 import Palamedes.Total
 import Palamedes.Util
 
+-- Lean core (v4.32+) declares a deprecated `Tree` (alias for `BinaryTree`) at the root namespace, so
+-- Palamedes' own `Tree` lives under `namespace Palamedes` to avoid the clash.
+namespace Palamedes
+
 section TypeDef
 
 inductive Tree (α : Type) where
@@ -77,47 +81,24 @@ section Unfold
 
 open Gen
 
-private def Tree.unfold_aux (n : Nat) (f : β → Gen (TreeF α β)) (b : β) : Gen (Option (Tree α)) :=
-  match n with
-  | 0 => pure none
-  | n + 1 => do
-    match (← f b) with
-    | .leaf => pure (some .leaf)
-    | .node bl x br => do
-      let l ← Tree.unfold_aux n f bl
-      let r ← Tree.unfold_aux n f br
-      pure (do pure (.node (← l) x (← r)))
+/-- The polymorphic Basalt generator underlying the tree `unfold`: `leaf` stops, `node bl x br`
+recurses on both children. A direct `partial_fixpoint`. -/
+def Tree.unfoldGo [_root_.Gen G] (step : β → G (TreeF α β)) (b : β) : G (Tree α) :=
+  step b >>= fun t =>
+    match t with
+    | .leaf => pure .leaf
+    | .node bl x br =>
+      Tree.unfoldGo step bl >>= fun l =>
+      Tree.unfoldGo step br >>= fun r =>
+      pure (.node l x r)
+  partial_fixpoint
 
-@[simp]
-theorem Tree.unfold_aux_monotonic :
-    some v ∈ 〚Tree.unfold_aux n f b〛 →
-    some v ∈ 〚Tree.unfold_aux (n + m) f b〛 := by
-  induction n generalizing v f b
-  case zero =>
-    simp [Tree.unfold_aux]
-  case succ n' ih =>
-    unfold Tree.unfold_aux
-    simp
-    intro t ht h
-    cases t <;> simp_all +arith
-    case leaf =>
-      exists TreeF.leaf
-    case node l x r =>
-      replace ⟨ ovl, hl, ovr, hr, h ⟩ := h
-      cases ovl <;> simp_all
-      case some vl =>
-        cases ovr <;> simp_all
-        case some vr =>
-        exists (TreeF.node l x r)
-        simp_all
-        exists vl
-        simp_all
-        exists vr
-        simp_all
-
-@[irreducible]
 def Tree.unfold (f : β → Gen (TreeF α β)) (v : β) : Gen (Tree α) :=
-  .indexed (fun n => Tree.unfold_aux n f v)
+  ⟨fun {_G} _ _ => Tree.unfoldGo (fun b => (f b).run) v⟩
+
+/-- Failure-free witness for `Tree.unfold`: the same fixpoint at the `Fail`-free interface. -/
+def TGen.Tree.unfold (f : β → TGen (TreeF α β)) (v : β) : TGen (Tree α) :=
+  ⟨fun {_G} _ => Palamedes.Tree.unfoldGo (fun b => (f b).run) v⟩
 
 @[simp]
 def Tree.unfold_support (P : β → TreeF α β → Prop) (b : β) (t : Tree α) : Prop :=
@@ -132,60 +113,39 @@ def Tree.unfold_support (P : β → TreeF α β → Prop) (b : β) (t : Tree α)
 theorem Tree.support_unfold :
     support (Tree.unfold f b) = Tree.unfold_support (fun b' => support (f b')) b := by
   funext s
-  simp_all
+  apply propext
+  show s ∈ SPMF.support (Tree.unfoldGo (fun b => (f b).run) b) ↔
+    Tree.unfold_support (fun b' => support (f b')) b s
   induction s generalizing b with
   | leaf =>
-    apply Iff.intro
-    . simp_all [Tree.unfold]
-      intro n h
-      cases n <;> simp_all [Tree.unfold_aux]
-      case succ n' =>
-        replace ⟨v', hv', h⟩ := h
-        cases v' <;> simp_all
-        case node l x r =>
-          replace ⟨ovl, hl, ovr, hr, h⟩ := h
-          cases ovl <;> simp_all
-          cases ovr <;> simp_all
-    . intros h
-      simp_all [Tree.unfold]
-      intros
-      exists 1
-      simp [Tree.unfold_aux]
-      exists .leaf
+    unfold Tree.unfoldGo
+    rw [SPMF.support_bind]
+    simp only [Set.mem_setOf_eq, Tree.unfold_support]
+    constructor
+    · rintro ⟨t, ht, hxs⟩
+      cases t with
+      | leaf => exact ht
+      | node bl x br => simp at hxs
+    · intro h
+      exact ⟨.leaf, h, by simp⟩
   | node l x r ihl ihr =>
-    apply Iff.intro
-    . simp_all [Tree.unfold]
-      intro n h
-      cases n <;> simp_all [Tree.unfold_aux]; case succ n =>
-      replace ⟨v', hv', h⟩ := h
-      cases v' <;> simp_all
-      case node bl x br =>
-        replace ⟨ovl, hvl, ovr, hvr, h⟩ := h
-        cases ovl <;> simp_all
-        case some vl =>
-          cases ovr <;> simp_all
-          case some vr =>
-            exists bl, br
-            apply And.intro hv'
-            rw [← @ihl bl, ← @ihr br]
-            apply And.intro <;> exists n
-    . intro ⟨bl, br, hx, hl, hr⟩
-      rw [← @ihl bl] at hl
-      simp [Tree.unfold] at hl
-      replace ⟨hml, nl, hl⟩ := hl
-      rw [← @ihr br] at hr
-      simp [Tree.unfold] at hr
-      replace ⟨hmr, nr, hr⟩ := hr
-      simp [Tree.unfold]
-      simp_all
-      exists (nl + nr + 1)
-      exists TreeF.node bl x br
-      simp_all
-      exists (some l)
-      simp_all [Tree.unfold_aux_monotonic]
-      exists (some r)
-      rw [Nat.add_comm]
-      simp_all [Tree.unfold_aux_monotonic]
+    unfold Tree.unfoldGo
+    rw [SPMF.support_bind]
+    simp only [Set.mem_setOf_eq, Tree.unfold_support]
+    constructor
+    · rintro ⟨t, ht, hxs⟩
+      cases t with
+      | leaf => simp at hxs
+      | node bl x' br =>
+        simp only [SPMF.support_bind, SPMF.support_pure, Set.mem_setOf_eq,
+          Set.mem_singleton_iff] at hxs
+        obtain ⟨l', hl', r', hr', heq⟩ := hxs
+        obtain ⟨rfl, rfl, rfl⟩ := Tree.node.inj heq.symm
+        exact ⟨bl, br, ht, ihl.mp hl', ihr.mp hr'⟩
+    · rintro ⟨bl, br, hb', hl, hr⟩
+      refine ⟨.node bl x br, hb', ?_⟩
+      simp only [SPMF.support_bind, SPMF.support_pure, Set.mem_setOf_eq, Set.mem_singleton_iff]
+      exact ⟨l, ihl.mpr hl, r, ihr.mpr hr, rfl⟩
 
 @[gen_congr]
 theorem Tree.support_unfold_congr
@@ -408,6 +368,8 @@ theorem Tree.merge_accuM
 
 end FoldMerging
 
+open Gen
+
 namespace Gen
 
 namespace CorrectGen
@@ -442,9 +404,6 @@ def Tree.s_unfold
       apply Iff.intro <;> intro h
       . replace ⟨ bl, sl, br, sr, ⟨ ⟨ t', ⟨ ht' , h ⟩  ⟩, ⟨ hl, hr ⟩ ⟩ ⟩ := h
         cases t' <;> simp_all [(g b s).property]
-        case mp.node bl' x' br' =>
-          replace ⟨ x'', l'', r'', ht', hx, hr, hl ⟩ := ht'
-          simp_all
       . rw [Option.bind_eq_some_iff] at h
         replace ⟨ bl, ⟨ hl, h ⟩ ⟩ := h
         rw [Option.bind_eq_some_iff] at h
@@ -453,7 +412,6 @@ def Tree.s_unfold
         apply And.intro
         . exists TreeF.node bl x br
           simp_all [(g b s).property]
-          exists x, bl, br
         . simp_all
 
 @[extract]
@@ -478,20 +436,16 @@ end CorrectGen
 
 namespace Total
 
-@[simp, aesop safe (rule_sets := [totality])]
-def Tree.total_unfold
+/-- An `unfold` whose step generator is everywhere assume-free is itself assume-free; the witness is
+the same fixpoint at the failure-free interface. See `List.total_unfold`. -/
+@[aesop safe (rule_sets := [totality])]
+theorem Tree.total_unfold
     (h : ∀ b, total (g b)) :
     total (Tree.unfold g b) := by
-  simp [Tree.unfold]
-  apply total_indexed
-  intro n
-  induction n generalizing b with
-  | zero => simp [Tree.unfold_aux]
-  | succ n' ih =>
-    simp [Tree.unfold_aux]
-    apply total_bind <;> try apply h
-    intro t h
-    cases t <;> simp [ih]
+  choose tg hg using h
+  have : g = fun b => (tg b).toGen := funext fun b => (hg b).symm
+  subst this
+  exact ⟨TGen.Tree.unfold tg b, by ext; rfl⟩
 
 end Total
 
@@ -507,3 +461,5 @@ instance [ToString α] : ToString (Tree α) where
   toString := Tree.toString
 
 end PrettyPrint
+
+end Palamedes

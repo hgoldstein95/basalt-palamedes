@@ -15,6 +15,10 @@ inductive Atom where
 
 end TypeDef
 
+namespace Palamedes
+
+open Gen
+
 namespace Gen
 
 @[irreducible]
@@ -61,6 +65,8 @@ theorem total_arbLabel : total arbLabel := by
 end Total
 
 end Gen
+
+end Palamedes
 
 namespace PrettyPrint
 

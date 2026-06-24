@@ -25,6 +25,10 @@ instance : ToString Color where
 
 end TypeDef
 
+namespace Palamedes
+
+open Gen
+
 namespace Gen
 
 def arbColor : Gen Color := pick (pure .red) (pure .black)
@@ -82,3 +86,5 @@ theorem total_color_rec (hf : total gr) (ht : total gb) : total (Color.rec gr gb
 end Total
 
 end Gen
+
+end Palamedes

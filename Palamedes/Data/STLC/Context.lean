@@ -4,6 +4,10 @@ import Palamedes.Total
 import Batteries.Data.List.Lemmas
 import Mathlib.Data.List.Basic
 
+namespace Palamedes
+
+open Gen
+
 namespace Gen
 
 def elements (xs : List α) (h : xs.length > 0) : Gen α :=
@@ -24,7 +28,7 @@ theorem support_elements
     | [] =>
       simp_all [elements]
     | _ :: _ =>
-      simp [elements] at ih |-
+      simp [elements] at ih ⊢
       simp_all
 
 namespace CorrectGen
@@ -65,3 +69,5 @@ theorem getElem?_eq_some_iff_indexesOf_getElem?_eq_some
   simp
 
 end Gen
+
+end Palamedes

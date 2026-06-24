@@ -2,7 +2,11 @@ import Palamedes.Gen
 import Palamedes.Support
 import Palamedes.OptimizeCongr
 
-open Lean Elab Command Term Meta Gen
+open Lean Elab Command Term Meta
+
+namespace Palamedes
+
+open Gen
 
 /-!
 # Correct-by-Construction Optimizer
@@ -48,7 +52,8 @@ partial def assumeReachesHead (e : Expr) (crossed : Array FVarId) : MetaM Bool :
   | pick _ x y => return (← assumeReachesHead x crossed) || (← assumeReachesHead y crossed)
   | dite _ _ _ t f => return (← assumeUnderBinder t crossed) || (← assumeUnderBinder f crossed)
   | ite _ _ _ t f => return (← assumeReachesHead t crossed) || (← assumeReachesHead f crossed)
-  | indexed _ _ => return false
+  -- A per-datatype `unfold` combinator (a `partial_fixpoint`) is an opaque barrier: a guard inside
+  -- the fixpoint is re-asserted per unfolding and cannot be hoisted. It falls through to `_`.
   | _ => return false
 
 /-- Descend under one leading binder. A value binder enters `crossed` (a guard may depend on it); a
@@ -118,6 +123,19 @@ def optimizeBind? (x f : Expr) : MetaM (Option GenRewriteResult) :=
       let f' ← withLocalDecl `h .default (← mkEq b (.const ``true [])) fun h => do
         mkLambdaFVars #[h] (← mkAppM ``bind #[x, ← mkLambdaFVars #[a] (.app g h)])
       return some (← mkAppM ``assume #[b, f'], ``support_bind_assume)
+
+/-- Single head rewrite of an `assume` node `assume b f`. When the guard `b` is decidably *true*, the
+guard never filters: `assume b f ~~> f h` (twin lemma `support_assume_true`), which deletes the dead
+`empty` else-branch. This is the step that makes a satisfiable-but-syntactically-present `assume`
+disappear, so that a total generator ends up genuinely `Fail`-free after optimization. A guard that is
+not closed (mentions bound values) or not provably true is left alone — that is a genuine filter. -/
+def optimizeAssume? (b f : Expr) : MetaM (Option GenRewriteResult) := do
+  -- Only discharge a guard we can *close*: no metavariables, and definitionally `true`. A guard that
+  -- mentions bound generator values (e.g. an unfold's seed) is not closed and stays as a real filter.
+  if b.hasExprMVar then return none
+  unless ← isDefEq b (.const ``true []) do return none
+  let h ← mkDecideProof (← mkEq b (.const ``true []))
+  return some (f.beta #[h], ``support_assume_true)
 
 /-- Single head rewrite of a `pick` node `pick x y`. Reports the twin `support_*` lemma alongside
 the rewritten expression. -/
@@ -248,7 +266,7 @@ optimizer cannot descend through, whether there was actually anything to descend
 private def isGenValued (e : Expr) : MetaM Bool := do
   forallTelescopeReducing (← inferType e) fun _ body => do
     let head := body.getAppFn
-    return head.isConstOf ``Gen || head.isConstOf ``Raw.Gen
+    return head.isConstOf ``Gen
 
 mutual
 
@@ -328,6 +346,7 @@ private partial def tryHeadRewrite (e : Expr) : MetaM (Option (Expr × Expr)) :=
     match_expr e with
     | bind _ _ _ _ x f => optimizeBind? x f
     | pick _ x y => optimizePick? x y
+    | assume _ b f => optimizeAssume? b f
     | _ => pure none
   match res? with
   | none => return none
@@ -344,3 +363,5 @@ def optimizeGen (e : Expr) : MetaM (Expr × Expr) := do
     | some p => mkExpectedTypeHint p (← mkEq (← mkSupport e) (← mkSupport r.expr))
     | none => mkSupportRefl e
   return (r.expr, proof)
+
+end Palamedes

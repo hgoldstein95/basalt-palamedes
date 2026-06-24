@@ -1,7 +1,7 @@
 import Lean
 import Palamedes.Optimizer
 
-open Lean Elab Command Term Meta Gen
+open Lean Elab Command Term Meta Palamedes Palamedes.Gen
 
 syntax (name := assertOptimizes) "#assert_optimizes! " term " goes_to " term : command
 
@@ -11,15 +11,15 @@ def expandAssertOptimizes : CommandElab := fun stx =>
   | `(#assert_optimizes! $t1:term goes_to $t2:term) => do
     liftTermElabM do
       let mα ← mkFreshExprMVar none
-      let e1 ← elabTerm t1 (some (.app (.const ``Gen []) mα))
-      let e2 ← elabTerm t2 (some (.app (.const ``Gen []) mα))
-      let (e1', proof) ← optimizeGen e1
+      let e1 ← elabTerm t1 (some (.app (.const ``Palamedes.Gen []) mα))
+      let e2 ← elabTerm t2 (some (.app (.const ``Palamedes.Gen []) mα))
+      let (e1', proof) ← Palamedes.optimizeGen e1
       unless ← isDefEq e1' e2 do
         throwError "{e1}\n~~>\n{e1'}\n!=\n{e2}"
 
       -- The optimizer now hands back a proof that `support` was preserved; check it proves exactly
       -- `support e1 = support e1'` and is well-typed.
-      let thm ← mkEq (← mkAppM ``support #[e1]) (← mkAppM ``support #[e1'])
+      let thm ← mkEq (← mkAppM ``Palamedes.Gen.support #[e1]) (← mkAppM ``Palamedes.Gen.support #[e1'])
       unless ← isDefEq (← inferType proof) thm do
         throwError "carried proof has wrong type: expected {thm}, got {← inferType proof}"
       try

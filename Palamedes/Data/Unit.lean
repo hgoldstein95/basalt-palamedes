@@ -2,6 +2,10 @@ import Palamedes.Gen
 import Palamedes.CorrectGen
 import Palamedes.Total
 
+namespace Palamedes
+
+open Gen
+
 namespace Gen
 
 @[reducible]
@@ -18,3 +22,5 @@ theorem s_arbUnit_val : s_arbUnit.val = pure () := rfl
 end CorrectGen
 
 end Gen
+
+end Palamedes

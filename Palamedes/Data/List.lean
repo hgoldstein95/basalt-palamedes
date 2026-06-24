@@ -78,39 +78,37 @@ end RecursionSchemes
 
 section Unfold
 
+namespace Palamedes
+
 open Gen
 
-private def List.unfold_aux (n : Nat) (f : β → Gen (ListF α β)) (b : β) : Gen (Option (List α)) :=
-  match n with
-  | 0 => pure none
-  | n + 1 => do
-    match (← f b) with
-    | .nil => pure (some [])
-    | .cons x b' => do
-      let xs ← List.unfold_aux n f b'
-      pure (do x :: (← xs))
+/-- The polymorphic Basalt generator underlying the list `unfold`: apply `step` to the seed; on `nil`
+stop, on `cons x b'` emit `x` and recurse on `b'`. A direct `partial_fixpoint` over Basalt's CCPO.
+
+`step` is the *already-instantiated* step generator (`β → G (ListF α β)`), not a `Gen`/`TGen`, so the
+one fixpoint serves both the failure-supporting interface (`List.unfold`, via `(f b).run`) and the
+failure-free one (`TGen.List.unfold`); their totality relationship is then a fixpoint congruence (see
+`List.total_unfold`). -/
+def List.unfoldGo [_root_.Gen G] (step : β → G (ListF α β)) (b : β) : G (List α) :=
+  step b >>= fun t =>
+    match t with
+    | .nil => pure []
+    | .cons x b' => List.unfoldGo step b' >>= fun xs => pure (x :: xs)
+  partial_fixpoint
+
+/-- The recursive list `unfold` operator. Synthesis emits applications of this as data; the recursion
+lives in the `partial_fixpoint` `unfoldGo`. -/
+def List.unfold (f : β → Gen (ListF α β)) (b : β) : Gen (List α) :=
+  ⟨fun {_G} _ _ => List.unfoldGo (fun b => (f b).run) b⟩
+
+/-- The failure-free list `unfold`: the same fixpoint instantiated at a `TGen` step. This is the
+totality witness for `List.unfold` when its step is failure-free. -/
+def TGen.List.unfold (f : β → TGen (ListF α β)) (b : β) : TGen (List α) :=
+  ⟨fun {_G} _ => Palamedes.List.unfoldGo (fun b => (f b).run) b⟩
 
 @[simp]
-theorem List.unfold_aux_monotonic :
-    some v ∈ 〚List.unfold_aux n f b〛 →
-    some v ∈ 〚List.unfold_aux (n + m) f b〛 := by
-  induction n generalizing v f b
-  case zero =>
-    simp [List.unfold_aux]
-  case succ n' ih =>
-    unfold List.unfold_aux
-    simp
-    intro l hl hv
-    simp_all [Nat.add_comm]
-    exists l
-    cases l <;> simp_all
-    have ⟨w, ⟨hl, hr⟩⟩ := hv
-    exists w
-    cases w <;> simp_all
-
-@[irreducible]
-def List.unfold (f : β → Gen (ListF α β)) (b : β) : Gen (List α) :=
-  indexed (fun n => List.unfold_aux n f b)
+theorem List.run_unfold (f : β → Gen (ListF α β)) (b : β) (G : Type → Type) [_root_.Gen G] [Fail G] :
+    (List.unfold f b).run (G := G) = List.unfoldGo (fun b => (f b).run) b := rfl
 
 -- TODO: I wish I had a better naming convention for this.
 @[simp]
@@ -122,54 +120,48 @@ def List.unfold_support (P : β → ListF α β → Prop) (b : β) (xs : List α
 @[simp]
 theorem List.support_unfold :
     support (List.unfold f b) = List.unfold_support (fun b' => support (f b')) b := by
-  unfold List.unfold
   funext xs
-  simp_all
-  have hm : ∀ b v (n m : Nat),
-    some v ∈ 〚List.unfold_aux n f b〛
-    → some v ∈ 〚List.unfold_aux (n + m) f b〛 := by
-    simp_all
+  apply propext
+  show xs ∈ SPMF.support (List.unfoldGo (fun b => (f b).run) b) ↔
+    List.unfold_support (fun b' => support (f b')) b xs
   induction xs generalizing b with
   | nil =>
-    apply Iff.intro
-    . intro ⟨n, h⟩
-      cases n <;> simp_all [List.unfold_aux]
-      have ⟨v', hv'1, hv'2⟩ := h
-      cases v' <;> simp_all
-      have ⟨v'', hv''⟩ := hv'2
-      cases v'' <;> simp_all
-    . simp
-      intro h
-      exists 1
-      simp [List.unfold_aux]
-      exists ListF.nil
+    unfold List.unfoldGo
+    rw [SPMF.support_bind]
+    simp only [Set.mem_setOf_eq, List.unfold_support]
+    constructor
+    · rintro ⟨t, ht, hxs⟩
+      cases t with
+      | nil => exact ht
+      | cons x b' => simp at hxs
+    · intro h
+      exact ⟨.nil, h, by simp⟩
   | cons x xs ih =>
-    apply Iff.intro
-    . intro ⟨n, h⟩
-      cases n <;> simp_all [List.unfold_aux]; case succ n =>
-      have ⟨v', hv'1, hv'2⟩ := h
-      cases v' <;> simp_all
-      case cons _ b'' =>
-      have ⟨v'', hv''⟩ := hv'2
-      cases v'' <;> simp_all
-      obtain ⟨hv'', rfl, rfl⟩ := hv''
-      exists b''
-      apply And.intro hv'1
-      apply (@ih b'').mp
-      exists n
-    . intro ⟨b', hx, hxs⟩
-      have ⟨n, h⟩ := ih.mpr hxs
-      exists n + 1
-      simp_all
-      exists ListF.cons x b'
-      simp_all
-      exists some xs
+    unfold List.unfoldGo
+    rw [SPMF.support_bind]
+    simp only [Set.mem_setOf_eq, List.unfold_support]
+    constructor
+    · rintro ⟨t, ht, hxs⟩
+      cases t with
+      | nil => simp [SPMF.support_pure] at hxs
+      | cons x' b' =>
+        simp only [SPMF.support_bind, SPMF.support_pure, Set.mem_setOf_eq,
+          Set.mem_singleton_iff] at hxs
+        obtain ⟨ys, hys, heq⟩ := hxs
+        obtain ⟨rfl, rfl⟩ := List.cons.inj heq.symm
+        exact ⟨b', ht, ih.mp hys⟩
+    · rintro ⟨b', hb', hxs⟩
+      refine ⟨.cons x b', hb', ?_⟩
+      simp only [SPMF.support_bind, SPMF.support_pure, Set.mem_setOf_eq, Set.mem_singleton_iff]
+      exact ⟨xs, ih.mpr hxs, rfl⟩
 
 @[gen_congr]
 theorem List.support_unfold_congr
     {hf : ∀ {b}, support (f b) = support (f' b)} :
     support (List.unfold f b) = support (List.unfold f' b) := by
   aesop
+
+end Palamedes
 
 end Unfold
 
@@ -347,6 +339,10 @@ theorem List.merge_accuM
 
 end FoldMerging
 
+namespace Palamedes
+
+open Gen
+
 namespace Gen
 
 namespace CorrectGen
@@ -411,21 +407,21 @@ end CorrectGen
 
 namespace Total
 
-@[simp, aesop safe (rule_sets := [totality])]
-def List.total_unfold
+/-- An `unfold` whose step generator is everywhere assume-free is itself assume-free. The witness is
+the *same* `unfoldGo` fixpoint re-run at the failure-free interface (`TGen.List.unfold`); since
+`unfoldGo` never mentions `Fail`, the two coincide by a fixpoint congruence (here: definitional,
+because `TGen.toGen` forgets the `Fail` instance argument). -/
+@[aesop safe (rule_sets := [totality])]
+theorem List.total_unfold
     (h : ∀ b, total (g b)) :
     total (List.unfold g b) := by
-  simp [List.unfold]
-  apply total_indexed
-  intro n
-  induction n generalizing b with
-  | zero => simp [List.unfold_aux]
-  | succ n' ih =>
-    simp [List.unfold_aux]
-    apply total_bind <;> try apply h
-    intro t h
-    cases t <;> simp [ih]
+  choose tg hg using h
+  have : g = fun b => (tg b).toGen := funext fun b => (hg b).symm
+  subst this
+  exact ⟨TGen.List.unfold tg b, by ext; rfl⟩
 
 end Total
 
 end Gen
+
+end Palamedes

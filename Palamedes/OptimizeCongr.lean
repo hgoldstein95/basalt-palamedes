@@ -26,8 +26,8 @@ Returns `none` if the statement is not of that shape (so the attribute can rejec
 def analyzeCongr (lemmaName : Name) : MetaM (Option CongrRule) := do
   forallTelescope (← getConstInfo lemmaName).type fun _ body => do
     let_expr Eq _ lhs rhs := body | return none
-    let_expr Gen.support _ genL := lhs | return none
-    let_expr Gen.support _ genR := rhs | return none
+    let_expr Palamedes.Gen.support _ genL := lhs | return none
+    let_expr Palamedes.Gen.support _ genR := rhs | return none
     let some head := genL.getAppFn.constName? | return none
     -- Both sides must be applications of the *same* head constant.
     unless genR.getAppFn.constName? == some head do return none

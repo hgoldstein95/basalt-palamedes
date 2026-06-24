@@ -1,85 +1,53 @@
 import Palamedes.Gen
-import Plausible.Gen
+import Basalt.PlausibleGen
+import Plausible
 
-/-
-Infrastructure for sampling from a generator.
+/-!
+# Executable sampling for Palamedes generators
+
+A `Palamedes.Gen α` is a thin wrapper around a polymorphic Basalt generator
+(`∀ {G} [Gen G], G α`). Basalt provides a `Gen Plausible.Gen` instance (`Basalt.PlausibleGen`), so we
+sample by instantiating the generator at `Plausible.Gen` and running it with Plausible's sampler.
+
+The filtering combinators (`Gen.assume`/`Gen.empty`) bottom out at the `Fail` capability's `fail`.
+The `Fail Plausible.Gen` instance below interprets that as a thrown `GenError` (via Plausible's
+`MonadExcept`) — a *computable* failure, so filtered generators can be sampled.
+
+## Known limitation: no fuel or backtracking (deferred)
+
+This is a deliberately minimal sampler: it does **not** bound recursion depth or retry on failure —
+Basalt's `Plausible.Gen` interpretation of `pick` commits to one branch, and a thrown `Fail`
+propagates straight out. Two consequences:
+
+* **Filtering generators can fail outright.** A generator synthesized with `allow_partial` (so it
+  contains a genuinely failing `assume`) throws `GenError` whenever a random path hits the failing
+  branch, with no backtracking to recover (e.g. `genAVL`, `genRBT`).
+* **Recursion can diverge.** `total` here means *assume-free*, not *terminating* (almost-sure
+  termination, `SPMF.IsPMF`, is a separate property the synthesizer does not yet establish). A total
+  but non-a.s.-terminating generator — typically branching recursion with no size decay — can fail to
+  terminate when sampled (e.g. `genWellTyped`).
+
+Generators that are both non-filtering and a.s.-terminating (e.g. `genBST`, `genSortedBetween`,
+`genWellScoped`) sample fine. A size-bounded / backtracking sampler is left as future work.
 -/
 
-def replicateM [Monad m] (n : Nat) (mx : m α) : m (List α) :=
-  match n with
-  | 0 => pure []
-  | n + 1 => do
-    let x ← mx
-    let xs ← replicateM n mx
-    pure (x :: xs)
+namespace Palamedes
 
-structure SampleConfig where
-  backtrackLimit : Nat
-  sizeLimit : Nat
-  sizeRetryLimit : Nat
+open Gen
 
-instance : Inhabited SampleConfig where
-  default := {backtrackLimit := 100, sizeLimit := 20, sizeRetryLimit := 100}
+/-- Computable failure for the executable interpretation: a thrown generation error. (Note that the
+sampler does not catch it — see the module docstring's "Known limitation".) -/
+instance : Fail Plausible.Gen := ⟨throw Plausible.Gen.genericFailure⟩
 
-abbrev SampleM α := Plausible.Gen α
+/-- Interpret `g` at Plausible's `Gen` monad. -/
+def toPlausible (g : Gen α) : Plausible.Gen α := g.run
 
-namespace SampleM
+/-- Draw a single value from `g` at the given size. -/
+def sample (g : Gen α) (size : Nat := 100) : IO α :=
+  Plausible.Gen.run (toPlausible g) size
 
-def failWith (s : String) : SampleM α := do
-  throw (.genError s)
+/-- Draw `n` values from `g`. -/
+def sampleN (n : Nat) (g : Gen α) (size : Nat := 100) : IO (List α) :=
+  (List.replicate n ()).mapM (fun _ => sample g size)
 
-def next : SampleM Nat := Plausible.Gen.chooseNat
-
-def randBound (lo hi : Nat) (pf : lo ≤ hi) : SampleM {v : Nat // lo ≤ v ∧ v ≤ hi} :=
-  Plausible.Gen.choose (α := Nat) lo hi pf
-
-def weightedChoice (g₁ g₂ : SampleM α) : SampleM α := do
-  let ⟨b, _⟩ ← SampleM.randBound 0 1 (by simp)
-  if b == 0 then g₁ else g₂
-
-def run : SampleM α → IO α := (Plausible.Gen.run · 100)
-
-mutual
-partial def sizedLoop
-    (cfg : SampleConfig)
-    (n : Nat)
-    (f : Nat → Gen (Option α))
-    (remaining : Nat) :
-    SampleM α := do
-  match (← sampleRand cfg (f n)) with
-  | .none =>
-    match remaining with
-    | 0 => failWith "ran out of fuel"
-    | remaining' + 1 => sizedLoop cfg n f remaining'
-  | .some v => pure v
-
-partial def backtrackLoop
-    (cfg : SampleConfig)
-    (x y : Gen α)
-    (remaining : Nat) :
-    SampleM α :=
-  match remaining with
-  | 0 => failWith "backtracked too many times"
-  | remaining' + 1 =>
-    try
-      weightedChoice (sampleRand cfg x) (sampleRand cfg y)
-    catch
-      | _ => backtrackLoop cfg x y remaining'
-
-partial def sampleRand (cfg : SampleConfig) : Gen α → SampleM α
-  | .ret v' => pure v'
-  | .pick x y => backtrackLoop cfg x y cfg.backtrackLimit
-  | .indexed f => sizedLoop cfg cfg.sizeLimit f cfg.sizeRetryLimit
-  | .bind x f => sampleRand cfg x >>= sampleRand cfg ∘ f
-  | .assume b f => if h : b then sampleRand cfg (f h) else throw (.genError "assume check failed")
-end
-
-end SampleM
-
-partial def interpGen (cfg : SampleConfig) : Gen α → IO α := SampleM.run ∘ SampleM.sampleRand cfg
-
-partial def sample (g : Gen α) (cfg : SampleConfig := default) : IO α :=
-  interpGen cfg g
-
-partial def sampleN (n : Nat) (g : Gen α) (cfg : SampleConfig := default) : IO (List α) :=
-  replicateM n <| interpGen cfg g
+end Palamedes

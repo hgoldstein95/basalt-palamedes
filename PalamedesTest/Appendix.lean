@@ -2,7 +2,7 @@ import Palamedes.Synthesizer
 
 set_option linter.auxLemma false
 
-open Gen CorrectGen
+open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
 
 def genOneOrInRange (lo hi : Nat) : Gen Nat :=
   if h : decide (lo <= hi) = true then
@@ -20,8 +20,8 @@ def genOneOrInRange_manual (lo hi : Nat) : Gen Nat :=
   else
     pure 0
 
-def genCompleteTree (n : Nat) : Gen (Tree Nat) :=
-  Tree.unfold
+def genCompleteTree (n : Nat) : Gen (Palamedes.Tree Nat) :=
+  Palamedes.Tree.unfold
     (fun x =>
       if x.snd = 0 then pure TreeF.leaf
       else do
@@ -33,8 +33,8 @@ def genCompleteTree (n : Nat) : Gen (Tree Nat) :=
 Differences:
 - Remove extra unit in collector.
 -/
-def genComplete_manual (n : Nat) : Gen (Tree Nat) :=
-  Tree.unfold
+def genComplete_manual (n : Nat) : Gen (Palamedes.Tree Nat) :=
+  Palamedes.Tree.unfold
     (fun height =>
       if height = 0 then
         pure TreeF.leaf
@@ -92,8 +92,8 @@ def genLengthKAllTwos_manual (k : Nat): Gen (List Nat) :=
         pure (ListF.cons 2 (len - 1)))
     k
 
-def genAVL (height lo hi : Nat) : Gen (Tree Nat) :=
-  Tree.unfold
+def genAVL (height lo hi : Nat) : Gen (Palamedes.Tree Nat) :=
+  Palamedes.Tree.unfold
     (fun x => do
       let __do_lift <-
         if x.snd.snd = 0 then pure TreeF.leaf
@@ -121,8 +121,8 @@ Differences:
 - Remove two extra units in collector.
 - Nicer match on height to reduce some duplication.
 -/
-def genAVL_manual (height lo hi : Nat) : Gen (Tree Nat) :=
-  Tree.unfold
+def genAVL_manual (height lo hi : Nat) : Gen (Palamedes.Tree Nat) :=
+  Palamedes.Tree.unfold
     (fun (lo, hi, height) => do
       match height with
       | 0 => pure TreeF.leaf
@@ -149,10 +149,10 @@ Differences:
 - Generator is technically total now; this requires insight about the total number of values that
 can appear in a tree of height k.
 
-def genAVL_manual' (height lo hi : Nat) : Gen (Tree Nat) :=
+def genAVL_manual' (height lo hi : Nat) : Gen (Palamedes.Tree Nat) :=
   -- Guarantee that there are enough values in the range, given the height.
   assume (hi - lo > 2 ^ height) fun _ =>
-    Tree.unfold
+    Palamedes.Tree.unfold
       (fun (lo, hi, height) => do
         match height with
         | 0 => pure TreeF.leaf

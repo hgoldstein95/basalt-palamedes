@@ -121,57 +121,34 @@ end RecursionSchemes
 
 section Unfold
 
+namespace Palamedes
+
 open Gen
 
-private def Term.unfold_aux (n : Nat) (f : α → Gen (TermF α)) (x : α) : Gen (Option Term) :=
-  match n with
-  | 0 => pure none
-  | n + 1 => do
-    match (← f x) with
-    | .unit => pure (some .unit)
-    | .var n => pure (some (.var n))
-    | .abs τ x' =>
-      let t ← Term.unfold_aux n f x'
-      pure (do pure (.abs τ (← t)))
-    | .app x₁ x₂ => do
-      let t₁ ← Term.unfold_aux n f x₁
-      let t₂ ← Term.unfold_aux n f x₂
-      pure (do pure (.app (← t₁) (← t₂)))
+/-- The polymorphic Basalt generator underlying the term `unfold`: `unit`/`var` stop, `abs` recurses
+on its body, `app` recurses on both subterms. A direct `partial_fixpoint` over Basalt's CCPO. -/
+def Term.unfoldGo [_root_.Gen G] (step : α → G (TermF α)) (x : α) : G Term :=
+  step x >>= fun t =>
+    match t with
+    | .unit => pure .unit
+    | .var n => pure (.var n)
+    | .abs τ x' => Term.unfoldGo step x' >>= fun t' => pure (.abs τ t')
+    | .app x₁ x₂ =>
+      Term.unfoldGo step x₁ >>= fun t₁ =>
+      Term.unfoldGo step x₂ >>= fun t₂ =>
+      pure (.app t₁ t₂)
+  partial_fixpoint
+
+def Term.unfold (f : α → Gen (TermF α)) (x : α) : Gen Term :=
+  ⟨fun {_G} _ _ => Term.unfoldGo (fun b => (f b).run) x⟩
+
+/-- Failure-free witness for `Term.unfold`: the same fixpoint at the `Fail`-free interface. -/
+def TGen.Term.unfold (f : α → TGen (TermF α)) (x : α) : TGen Term :=
+  ⟨fun {_G} _ => Palamedes.Term.unfoldGo (fun b => (f b).run) x⟩
 
 @[simp]
-theorem Term.unfold_aux_monotonic :
-    some v ∈ 〚Term.unfold_aux n f x〛 →
-    some v ∈ 〚Term.unfold_aux (n + m) f x〛 := by
-  induction n generalizing v f x
-  case zero =>
-    simp [Term.unfold_aux]
-  case succ α n' ih =>
-    unfold Term.unfold_aux
-    simp
-    intro t ht h
-    cases t <;> simp_all +arith
-    case unit =>
-      exists TermF.unit
-    case var n => exists TermF.var n
-    case abs τ t' =>
-      replace ⟨ ov', hv', hv ⟩ := h
-      cases ov' <;> simp_all
-      case some v' =>
-        exists TermF.abs τ t'; simp_all
-        exists v'; simp_all
-    case app t₁ t₂ =>
-      replace ⟨ ov₁, h₁, ov₂, h₂, h ⟩ := h
-      cases ov₁ <;> simp_all
-      case some v₁ =>
-        cases ov₂ <;> simp_all
-        case some v₂ =>
-          exists TermF.app t₁ t₂; simp_all
-          exists v₁; simp_all
-          exists v₂; simp_all
-
-@[irreducible]
-def Term.unfold (f : α → Gen (TermF α)) (x : α) : Gen Term :=
-  .indexed (fun n => Term.unfold_aux n f x)
+theorem Term.run_unfold (f : α → Gen (TermF α)) (x : α) (G : Type → Type) [_root_.Gen G] [Fail G] :
+    (Term.unfold f x).run (G := G) = Term.unfoldGo (fun b => (f b).run) x := rfl
 
 @[simp]
 def Term.unfold_support (P : α → TermF α → Prop) (x : α) (t : Term) : Prop :=
@@ -190,139 +167,87 @@ def Term.unfold_support (P : α → TermF α → Prop) (x : α) (t : Term) : Pro
 theorem Term.support_unfold :
     support (Term.unfold f x) = Term.unfold_support (fun x' => support (f x')) x := by
   funext t
-  simp_all
-  induction t generalizing x
-  case unit =>
-    apply Iff.intro
-    . intro h
-      simp_all [unfold]
-      replace ⟨n, h⟩ := h
-      cases n <;> simp_all [Term.unfold_aux]
-      case succ n' =>
-        replace ⟨v', hv', h⟩ := h
-        cases v' <;> simp_all
-        case abs τ t' =>
-          replace ⟨ov', hv', h⟩ := h
-          cases ov' <;> simp_all
-        case app t₁ t₂ =>
-          replace ⟨ov₁, h₁, ov₂, h₂, h⟩ := h
-          cases ov₁ <;> simp_all
-          cases ov₂ <;> simp_all
-    . intros h
-      simp_all [unfold]
-      exists 1
-      exists TermF.unit
-  case var n =>
-    apply Iff.intro
-    . --(->)
-      intro h
-      simp_all [unfold]
-      replace ⟨n, h⟩ := h
-      cases n <;> simp_all [Term.unfold_aux]
-      case succ n' =>
-        replace ⟨v', hv', h⟩ := h
-        cases v' <;> simp_all
-        case abs τ t' =>
-          replace ⟨ov', hv', h⟩ := h
-          cases ov' <;> simp_all
-        case app t₁ t₂ =>
-          replace ⟨ov₁, h₁, ov₂, h₂, h⟩ := h
-          cases ov₁ <;> simp_all
-          cases ov₂ <;> simp_all
-    . --(<-)
-      intro h
-      simp [unfold]
-      simp_all
-      exists 1
-      exists TermF.var n
-  case abs τ t' ih =>
-    apply Iff.intro
-    . -- (->)
-      intro h
-      simp_all [unfold]
-      replace ⟨n, h⟩ := h
-      cases n <;> simp_all [Term.unfold_aux]
-      case succ n' =>
-        replace ⟨vf, hvf, h⟩ := h
-        cases vf <;> simp_all
-        case abs τ b' =>
-          replace ⟨ov', hv', h⟩ := h
-          cases ov' <;> simp_all
-          case some v' =>
-            exists b'
-            apply And.intro hvf
-            replace ih := @ih b'
-            rw [Iff.comm] at ih
-            rw [ih]
-            exists n'
-        case app t₁ t₂ =>
-          replace ⟨ov₁, h₁, ov₂, h₂, h⟩ := h
-          cases ov₁ <;> simp_all
-          cases ov₂ <;> simp_all
-    . -- (<-)
-      intro ⟨b', hb', h⟩
-      replace ih := @ih b'
-      rw [Iff.comm] at ih
-      rw [ih] at h
-      simp [unfold] at h |-
-      replace ⟨hm, n, h⟩ := h
-      intros
-      simp_all
-      exists n + 1
-      exists TermF.abs τ b'; simp_all
-      exists some t'
-  case app t₁ t₂ ih₁ ih₂ =>
-    apply Iff.intro
-    . intro h
-      simp_all [unfold]
-      replace ⟨n, h⟩ := h
-      cases n <;> simp_all [Term.unfold_aux]
-      case succ n =>
-        replace ⟨vf, hvf, h⟩ := h
-        cases vf <;> simp_all
-        case abs τ b' =>
-          replace ⟨ov', hv', h⟩ := h
-          cases ov' <;> simp_all
-        case app b₁ b₂ =>
-          replace ⟨ov₁, hv₁, ov₂, hv₂, h⟩ := h
-          cases ov₁ <;> simp_all
-          case some v₁ =>
-            cases ov₂ <;> simp_all
-            case some v₂ =>
-              exists b₁, b₂
-              apply And.intro hvf
-              replace ih₁ := @ih₁ b₁
-              replace ih₂ := @ih₂ b₂
-              rw [Iff.comm] at ih₁ ih₂
-              rw [ih₁, ih₂]
-              apply And.intro <;> exists n
-    . intro ⟨b₁, b₂, hb, h₁, h₂⟩
-      replace ih₁ := @ih₁ b₁
-      rw [Iff.comm] at ih₁
-      rw [ih₁] at h₁
-      simp [unfold] at h₁ |-
-      replace ⟨hm₁, n₁, h₁⟩ := h₁
-      replace ih₂ := @ih₂ b₂
-      rw [Iff.comm] at ih₂
-      rw [ih₂] at h₂
-      simp [unfold] at h₂
-      replace ⟨hm₂, n₂, h₂⟩ := h₂
-      intros
-      simp_all
-      exists n₁ + n₂ + 1
-      exists TermF.app b₁ b₂
-      simp_all
-      exists some t₁
-      simp_all [Term.unfold_aux_monotonic]
-      exists some t₂
-      rw [Nat.add_comm]
-      simp_all [Term.unfold_aux_monotonic]
+  apply propext
+  show t ∈ SPMF.support (Term.unfoldGo (fun b => (f b).run) x) ↔
+    Term.unfold_support (fun x' => support (f x')) x t
+  induction t generalizing x with
+  | unit =>
+    unfold Term.unfoldGo
+    rw [SPMF.support_bind]
+    simp only [Set.mem_setOf_eq, Term.unfold_support]
+    constructor
+    · rintro ⟨t, ht, hxs⟩
+      cases t with
+      | unit => exact ht
+      | var n => simp at hxs
+      | abs τ x' => simp at hxs
+      | app x₁ x₂ => simp at hxs
+    · intro h
+      exact ⟨.unit, h, by simp⟩
+  | var m =>
+    unfold Term.unfoldGo
+    rw [SPMF.support_bind]
+    simp only [Set.mem_setOf_eq, Term.unfold_support]
+    constructor
+    · rintro ⟨t, ht, hxs⟩
+      cases t with
+      | unit => simp at hxs
+      | var n =>
+        simp only [SPMF.support_pure, Set.mem_singleton_iff] at hxs
+        obtain rfl := Term.var.inj hxs.symm
+        exact ht
+      | abs τ x' => simp at hxs
+      | app x₁ x₂ => simp at hxs
+    · intro h
+      exact ⟨.var m, h, by simp⟩
+  | abs τ t' ih =>
+    unfold Term.unfoldGo
+    rw [SPMF.support_bind]
+    simp only [Set.mem_setOf_eq, Term.unfold_support]
+    constructor
+    · rintro ⟨t, ht, hxs⟩
+      cases t with
+      | unit => simp at hxs
+      | var n => simp at hxs
+      | abs τ' x' =>
+        simp only [SPMF.support_bind, SPMF.support_pure, Set.mem_setOf_eq,
+          Set.mem_singleton_iff] at hxs
+        obtain ⟨s', hs', heq⟩ := hxs
+        obtain ⟨rfl, rfl⟩ := Term.abs.inj heq.symm
+        exact ⟨x', ht, ih.mp hs'⟩
+      | app x₁ x₂ => simp at hxs
+    · rintro ⟨x', hx', hs⟩
+      refine ⟨.abs τ x', hx', ?_⟩
+      simp only [SPMF.support_bind, SPMF.support_pure, Set.mem_setOf_eq, Set.mem_singleton_iff]
+      exact ⟨t', ih.mpr hs, rfl⟩
+  | app t₁ t₂ ih₁ ih₂ =>
+    unfold Term.unfoldGo
+    rw [SPMF.support_bind]
+    simp only [Set.mem_setOf_eq, Term.unfold_support]
+    constructor
+    · rintro ⟨t, ht, hxs⟩
+      cases t with
+      | unit => simp at hxs
+      | var n => simp at hxs
+      | abs τ' x' => simp at hxs
+      | app x₁ x₂ =>
+        simp only [SPMF.support_bind, SPMF.support_pure, Set.mem_setOf_eq,
+          Set.mem_singleton_iff] at hxs
+        obtain ⟨s₁, hs₁, s₂, hs₂, heq⟩ := hxs
+        obtain ⟨rfl, rfl⟩ := Term.app.inj heq.symm
+        exact ⟨x₁, x₂, ht, ih₁.mp hs₁, ih₂.mp hs₂⟩
+    · rintro ⟨x₁, x₂, hx, h₁, h₂⟩
+      refine ⟨.app x₁ x₂, hx, ?_⟩
+      simp only [SPMF.support_bind, SPMF.support_pure, Set.mem_setOf_eq, Set.mem_singleton_iff]
+      exact ⟨t₁, ih₁.mpr h₁, t₂, ih₂.mpr h₂, rfl⟩
 
 @[gen_congr]
 theorem Term.support_unfold_congr
     {hf : ∀ {b}, support (f b) = support (f' b)} :
     support (Term.unfold f b) = support (Term.unfold f' b) := by
   aesop
+
+end Palamedes
 
 end Unfold
 
@@ -624,6 +549,10 @@ theorem Term.merge_accu_Option
 
 end FoldMerging
 
+namespace Palamedes
+
+open Gen
+
 namespace Gen
 
 namespace CorrectGen
@@ -721,24 +650,22 @@ end CorrectGen
 
 namespace Total
 
-@[simp, aesop safe (rule_sets := [totality])]
-def Term.total_unfold
+/-- An `unfold` whose step generator is everywhere assume-free is itself assume-free; the witness is
+the same fixpoint at the failure-free interface. See `List.total_unfold`. -/
+@[aesop safe (rule_sets := [totality])]
+theorem Term.total_unfold
     (h : ∀ b, total (g b)) :
     total (Term.unfold g b) := by
-  simp [Term.unfold]
-  apply total_indexed
-  intro n
-  induction n generalizing b with
-  | zero => simp [Term.unfold_aux]
-  | succ n' ih =>
-    simp [Term.unfold_aux]
-    apply total_bind <;> try apply h
-    intro t h
-    cases t <;> simp [ih]
+  choose tg hg using h
+  have : g = fun b => (tg b).toGen := funext fun b => (hg b).symm
+  subst this
+  exact ⟨TGen.Term.unfold tg b, by ext; rfl⟩
 
 end Total
 
 end Gen
+
+end Palamedes
 
 namespace PrettyPrint
 

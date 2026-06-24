@@ -2,12 +2,12 @@ import Palamedes.Synthesizer
 
 set_option maxHeartbeats 1000000
 
-open Gen CorrectGen
+open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
 
 namespace AVL
 
 @[simp]
-def isBST (t : Tree Nat) : Nat × Nat →  Bool := fun (lo, hi) =>
+def isBST (t : Palamedes.Tree Nat) : Nat × Nat →  Bool := fun (lo, hi) =>
   match t with
   | .leaf => true
   | .node l x r =>
@@ -16,7 +16,7 @@ def isBST (t : Tree Nat) : Nat × Nat →  Bool := fun (lo, hi) =>
     isBST r ⟨x + 1, hi⟩
 
 @[simp]
-def isBalanced (t : Tree Nat) (height : Nat) : Bool :=
+def isBalanced (t : Palamedes.Tree Nat) (height : Nat) : Bool :=
   match t with
   | .leaf => height <= 1
   | .node l _ r =>
@@ -25,10 +25,10 @@ def isBalanced (t : Tree Nat) (height : Nat) : Bool :=
     isBalanced r (height - 1)
 
 @[simp]
-def isAVL (height lo hi : Nat) (t : Tree Nat) : Bool :=
+def isAVL (height lo hi : Nat) (t : Palamedes.Tree Nat) : Bool :=
   isBalanced t height && isBST t (lo, hi)
 
-def genAVL (height lo hi : Nat) : Gen (Tree Nat) := by
+def genAVL (height lo hi : Nat) : Gen (Palamedes.Tree Nat) := by
   generator_search (fun t => isAVL height lo hi t = true) allow_partial
 
 end AVL

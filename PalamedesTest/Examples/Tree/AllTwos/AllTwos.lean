@@ -1,15 +1,15 @@
 import Palamedes.Synthesizer
 
-open Gen CorrectGen
+open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
 
 namespace AllTwosTree
 
 @[simp]
-def isAllTwos : Tree Nat → Bool
+def isAllTwos : Palamedes.Tree Nat → Bool
   | .leaf => true
   | .node l x r => x = 2 && isAllTwos l && isAllTwos r
 
-def genAllTwos : Gen (Tree Nat) := by
+def genAllTwos : Gen (Palamedes.Tree Nat) := by
   generator_search (fun t => isAllTwos t)
 
 end AllTwosTree

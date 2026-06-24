@@ -15,7 +15,7 @@ import Palamedes.Data.Color
 import Palamedes.Data.Tuple
 import Palamedes.Util
 
-open Gen CorrectGen
+open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
 
 section Guards
 
@@ -274,7 +274,7 @@ end Normalizers
 
 section CaseSplit
 
-open Lean Lean.Meta Lean.Elab.Tactic Aesop Gen.CorrectGen
+open Lean Lean.Meta Lean.Elab.Tactic Aesop Palamedes.Gen.CorrectGen
 
 /- The datatypes the case-split rule can scrutinise, each paired with its `s_case*` lemma. Every
    such lemma has the shape `(scrut) (h : ∀ {a}, P a scrut = Q a) (cases…)`, so one routine drives

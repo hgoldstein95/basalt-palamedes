@@ -2,6 +2,10 @@ import Palamedes.Gen
 import Palamedes.CorrectGen
 import Palamedes.Total
 
+namespace Palamedes
+
+open Gen
+
 namespace Gen
 
 def arbBool : Gen Bool := pick (pure true) (pure false)
@@ -52,3 +56,5 @@ theorem total_Bool_rec (hf : total gf) (ht : total gt) : total (Bool.rec gf gt b
 end Total
 
 end Gen
+
+end Palamedes

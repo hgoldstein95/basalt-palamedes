@@ -98,46 +98,30 @@ end RecursionSchemes
 
 section Unfold
 
+namespace Palamedes
+
 open Gen
 
-private def Stack.unfold_aux (n : Nat) (f : α → Gen (StackF α)) (x : α)
-  : Gen (Option Stack) :=
-  match n with
-  | 0 => pure none
-  | n' + 1 => do
-    match (← f x) with
-    | .mty => pure (some .mty)
-    | .cons x vs => do
-      let s ← Stack.unfold_aux n' f vs
-      pure (do pure (.cons x (← s)))
-    | .ret_cons pc vs => do
-      let s ← Stack.unfold_aux n' f vs
-      pure (do pure (.ret_cons pc (← s)))
+/-- The polymorphic Basalt generator underlying the stack `unfold`: `mty` stops, `cons`/`ret_cons`
+each recurse linearly on their tail. A direct `partial_fixpoint` over Basalt's CCPO. -/
+def Stack.unfoldGo [_root_.Gen G] (step : α → G (StackF α)) (x : α) : G Stack :=
+  step x >>= fun t =>
+    match t with
+    | .mty => pure .mty
+    | .cons z s => Stack.unfoldGo step s >>= fun s' => pure (.cons z s')
+    | .ret_cons pc s => Stack.unfoldGo step s >>= fun s' => pure (.ret_cons pc s')
+  partial_fixpoint
+
+def Stack.unfold (f : α → Gen (StackF α)) (x : α) : Gen Stack :=
+  ⟨fun {_G} _ _ => Stack.unfoldGo (fun b => (f b).run) x⟩
+
+/-- Failure-free witness for `Stack.unfold`: the same fixpoint at the `Fail`-free interface. -/
+def TGen.Stack.unfold (f : α → TGen (StackF α)) (x : α) : TGen Stack :=
+  ⟨fun {_G} _ => Palamedes.Stack.unfoldGo (fun b => (f b).run) x⟩
 
 @[simp]
-theorem Stack.unfold_aux_monotonic :
-    some v ∈ 〚Stack.unfold_aux n f b〛 →
-    some v ∈ 〚Stack.unfold_aux (n + m) f b〛 := by
-  induction n generalizing v f b
-  case zero =>
-    simp [Stack.unfold_aux]
-  case succ n' ih =>
-    unfold Stack.unfold_aux
-    simp [bind]
-    intro h
-    replace ⟨ s, hs, h ⟩ := h
-    simp_all [Nat.add_comm]
-    exists s
-    apply And.intro hs
-    cases s <;> simp_all
-    all_goals
-      replace ⟨ v', h ⟩ := h
-      exists v'
-      cases v' <;> simp_all
-
-@[irreducible]
-def Stack.unfold (f : α → Gen (StackF α)) (x : α) : Gen Stack :=
-  .indexed (fun n => Stack.unfold_aux n f x)
+theorem Stack.run_unfold (f : α → Gen (StackF α)) (x : α) (G : Type → Type) [_root_.Gen G] [Fail G] :
+    (Stack.unfold f x).run (G := G) = Stack.unfoldGo (fun b => (f b).run) x := rfl
 
 @[simp]
 def Stack.unfold_support (P : α → StackF α → Prop) (v : α) (s : Stack) : Prop :=
@@ -150,88 +134,68 @@ def Stack.unfold_support (P : α → StackF α → Prop) (v : α) (s : Stack) : 
 theorem Stack.support_unfold :
     support (Stack.unfold f b) = Stack.unfold_support (fun b' => support (f b')) b := by
   funext s
-  simp_all
+  apply propext
+  show s ∈ SPMF.support (Stack.unfoldGo (fun b => (f b).run) b) ↔
+    Stack.unfold_support (fun b' => support (f b')) b s
   induction s generalizing b with
   | mty =>
-    apply Iff.intro
-    . intro h
-      simp [unfold] at h
-      replace ⟨hm, n, h⟩ := h
-      cases n <;> simp_all [Stack.unfold_aux]
-      case succ n' =>
-        have ⟨v', hv'1, hv'2⟩ := h
-        cases v' <;> simp_all
-        all_goals
-          have ⟨v'', hv''⟩ := hv'2
-          cases v'' <;> simp_all
-    . intros h
-      simp_all [unfold]
-      exists 1
-      exists StackF.mty
+    unfold Stack.unfoldGo
+    rw [SPMF.support_bind]
+    simp only [Set.mem_setOf_eq, Stack.unfold_support]
+    constructor
+    · rintro ⟨t, ht, hxs⟩
+      cases t with
+      | mty => exact ht
+      | cons z s => simp at hxs
+      | ret_cons pc s => simp at hxs
+    · intro h
+      exact ⟨.mty, h, by simp⟩
   | cons x s' ih =>
-    apply Iff.intro
-    . intro h
-      simp [unfold] at h
-      replace ⟨hm, n, h⟩ := h
-      cases n <;> simp_all [Stack.unfold_aux]
-      case succ n =>
-        have ⟨v', hv'1, hv'2⟩ := h; clear h
-        cases v' <;> simp_all
-        case cons _ b'' =>
-          have ⟨v'', hv''⟩ := hv'2; clear hv'2
-          cases v'' <;> simp_all
-          obtain ⟨hv'', rfl, rfl⟩ := hv''
-          exists b''
-          apply And.intro hv'1
-          apply (@ih b'').mp
-          simp [unfold]
-          simp_all
-          exists n
-        case ret_cons _ b'' =>
-          have ⟨v'', hv''⟩ := hv'2
-          cases v'' <;> simp_all
-    . intro ⟨b', hx, hs⟩
-      simp_all [unfold]
-      have ⟨n, h⟩ := ih.mpr hs
-      exists n + 1
-      exists StackF.cons x b'
-      simp_all
-      exists (some s')
+    unfold Stack.unfoldGo
+    rw [SPMF.support_bind]
+    simp only [Set.mem_setOf_eq, Stack.unfold_support]
+    constructor
+    · rintro ⟨t, ht, hxs⟩
+      cases t with
+      | mty => simp at hxs
+      | cons z s'' =>
+        simp only [SPMF.support_bind, SPMF.support_pure, Set.mem_setOf_eq,
+          Set.mem_singleton_iff] at hxs
+        obtain ⟨ys, hys, heq⟩ := hxs
+        obtain ⟨rfl, rfl⟩ := Stack.cons.inj heq.symm
+        exact ⟨s'', ht, ih.mp hys⟩
+      | ret_cons pc s'' => simp at hxs
+    · rintro ⟨v', hb', hxs⟩
+      refine ⟨.cons x v', hb', ?_⟩
+      simp only [SPMF.support_bind, SPMF.support_pure, Set.mem_setOf_eq, Set.mem_singleton_iff]
+      exact ⟨s', ih.mpr hxs, rfl⟩
   | ret_cons pc s' ih =>
-    apply Iff.intro
-    . intro h
-      simp [unfold] at h
-      replace ⟨hm, n, h⟩ := h
-      cases n <;> simp_all [Stack.unfold_aux]
-      case succ n =>
-        replace ⟨v', hv', h⟩ := h
-        cases v' <;> simp_all
-        case cons _ b'' =>
-          have ⟨v'', hv''⟩ := h
-          cases v'' <;> simp_all
-        case ret_cons _ b'' =>
-          have ⟨v'', hv''⟩ := h
-          cases v'' <;> simp_all
-          obtain ⟨hv'', rfl, rfl⟩ := hv''
-          exists b''
-          apply And.intro hv'
-          apply (@ih b'').mp
-          simp [unfold]
-          simp_all
-          exists n
-    . intro ⟨b', hx, hs⟩
-      simp_all [unfold]
-      have ⟨n, h⟩ := ih.mpr hs
-      exists (n + 1)
-      exists (StackF.ret_cons pc b')
-      simp_all
-      exists (some s')
+    unfold Stack.unfoldGo
+    rw [SPMF.support_bind]
+    simp only [Set.mem_setOf_eq, Stack.unfold_support]
+    constructor
+    · rintro ⟨t, ht, hxs⟩
+      cases t with
+      | mty => simp at hxs
+      | cons z s'' => simp at hxs
+      | ret_cons pc' s'' =>
+        simp only [SPMF.support_bind, SPMF.support_pure, Set.mem_setOf_eq,
+          Set.mem_singleton_iff] at hxs
+        obtain ⟨ys, hys, heq⟩ := hxs
+        obtain ⟨rfl, rfl⟩ := Stack.ret_cons.inj heq.symm
+        exact ⟨s'', ht, ih.mp hys⟩
+    · rintro ⟨v', hb', hxs⟩
+      refine ⟨.ret_cons pc v', hb', ?_⟩
+      simp only [SPMF.support_bind, SPMF.support_pure, Set.mem_setOf_eq, Set.mem_singleton_iff]
+      exact ⟨s', ih.mpr hxs, rfl⟩
 
 @[gen_congr]
 theorem Stack.support_unfold_congr
     {hf : ∀ {b}, support (f b) = support (f' b)} :
     support (Stack.unfold f b) = support (Stack.unfold f' b) := by
   aesop
+
+end Palamedes
 
 end Unfold
 
@@ -462,6 +426,10 @@ theorem Stack.merge_accuM
 
 end FoldMerging
 
+namespace Palamedes
+
+open Gen
+
 namespace Gen
 
 namespace CorrectGen
@@ -545,24 +513,22 @@ end CorrectGen
 
 namespace Total
 
-@[simp, aesop safe (rule_sets := [totality])]
-def Stack.total_unfold
+/-- An `unfold` whose step generator is everywhere assume-free is itself assume-free; the witness is
+the same fixpoint at the failure-free interface. See `List.total_unfold`. -/
+@[aesop safe (rule_sets := [totality])]
+theorem Stack.total_unfold
     (h : ∀ b, total (g b)) :
     total (Stack.unfold g b) := by
-  simp [Stack.unfold]
-  apply total_indexed
-  intro n
-  induction n generalizing b with
-  | zero => simp [Stack.unfold_aux]
-  | succ n' ih =>
-    simp [Stack.unfold_aux]
-    apply total_bind <;> try apply h
-    intro x h
-    cases x <;> simp [ih]
+  choose tg hg using h
+  have : g = fun b => (tg b).toGen := funext fun b => (hg b).symm
+  subst this
+  exact ⟨TGen.Stack.unfold tg b, by ext; rfl⟩
 
 end Total
 
 end Gen
+
+end Palamedes
 
 namespace PrettyPrint
 

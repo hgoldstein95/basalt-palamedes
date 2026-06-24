@@ -1,6 +1,6 @@
 import Palamedes.Synthesizer
 
-open Gen CorrectGen
+open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
 
 def genEq2 : Gen Nat := by
   generator_search (· = 2)

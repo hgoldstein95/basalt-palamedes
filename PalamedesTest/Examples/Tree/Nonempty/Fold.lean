@@ -1,13 +1,13 @@
 import Palamedes.Synthesizer
 
-open Gen CorrectGen
+open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
 
 namespace NonemptyFold
 
-def isNonemptyFold (t : Tree α) : Bool :=
-  Tree.fold (fun _ _ _ => true) false t
+def isNonemptyFold (t : Palamedes.Tree α) : Bool :=
+  Palamedes.Tree.fold (fun _ _ _ => true) false t
 
-def genNonemptyFold : Gen (Tree Nat) := by
+def genNonemptyFold : Gen (Palamedes.Tree Nat) := by
   generator_search (fun t => isNonemptyFold t = true)
 
 end NonemptyFold

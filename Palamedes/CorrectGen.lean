@@ -1,6 +1,12 @@
 import Palamedes.Gen
 import Palamedes.Extract
 
+namespace Palamedes
+
+open Gen
+
+/-- A generator bundled with a proof that its `support` (via the `SPMF` interpretation) equals the
+target predicate `P`. This subtype is the object the deductive search actually constructs. -/
 def CorrectGen (P : α → Prop) := {g : Gen α // g.support = P}
 
 namespace Gen
@@ -88,3 +94,5 @@ attribute [extract] id_eq
 end CorrectGen
 
 end Gen
+
+end Palamedes

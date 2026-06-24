@@ -2,31 +2,27 @@ import Palamedes.Gen
 import Palamedes.CorrectGen
 import Palamedes.Total
 
+namespace Palamedes
+
+open Gen
+
 namespace Gen
 
-@[reducible]
-def arbNatAux : Nat → Gen (Option Nat)
-  | 0 => pure none
-  | n + 1 => pick (pure (some 0)) (.map (1 + .) <$> arbNatAux n)
+/-- Polymorphic Basalt generator for an arbitrary natural number (geometrically distributed): stop at
+`0`, or recurse and add one. A direct `partial_fixpoint` over Basalt's CCPO. -/
+def arbNatGo [_root_.Gen G] : G Nat :=
+  RandomChoice.pick
+    (fun () => pure 0)
+    (fun () => arbNatGo >>= fun n => pure (n + 1))
+  partial_fixpoint
+
+def arbNat : Gen Nat := ⟨fun {_G} _ _ => arbNatGo⟩
+
+/-- Failure-free witness for `arbNat`: the same fixpoint at the `Fail`-free interface. -/
+def TGen.arbNat : TGen Nat := ⟨fun {_G} _ => arbNatGo⟩
 
 @[simp]
-theorem arbNatAux_monotonic :
-  some v ∈ 〚arbNatAux n〛
-  → some v ∈ 〚arbNatAux (n + m)〛 := by
-  induction n generalizing v <;> intro h <;> simp_all [Nat.add_comm, arbNatAux]
-  cases h
-  case succ.inl hv h => aesop
-  case succ.inr hv h =>
-    replace ⟨ox, hx, h⟩ := h
-    cases ox
-    case none => simp_all
-    case some v' =>
-      simp_all
-      exists v'
-      simp_all
-
-@[irreducible]
-def arbNat : Gen Nat := indexed arbNatAux
+theorem run_arbNat (G : Type → Type) [_root_.Gen G] [Fail G] : arbNat.run (G := G) = arbNatGo := rfl
 
 def gt (lo : Nat) : Gen Nat := (lo + 1 + · ) <$> arbNat
 
@@ -41,17 +37,13 @@ def lt (hi : Nat) (_ : hi > 0) : Gen Nat :=
 @[simp]
 theorem support_arbNat :
     support arbNat = fun _ => True := by
-  simp [arbNat]
   funext v
+  apply propext
+  simp only [iff_true]
+  show v ∈ SPMF.support arbNatGo
   induction v with
-  | zero => simp_all; intros; exists 1; simp [arbNatAux]
-  | succ n ih =>
-    simp_all
-    have ⟨n', hn'⟩ := ih
-    exists n' + 1
-    simp [arbNatAux]
-    exists some n
-    simp +arith [hn']
+  | zero => rw [arbNatGo]; simp
+  | succ n ih => rw [arbNatGo]; simp_all
 
 @[simp]
 theorem support_gt :
@@ -228,12 +220,11 @@ end CorrectGen
 
 namespace Total
 
+/-- `arbNat` is assume-free: its body uses only `pick`/`pure`/`bind`, so the same fixpoint at the
+failure-free interface (`TGen.arbNat`) is a witness. (Almost-sure termination is a strictly stronger,
+orthogonal fact; see the Basalt library.) -/
 @[simp, aesop safe (rule_sets := [totality])]
-theorem total_arbNat : total arbNat := by
-  simp [arbNat]
-  apply total_indexed
-  intro n
-  induction n <;> simp [arbNatAux, *]
+theorem total_arbNat : total arbNat := ⟨TGen.arbNat, by ext; rfl⟩
 
 @[simp, aesop safe (rule_sets := [totality])]
 theorem total_choose : total (choose lo hi h) := by
@@ -261,3 +252,5 @@ theorem total_lt : total (lt lo h) := by simp [lt]
 end Total
 
 end Gen
+
+end Palamedes

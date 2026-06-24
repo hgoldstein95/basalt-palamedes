@@ -26,8 +26,8 @@ are exempt: they are ordinary case splits that legitimately appear in `s_unfold`
 def isResidue (c : Name) : Bool :=
   if (c.toString.splitOn ".match_").length > 1 then false
   else
-    c == ``Subtype.val || c == ``Eq.mpr || c == ``Eq.rec || c == ``CorrectGen ||
-    (`Gen.CorrectGen).isPrefixOf c
+    c == ``Subtype.val || c == ``Eq.mpr || c == ``Eq.rec || c == ``Palamedes.CorrectGen ||
+    (`Palamedes.Gen.CorrectGen).isPrefixOf c
 
 run_cmd liftTermElabM do
   let env ← getEnv
@@ -39,7 +39,7 @@ run_cmd liftTermElabM do
       let some ci := env.find? n | continue
       let some val := ci.value? | continue
       let isGen ← forallTelescope ci.type fun _ body =>
-        return body.getAppFn.constName? == some ``Gen
+        return body.getAppFn.constName? == some ``Palamedes.Gen
       unless isGen do continue
       total := total + 1
       let bad := val.getUsedConstants.filter isResidue

@@ -3,6 +3,10 @@ import Palamedes.CorrectGen
 import Palamedes.Optimizer
 import Palamedes.RuleSets
 
+namespace Palamedes
+
+open Gen
+
 namespace Gen
 
 namespace CorrectGen
@@ -24,3 +28,5 @@ theorem s_arbTuple_val
 end CorrectGen
 
 end Gen
+
+end Palamedes

@@ -77,49 +77,32 @@ end RecursionSchemes
 
 section Unfold
 
+namespace Palamedes
+
 open Gen
 
-private def Ty.unfold_aux (n : Nat) (f : α → Gen (TyF α)) (x : α) : Gen (Option Ty) :=
-  match n with
-  | 0 => pure none
-  | n + 1 => do
-    match (← f x) with
-    | .unit => pure (some .unit)
-    | .arrow b₁ b₂ => do
-      let τ₁ ← Ty.unfold_aux n f b₁
-      let τ₂ ← Ty.unfold_aux n f b₂
-      pure (do pure (.arrow (← τ₁) (← τ₂)))
+/-- The polymorphic Basalt generator underlying the type `unfold`: `unit` stops, `arrow b₁ b₂`
+recurses on both children. A direct `partial_fixpoint` over Basalt's CCPO. -/
+def Ty.unfoldGo [_root_.Gen G] (step : α → G (TyF α)) (x : α) : G Ty :=
+  step x >>= fun t =>
+    match t with
+    | .unit => pure .unit
+    | .arrow b₁ b₂ =>
+      Ty.unfoldGo step b₁ >>= fun τ₁ =>
+      Ty.unfoldGo step b₂ >>= fun τ₂ =>
+      pure (.arrow τ₁ τ₂)
+  partial_fixpoint
+
+def Ty.unfold (f : α → Gen (TyF α)) (x : α) : Gen Ty :=
+  ⟨fun {_G} _ _ => Ty.unfoldGo (fun b => (f b).run) x⟩
+
+/-- Failure-free witness for `Ty.unfold`: the same fixpoint at the `Fail`-free interface. -/
+def TGen.Ty.unfold (f : α → TGen (TyF α)) (x : α) : TGen Ty :=
+  ⟨fun {_G} _ => Palamedes.Ty.unfoldGo (fun b => (f b).run) x⟩
 
 @[simp]
-theorem Ty.unfold_aux_monotonic :
-    some v ∈ 〚Ty.unfold_aux n f b〛 →
-    some v ∈ 〚Ty.unfold_aux (n + m) f b〛 := by
-  induction n generalizing v f b
-  case zero =>
-    simp [Ty.unfold_aux]
-  case succ n' ih =>
-    unfold Ty.unfold_aux
-    simp
-    intro τ hτ h
-    cases τ <;> simp_all +arith
-    case unit =>
-      exists TyF.unit
-    case arrow τ₁ τ₂ =>
-      replace ⟨ ov₁, h₁, ov₂, h₂, h ⟩ := h
-      cases ov₁ <;> simp_all
-      case some v₁ =>
-        cases ov₂ <;> simp_all
-        case some v₂ =>
-        exists (TyF.arrow τ₁ τ₂)
-        simp_all
-        exists v₁
-        simp_all
-        exists v₂
-        simp_all
-
-@[irreducible]
-def Ty.unfold (f : α → Gen (TyF α)) (x : α) : Gen Ty :=
-  .indexed (fun n => Ty.unfold_aux n f x)
+theorem Ty.run_unfold (f : α → Gen (TyF α)) (x : α) (G : Type → Type) [_root_.Gen G] [Fail G] :
+    (Ty.unfold f x).run (G := G) = Ty.unfoldGo (fun b => (f b).run) x := rfl
 
 @[simp]
 def Ty.unfold_support (P : α → TyF α → Prop) (x : α) (τ : Ty) : Prop :=
@@ -134,66 +117,47 @@ def Ty.unfold_support (P : α → TyF α → Prop) (x : α) (τ : Ty) : Prop :=
 theorem Ty.support_unfold :
     support (Ty.unfold f x) = Ty.unfold_support (fun x' => support (f x')) x := by
   funext τ
-  simp_all
+  apply propext
+  show τ ∈ SPMF.support (Ty.unfoldGo (fun b => (f b).run) x) ↔
+    Ty.unfold_support (fun x' => support (f x')) x τ
   induction τ generalizing x with
   | unit =>
-    apply Iff.intro
-    . intro h
-      simp_all [unfold]
-      replace ⟨n, h⟩ := h
-      cases n <;> simp_all [Ty.unfold_aux]
-      case succ n' =>
-        replace ⟨v', hv', h⟩ := h
-        cases v' <;> simp_all
-        case arrow τ₁ τ₂ =>
-          replace ⟨ov₁, h₁, ov₂, h₂, h⟩ := h
-          cases ov₁ <;> simp_all
-          cases ov₂ <;> simp_all
-    . intros h
-      simp_all [unfold]
-      exists 1
-      exists TyF.unit
+    unfold Ty.unfoldGo
+    rw [SPMF.support_bind]
+    simp only [Set.mem_setOf_eq, Ty.unfold_support]
+    constructor
+    · rintro ⟨t, ht, hxs⟩
+      cases t with
+      | unit => exact ht
+      | arrow b₁ b₂ => simp at hxs
+    · intro h
+      exact ⟨.unit, h, by simp⟩
   | arrow τ₁ τ₂ ih₁ ih₂ =>
-    apply Iff.intro
-    . intro h
-      simp_all [unfold]
-      replace ⟨n, h⟩ := h
-      cases n <;> simp_all [Ty.unfold_aux]
-      case succ n =>
-        replace ⟨v', hv', h⟩ := h
-        cases v' <;> simp_all
-        case arrow b₁ b₂ =>
-          replace ⟨ov₁, hv₁, ov₂, hv₂, h⟩ := h
-          cases ov₁ <;> simp_all
-          case some v₁ =>
-            cases ov₂ <;> simp_all
-            case some v₂ =>
-              exists b₁, b₂
-              apply And.intro hv'
-              rw [← @ih₁ b₁, ← @ih₂ b₂]
-              apply And.intro <;> exists n
-    . intro ⟨b₁, b₂, hx, h₁, h₂⟩
-      rw [← @ih₁ b₁] at h₁
-      simp [unfold] at h₁ ⊢
-      replace ⟨hm₁, n₁, h₁⟩ := h₁
-      rw [← @ih₂ b₂] at h₂
-      simp [unfold] at h₂
-      replace ⟨hm₂, n₂, h₂⟩ := h₂
-      simp_all
-      exists (n₁ + n₂ + 1)
-      exists TyF.arrow b₁ b₂
-      simp_all
-      exists (some τ₁)
-      simp_all [Ty.unfold_aux_monotonic]
-      exists (some τ₂)
-      rw [Nat.add_comm]
-      simp_all [Ty.unfold_aux_monotonic]
+    unfold Ty.unfoldGo
+    rw [SPMF.support_bind]
+    simp only [Set.mem_setOf_eq, Ty.unfold_support]
+    constructor
+    · rintro ⟨t, ht, hxs⟩
+      cases t with
+      | unit => simp at hxs
+      | arrow b₁ b₂ =>
+        simp only [SPMF.support_bind, SPMF.support_pure, Set.mem_setOf_eq,
+          Set.mem_singleton_iff] at hxs
+        obtain ⟨t₁, ht₁, t₂, ht₂, heq⟩ := hxs
+        obtain ⟨rfl, rfl⟩ := Ty.arrow.inj heq.symm
+        exact ⟨b₁, b₂, ht, ih₁.mp ht₁, ih₂.mp ht₂⟩
+    · rintro ⟨b₁, b₂, hx, h₁, h₂⟩
+      refine ⟨.arrow b₁ b₂, hx, ?_⟩
+      simp only [SPMF.support_bind, SPMF.support_pure, Set.mem_setOf_eq, Set.mem_singleton_iff]
+      exact ⟨τ₁, ih₁.mpr h₁, τ₂, ih₂.mpr h₂, rfl⟩
 
 @[gen_congr]
 theorem Ty.support_unfold_congr
     {hf : ∀ {b}, support (f b) = support (f' b)} :
     support (Ty.unfold f b) = support (Ty.unfold f' b) := by
   aesop
+
+end Palamedes
 
 end Unfold
 
@@ -384,6 +348,10 @@ theorem Ty.merge_accuM
 
 end FoldMerging
 
+namespace Palamedes
+
+open Gen
+
 namespace Gen
 
 namespace CorrectGen
@@ -450,20 +418,16 @@ end CorrectGen
 
 namespace Total
 
-@[simp]
-def Ty.total_unfold
+/-- An `unfold` whose step generator is everywhere assume-free is itself assume-free; the witness is
+the same fixpoint at the failure-free interface. See `List.total_unfold`. -/
+@[simp, aesop safe (rule_sets := [totality])]
+theorem Ty.total_unfold
     (h : ∀ b, total (g b)) :
     total (Ty.unfold g b) := by
-  simp [Ty.unfold]
-  apply total_indexed
-  intro n
-  induction n generalizing b with
-  | zero => simp [Ty.unfold_aux]
-  | succ n' ih =>
-    simp [Ty.unfold_aux]
-    apply total_bind <;> try apply h
-    intro τ h
-    cases τ <;> simp [ih]
+  choose tg hg using h
+  have : g = fun b => (tg b).toGen := funext fun b => (hg b).symm
+  subst this
+  exact ⟨TGen.Ty.unfold tg b, by ext; rfl⟩
 
 end Total
 
@@ -495,7 +459,7 @@ theorem support_arbTy :
   induction v <;> simp_all
 
 @[simp]
-def support_Ty_caseTy
+theorem support_Ty_caseTy
     {gu : (τ = Ty.unit) → Gen α}
     {ga : (τ₁ τ₂ : Ty) → (τ = Ty.arrow τ₁ τ₂) → Gen α} :
     support (caseTy
@@ -582,6 +546,8 @@ theorem total_Ty_caseTy
 end Total
 
 end Gen
+
+end Palamedes
 
 namespace PrettyPrint
 
