@@ -12,8 +12,8 @@ will read issues that are posted, but make no promises about how quickly they wi
 
 ## Requirements
 
-The toolchain is pinned in `lean-toolchain` (Lean `v4.30.0`). Dependencies — MathLib, Aesop, and
-Plausible — are pinned in `lakefile.toml` / `lake-manifest.json`.
+The toolchain is pinned in `lean-toolchain`. Dependencies are pinned in
+`lakefile.toml` / `lake-manifest.json`.
 
 ## Building
 
