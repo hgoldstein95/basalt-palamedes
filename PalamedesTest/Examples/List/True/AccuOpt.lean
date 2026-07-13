@@ -8,8 +8,8 @@ namespace TrueAccuOpt
 def isTrueAccuOpt (xs : List α) : Option Unit :=
   List.accuM
       (fun _ _ => ())
-      (fun _ _ _ => guard true)
       (fun _ => some ())
+      (fun _ _ _ => guard true)
       xs
       ()
 

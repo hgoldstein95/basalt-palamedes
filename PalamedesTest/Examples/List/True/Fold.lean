@@ -6,7 +6,7 @@ namespace TrueFold
 
 @[simp]
 def isTrueFold (xs : List α) : Bool :=
-  List.fold (fun _ b => b) true xs
+  List.fold true (fun _ b => b) xs
 
 def genTrueFold : Gen (List Nat) := by
   generator_search (fun xs => isTrueFold xs = true)

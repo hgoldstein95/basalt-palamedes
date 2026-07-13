@@ -18,9 +18,16 @@ generator is partial; synthesize it with `allow_partial`).
 `split`/`simp` handle recursion: a per-datatype `unfold` step is wrapped in a constructor `match`
 (`ListF.casesOn …`), and `(casesOn a …).toGen = casesOn a (…toGen)` is not definitional — it needs
 `cases a`. `split` performs that case analysis and `simp` discharges the resulting leaves via the
-`@[simp]` `total_*` lemmas. -/
-macro "totality" : tactic =>
-  `(tactic|
+`@[simp]` `total_*` lemmas.
+
+The per-datatype `total_unfold` steps are read from the `unfold_strategy` registry (see
+`Palamedes.UnfoldStrategy`), which `derive_palamedes` populates. -/
+elab "totality" : tactic => open Lean Elab Tactic in do
+  let entries := Palamedes.unfoldStrategies (← getEnv)
+  let alts ← entries.mapM fun e => do
+    let tu : Lean.Term := mkIdent (`_root_ ++ e.totalUnfold)
+    `(tactic| apply $tu:term)
+  evalTactic (← `(tactic|
     repeat'
       first
         | (intro)
@@ -36,13 +43,10 @@ macro "totality" : tactic =>
         | apply total_choose
         | apply total_gt
         | apply total_lt
-        | apply Tree.total_unfold
-        | apply Stack.total_unfold
         | apply total_arbLabel
         | apply total_elements
         | apply total_arbTy
         | apply total_Ty_caseTy
-        | apply Term.total_unfold
-        | apply List.total_unfold
+        $[| $alts:tactic]*
         | split
-        | simp (config := {singlePass := true}))
+        | simp (config := {singlePass := true})))

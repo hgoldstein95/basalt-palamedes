@@ -11,6 +11,7 @@ namespace Gen
 
 namespace CorrectGen
 
+@[extract, aesop 50% apply (rule_sets := [synthesis])]
 def s_arbTuple
     {P : α × β → Prop}
     (g : CorrectGen (fun (p : α × β) => ∃ (a : α) (b : β), P (a, b) ∧ p = (a, b))) :
@@ -18,12 +19,6 @@ def s_arbTuple
   Subtype.mk g.val <| by
     funext (a, b)
     simp_all [g.property]
-
-@[extract]
-theorem s_arbTuple_val
-    {P : α × β → Prop}
-    (g : CorrectGen (fun (p : α × β) => ∃ (a : α) (b : β), P (a, b) ∧ p = (a, b))) :
-    (s_arbTuple g).val = g.val := rfl
 
 end CorrectGen
 

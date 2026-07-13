@@ -8,8 +8,8 @@ namespace LengthKAccuOpt
 def lengthAccuOpt (xs : List α) : Option Nat :=
   List.accuM
     (fun _ _ => ())
-    (fun _ b _ => some (b + 1))
     (fun _ => some 0)
+    (fun _ b _ => some (b + 1))
     xs
     ()
 

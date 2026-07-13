@@ -1,6 +1,8 @@
 import Palamedes.Gen
 import Palamedes.CorrectGen
 import Palamedes.Total
+import Palamedes.RuleSets
+import Palamedes.CaseSplit
 
 section TypeDef
 
@@ -40,14 +42,13 @@ theorem support_arbColor :
 
 namespace CorrectGen
 
+@[extract, aesop safe apply (rule_sets := [synthesis])]
 def s_arbColor : @CorrectGen Color (fun _ => True) :=
   Subtype.mk arbColor <| by
     funext v
     simp
 
-@[extract]
-theorem s_arbColor_val : s_arbColor.val = arbColor := rfl
-
+@[extract, case_split]
 def s_caseColor
     {Q : α → Prop}
     {P : α → Color → Prop}
@@ -60,16 +61,6 @@ def s_caseColor
     match c with
     | .red => simp [gr.property, h]
     | .black => simp [gb.property, h]
-
-@[extract]
-theorem s_caseColor_val
-    {Q : α → Prop}
-    {P : α → Color → Prop}
-    (c : Color)
-    (h : ∀ {a}, P a c = Q a)
-    (gr : CorrectGen (fun a => P a .red))
-    (gb : CorrectGen (fun a => P a .black)) :
-    (s_caseColor c h gr gb).val = if c = .red then gr.val else gb.val := rfl
 
 end CorrectGen
 

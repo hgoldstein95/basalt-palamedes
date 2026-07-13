@@ -8,8 +8,8 @@ namespace EvenLenAccuOpt
 def isEvenLenAccuOpt (xs : List α) : Option Bool :=
   List.accuM
       (fun _ _ => ())
-      (fun _ b _ => some (!b))
       (fun _ => some true)
+      (fun _ b _ => some (!b))
       xs
       ()
 

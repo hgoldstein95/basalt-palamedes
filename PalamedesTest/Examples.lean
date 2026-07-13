@@ -67,6 +67,10 @@ import PalamedesTest.Examples.Tree.Nonempty.Fold
 import PalamedesTest.Examples.Stack.GoodStack
 import PalamedesTest.Examples.Stack.Fold
 
+-- The Stage-5 demo: a datatype the library does not have, derived and synthesized end-to-end
+-- from one `derive_palamedes` line, with zero edits to any `Palamedes/` module.
+import PalamedesTest.Examples.LeafTree.LeafTree
+
 import PalamedesTest.Examples.STLC.WellTyped.WellTyped
 import PalamedesTest.Examples.STLC.WellScoped.WellScoped
 

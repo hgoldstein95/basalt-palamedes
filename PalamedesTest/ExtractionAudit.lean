@@ -22,9 +22,13 @@ namespace PalamedesTest.ExtractionAudit
 `CorrectGen` combinators themselves, the `Subtype.val` projection that extraction is supposed
 to eliminate, and `Eq` casts (which would mean a rewrite leaked out of a `convert` proof
 argument into the generator). Matcher auxiliaries (e.g. `Gen.CorrectGen.List.s_unfold.match_1`)
-are exempt: they are ordinary case splits that legitimately appear in `s_unfold` generators. -/
+are exempt: they are ordinary case splits that legitimately appear in `s_unfold` generators.
+Proof auxiliaries (`…._proof_i`, abstracted out of combinator bodies by the definition
+elaborator) are exempt too: they are compiler-erased proofs of `Prop`s, never a combinator
+wrapper (those are `Type`-valued). -/
 def isResidue (c : Name) : Bool :=
   if (c.toString.splitOn ".match_").length > 1 then false
+  else if (c.toString.splitOn "._proof_").length > 1 then false
   else
     c == ``Subtype.val || c == ``Eq.mpr || c == ``Eq.rec || c == ``Palamedes.CorrectGen ||
     (`Palamedes.Gen.CorrectGen).isPrefixOf c

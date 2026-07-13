@@ -1,6 +1,8 @@
 import Palamedes.Gen
 import Palamedes.CorrectGen
 import Palamedes.Total
+import Palamedes.RuleSets
+import Palamedes.CaseSplit
 import Palamedes.Data.Nat
 
 section TypeDef
@@ -9,6 +11,7 @@ section TypeDef
 inductive Label where
   | low
   | high
+deriving DecidableEq
 
 inductive Atom where
   | atm (n : Nat) (l : Label)
@@ -32,14 +35,27 @@ theorem support_arbLabel : support arbLabel = fun _ => True := by
 
 namespace CorrectGen
 
+@[extract, aesop safe apply (rule_sets := [synthesis])]
 def s_arbLabel : @CorrectGen Label (fun _ => True) :=
   Subtype.mk arbLabel <| by
     funext v
     simp
 
-@[extract]
-theorem s_arbLabel_val : s_arbLabel.val = arbLabel := rfl
+@[extract, case_split]
+def s_caseLabel
+    {Q : α → Prop}
+    {P : α → Label → Prop}
+    (l : Label)
+    (h : ∀ {a}, P a l = Q a)
+    (gl : CorrectGen (fun a => P a .low))
+    (gh : CorrectGen (fun a => P a .high)) :
+    CorrectGen Q :=
+  Subtype.mk (if l = .low then gl.val else gh.val) <| by
+    match l with
+    | .low => simp [gl.property, h]
+    | .high => simp [gh.property, h]
 
+@[extract]
 def s_arbAtom
     {P : Atom → Prop}
     (g : CorrectGen (fun (a : Atom) => ∃ (n : Nat) (l : Label), P (.atm n l) ∧ a = .atm n l)) :
@@ -47,12 +63,6 @@ def s_arbAtom
   Subtype.mk g.val <| by
     funext (.atm n l)
     simp_all [g.property]
-
-@[extract]
-theorem s_arbAtom_val
-    {P : Atom → Prop}
-    (g : CorrectGen (fun (a : Atom) => ∃ (n : Nat) (l : Label), P (.atm n l) ∧ a = .atm n l)) :
-    (s_arbAtom g).val = g.val := rfl
 
 end CorrectGen
 

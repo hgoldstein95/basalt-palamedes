@@ -1,6 +1,8 @@
 import Palamedes.Gen
 import Palamedes.CorrectGen
 import Palamedes.Total
+import Palamedes.RuleSets
+import Palamedes.CaseSplit
 
 namespace Palamedes
 
@@ -116,14 +118,13 @@ theorem support_lt :
 
 namespace CorrectGen
 
+@[extract, aesop safe apply (rule_sets := [synthesis])]
 def s_arbNat : @CorrectGen Nat (fun _ => True) :=
   Subtype.mk arbNat <| by
     funext v
     simp
 
-@[extract]
-theorem s_arbNat_val : s_arbNat.val = arbNat := rfl
-
+@[extract, case_split]
 def s_caseNat
     {Q : α → Prop}
     {P : α → Nat → Prop}
@@ -138,15 +139,6 @@ def s_caseNat
     | n' + 1 => simp [(gs n').property, h]
 
 @[extract]
-theorem s_caseNat_val
-    {Q : α → Prop}
-    {P : α → Nat → Prop}
-    (n : Nat)
-    (h : ∀ {a}, P a n = Q a)
-    (gz : CorrectGen (fun a => P a 0))
-    (gs : (n' : Nat) → CorrectGen (fun a => P a (n' + 1))) :
-    (s_caseNat n h gz gs).val = if n = 0 then gz.val else (gs n.pred).val := rfl
-
 def s_between
     {lo hi : Nat}
     (h : lo ≤ hi) :
@@ -156,11 +148,6 @@ def s_between
     simp
 
 @[extract]
-theorem s_between_val
-    {lo hi : Nat}
-    (h : lo ≤ hi) :
-    (s_between h).val = choose lo hi h := rfl
-
 def s_between_partial
     {lo hi : Nat} :
     CorrectGen (fun v => lo ≤ v ∧ v ≤ hi) :=
@@ -170,11 +157,6 @@ def s_between_partial
     exact Nat.le_trans
 
 @[extract]
-theorem s_between_partial_val
-    {lo hi : Nat} :
-    (s_between_partial (lo := lo) (hi := hi)).val
-      = assume (lo ≤ hi) (fun h => choose lo hi (of_decide_eq_true h)) := rfl
-
 def s_gt
     {lo : Nat} :
     CorrectGen (fun v => lo < v) :=
@@ -182,10 +164,6 @@ def s_gt
     simp
 
 @[extract]
-theorem s_gt_val
-    {lo : Nat} :
-    (s_gt (lo := lo)).val = gt lo := rfl
-
 def s_lt_partial
     {hi : Nat} :
     CorrectGen (λ v => v < hi) :=
@@ -196,11 +174,6 @@ def s_lt_partial
     exact fun a => Nat.zero_lt_of_lt a
 
 @[extract]
-theorem s_lt_partial_val
-    {hi : Nat} :
-    (s_lt_partial (hi := hi)).val
-      = assume (hi > 0) (fun h => lt hi (of_decide_eq_true h)) := rfl
-
 def s_mod2_partial
     {r : Nat} :
     CorrectGen (λ v => v % 2 = r) :=
@@ -209,12 +182,6 @@ def s_mod2_partial
     funext x
     simp
     omega
-
-@[extract]
-theorem s_mod2_partial_val
-    {r : Nat} :
-    (s_mod2_partial (r := r)).val
-      = assume (r < 2) (fun h => mod2 r (of_decide_eq_true h)) := rfl
 
 end CorrectGen
 

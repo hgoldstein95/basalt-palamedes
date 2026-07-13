@@ -6,7 +6,7 @@ namespace EvenLenFold
 
 @[simp]
 def isEvenLenFold (xs : List α) : Bool :=
-  List.fold (fun _ b => !b) true xs
+  List.fold true (fun _ b => !b) xs
 
 def genEvenLenFold : Gen (List Nat) := by
   generator_search (fun xs => isEvenLenFold xs = true)

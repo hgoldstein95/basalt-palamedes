@@ -1,6 +1,7 @@
 import Palamedes.Gen
 import Palamedes.CorrectGen
 import Palamedes.RuleSets
+import Palamedes.CaseSplit
 import Palamedes.Total
 import Palamedes.Data.List
 import Palamedes.Data.Stack.Stack
@@ -92,7 +93,7 @@ macro "rw_merge" m:term : tactic =>
 -/
 macro "rw_true_and_list" : tactic =>
   `(tactic| conv =>
-        pattern fun _ => _
+        pattern fun _ _ _ => _
         repeat intro
         try conv =>
           arg 2; fail_if_success {guard_target = _ && _}; refine (Bool.and_true ..).symm.trans (Bool.and_comm ..)
@@ -101,7 +102,7 @@ macro "rw_true_and_list" : tactic =>
 
 macro "rw_true_and_tree" : tactic =>
   `(tactic| conv =>
-        pattern fun _ => _
+        pattern fun _ _ _ _ => _
         intro accL _ accR _
         try conv =>
           arg 2; fail_if_success {guard_target = _ && _ && _}; apply (Bool.and_true ..).symm.trans ((Bool.and_comm ..).symm.trans (Bool.and_assoc ..).symm)
@@ -130,14 +131,26 @@ end Coercions
 
 section ConvertToAccuM
 
+/- Close `a₁ && … && aₖ = (?g && a₁) && … && aₖ` by instantiating the guard slot `?g` to a literal
+`true` at the head of a left-associated `&&`-chain (the generalized `fold_accu_Option_*true`
+lemmas give every recursive constructor a guard; a guard-free user predicate needs `?g := true`
+inserted under `k - 1` trailing conjuncts). -/
+macro "true_guard_unify" : tactic =>
+  `(tactic|
+    first
+      | exact (Bool.true_and _).symm
+      | exact congrArg (· && _) (Bool.true_and _).symm
+      | exact congrArg (· && _) (congrArg (· && _) (Bool.true_and _).symm)
+      | exact congrArg (· && _) (congrArg (· && _) (congrArg (· && _) (Bool.true_and _).symm)))
+
 /- Unifier tactic for handling the covert_to_accuM sub-goals.  -/
 macro "accu_unify" : tactic =>
   `(tactic|
     (intros; first
       | rfl
       | rflm
-      | (simp_bexp; (first | rfl | rflm | exact (Bool.true_and _).symm | exact (Bool.and_true _).symm))
-      | (simp_all [guard, Option.bind_eq_some_iff, -beq_iff_eq, -Bool.true_and]; (first | rfl | rflm | exact (Bool.true_and _).symm | exact (Bool.and_true _).symm))))
+      | (simp_bexp; (first | rfl | rflm | true_guard_unify | exact (Bool.and_true _).symm))
+      | (simp_all [guard, Option.bind_eq_some_iff, -beq_iff_eq, -Bool.true_and]; (first | rfl | rflm | true_guard_unify | exact (Bool.and_true _).symm))))
 
 macro "accu_convert_one" L:term : tactic =>
   `(tactic|
@@ -235,40 +248,39 @@ macro "normalize_and_apply" : tactic =>
         case pf => norm_for_pick
     ))
 
-macro "normalize_and_apply_unfold" : tactic =>
-   `(tactic| (
-      goal_is_eq_or_and
-      apply convert ?pf ?arg
-      case' pf => try accu_simp
-      first
-      | case' arg => apply List.s_unfold _
-        case pf =>
-          norm_for_unfold List.fold List.coerce_to_fold
-            mergeVia List.merge_accuM
-            convertVia [List.fold_accu_Option_true, List.fold_accu_Option_function,
-                        List.fold_accu_Option_function_true, List.fold_accu_Option_basic]
-            condVia List.fold_accu_cond
-      | case' arg => apply Tree.s_unfold _
-        case pf =>
-          norm_for_unfold Tree.fold Tree.coerce_to_fold
-            mergeVia Tree.merge_accuM
-            convertVia [Tree.fold_accu_Option_true, Tree.fold_accu_Option_function,
-                        Tree.fold_accu_Option_function_true, Tree.fold_accu_Option_basic]
-            condVia Tree.fold_accu_cond
-      | case' arg => apply Stack.s_unfold _
-        case pf =>
-          norm_for_unfold Stack.fold Stack.coerce_to_fold
-            mergeVia Stack.merge_accuM
-            convertVia [Stack.fold_accu_Option_true, Stack.fold_accu_Option_function,
-                        Stack.fold_accu_Option_function_true, Stack.fold_accu_Option_basic]
-      | case' arg => apply Term.s_unfold _
-        case pf =>
-          norm_for_unfold Term.fold Term.coerce_to_fold
-            mergeVia Term.merge_accu_Option
-            convertVia [Term.fold_accu_Option_true, Term.fold_accu_Option_function,
-                        Term.fold_accu_Option_function_true, Term.fold_accu_Option_function_Option,
-                        Term.fold_accu_Option_basic]
-    ))
+open Lean Elab Tactic in
+/-- The unfold arm of the search, driven by the `unfold_strategy` registry: one alternative per
+registered datatype (see `Palamedes.UnfoldStrategy`), each `apply X.s_unfold` followed by the
+`norm_for_unfold` pipeline over that type's registered lemmas. `derive_palamedes` registers
+every type it derives, so this tactic needs no per-datatype edits. -/
+elab "normalize_and_apply_unfold" : tactic => do
+  let entries := Palamedes.unfoldStrategies (← getEnv)
+  if entries.isEmpty then
+    throwError "normalize_and_apply_unfold: no unfold_strategy entries registered"
+  -- reference registered constants by `_root_`-rooted idents so open namespaces cannot shadow
+  let root (n : Name) : Ident := mkIdent (`_root_ ++ n)
+  let mut alts : Array (TSyntax ``Lean.Parser.Tactic.tacticSeq) := #[]
+  for e in entries do
+    let sUnfold : Lean.Term := root e.sUnfold
+    let fold := root e.fold
+    let coerce : Lean.Term := root e.coerce
+    let merge : Lean.Term := root e.merge
+    let convs : Syntax.TSepArray `term "," := .ofElems (e.convert.map fun n => (root n : Lean.Term))
+    let norm ← match e.cond with
+      | some c =>
+        `(tactic| norm_for_unfold $fold $coerce mergeVia $merge
+            convertVia [$convs,*] condVia $(root c))
+      | none =>
+        `(tactic| norm_for_unfold $fold $coerce mergeVia $merge
+            convertVia [$convs,*])
+    alts := alts.push (← `(tacticSeq|
+      case' arg => apply $sUnfold:term _
+      case pf => $norm:tactic))
+  evalTactic (← `(tactic| (
+    goal_is_eq_or_and
+    apply convert ?pf ?arg
+    case' pf => try accu_simp
+    first $[| $alts]*)))
 
 end Normalizers
 
@@ -276,16 +288,10 @@ section CaseSplit
 
 open Lean Lean.Meta Lean.Elab.Tactic Aesop Palamedes.Gen.CorrectGen
 
-/- The datatypes the case-split rule can scrutinise, each paired with its `s_case*` lemma. Every
-   such lemma has the shape `(scrut) (h : ∀ {a}, P a scrut = Q a) (cases…)`, so one routine drives
-   them all regardless of how many constructors the datatype has.
-
-   TODO: We should do this via an annotation, not hard-coded. -/
-private def caseSplitLemmas : List (Name × Name) :=
-  [(``Nat, ``s_caseNat),
-   (``Bool, ``s_caseBool),
-   (``Color, ``s_caseColor),
-   (``Ty, ``s_caseTy)]
+/- The datatypes the case-split rule can scrutinise, each paired with its `s_case*` lemma, come
+   from the `case_split` registry (see `Palamedes.CaseSplit`): every `@[case_split]` lemma has
+   the shape `(scrut) (h : ∀ {a}, P a scrut = Q a) (cases…)`, so one routine drives them all
+   regardless of how many constructors the datatype has. -/
 
 private def isCorrectGenOr (tgt : Expr) : MetaM Bool := do
   match (← instantiateMVars tgt).getAppFnArgs with
@@ -325,6 +331,7 @@ def caseSplitRuleTac : RuleTac := fun input => do
     let tgt ← input.goal.getType
     unless ← isCorrectGenOr tgt do
       throwError "caseSplitRuleTac: goal is not a CorrectGen of a disjunction"
+    let caseSplitLemmas := Palamedes.caseSplitLemmas (← getEnv)
     let initialState ← saveState
     let mut apps := #[]
     for decl? in (← getLCtx).decls.toList do
@@ -360,14 +367,10 @@ tactics above, and we accomplish goal 2 here by trying every `arb` lemma
 that can close a goal before trying any lemmas that generate new subgoals.
 
 -/
+-- The `s_arb*` closers that used to be enumerated here are now `@[aesop safe apply]` tags on
+-- the definitions themselves (see the `Data/` modules).
 add_aesop_rules safe (rule_sets := [synthesis]) [
   (by (repeat apply duncurry); intro),
-  (by apply s_arbUnit),
-  (by apply s_arbBool),
-  (by apply s_arbColor),
-  (by apply s_arbNat),
-  (by apply s_arbTy),
-  (by apply s_arbLabel),
 ]
 
 add_aesop_rules 99% (rule_sets := [synthesis]) [
@@ -381,10 +384,6 @@ add_aesop_rules 99% (rule_sets := [synthesis]) [
   (by apply s_between_partial),
   (by apply (s_between (by first | aesop | omega))),
   (by goal_is_eq; apply convert (by norm_for_elements) (s_elements_partial _)),
-]
-
-add_aesop_rules 50% (rule_sets := [synthesis]) [
-  (by apply s_arbTuple),
 ]
 
 -- The per-datatype/per-scrutinee `s_case*` enumeration that used to live here is now the single

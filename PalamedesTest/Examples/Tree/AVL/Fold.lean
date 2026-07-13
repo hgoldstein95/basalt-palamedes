@@ -7,15 +7,17 @@ namespace AVLFold
 @[simp]
 def isAVLFold (height lo hi : Nat) (t : Palamedes.Tree Nat) : Bool :=
   Palamedes.Tree.fold
+      (fun _ => true)
       (fun bl x br bounds =>
         match bounds with
         | (sl, sr) => decide (sl ≤ x) && decide (x ≤ sr)
           && bl (sl, x - 1) && br (x + 1, sr))
-      (fun _ => true) t (lo, hi) = true
+      t (lo, hi) = true
     ∧
     Palamedes.Tree.fold
+      (fun h => decide (h ≤ 1))
       (fun bl _ br h => decide (h > 0) && bl (h - 1) && br (h - 1))
-      (fun h => decide (h ≤ 1)) t height
+      t height
 
 set_option maxHeartbeats 1000000
 

@@ -1,6 +1,8 @@
 import Palamedes.Gen
 import Palamedes.CorrectGen
 import Palamedes.Total
+import Palamedes.RuleSets
+import Palamedes.CaseSplit
 
 namespace Palamedes
 
@@ -10,14 +12,18 @@ namespace Gen
 
 def arbBool : Gen Bool := pick (pure true) (pure false)
 
+@[simp]
+theorem support_arbBool :
+    support arbBool = fun _ => True := by
+    funext x; cases x <;> simp_all [arbBool]
+
 namespace CorrectGen
 
+@[extract, aesop safe apply (rule_sets := [synthesis])]
 def s_arbBool : @CorrectGen Bool (fun _ => True) :=
   Subtype.mk arbBool (by simp [arbBool])
 
-@[extract]
-theorem s_arbBool_val : s_arbBool.val = arbBool := rfl
-
+@[extract, case_split]
 def s_caseBool
     {Q : α → Prop}
     {P : α → Bool → Prop}
@@ -30,16 +36,6 @@ def s_caseBool
     match b with
     | true => simp [gt.property, h]
     | false => simp [gf.property, h]
-
-@[extract]
-theorem s_caseBool_val
-    {Q : α → Prop}
-    {P : α → Bool → Prop}
-    (b : Bool)
-    (h : ∀ {a}, P a b = Q a)
-    (gt : CorrectGen (fun a => P a true))
-    (gf : CorrectGen (fun a => P a false)) :
-    (s_caseBool b h gt gf).val = if _h : b then gt.val else gf.val := rfl
 
 end CorrectGen
 

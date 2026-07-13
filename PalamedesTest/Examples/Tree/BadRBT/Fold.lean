@@ -8,16 +8,16 @@ namespace BadRBTFold
 @[simp]
 def isRRFold (t : Palamedes.Tree (Color × α)) : Bool :=
   Palamedes.Tree.fold
-    (fun bl c br isRedChild => if c.fst == .red then !isRedChild && bl true && br true else bl false && br false)
     (fun _ => true)
+    (fun bl c br isRedChild => if c.fst == .red then !isRedChild && bl true && br true else bl false && br false)
     t
     false
 
 @[simp]
 def isBHFold (t : Palamedes.Tree (Color × α)) (height : Nat) : Bool :=
   Palamedes.Tree.fold
-    (fun bl c br h => if c.fst == .red then bl h && br h else h >= 0 && bl (h - 1) && br (h - 1))
     (fun h => h == 0)
+    (fun bl c br h => if c.fst == .red then bl h && br h else h >= 0 && bl (h - 1) && br (h - 1))
     t
     height
 

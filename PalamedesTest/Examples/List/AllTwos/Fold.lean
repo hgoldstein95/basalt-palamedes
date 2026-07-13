@@ -6,7 +6,7 @@ namespace AllTwosFold
 
 @[simp]
 def isAllTwosFold (xs : List Nat) : Bool :=
-  List.fold (fun x b => x == 2 && b) true xs
+  List.fold true (fun x b => x == 2 && b) xs
 
 def genAllTwosFold : Gen (List Nat) := by
   generator_search (fun xs => isAllTwosFold xs = true)
