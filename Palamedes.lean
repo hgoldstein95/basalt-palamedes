@@ -3,3 +3,4 @@
 -- (`Sample`). The example corpus and the extraction audit live in the `PalamedesTest` library.
 import Palamedes.Synthesizer
 import Palamedes.Sample
+import Palamedes.Stats

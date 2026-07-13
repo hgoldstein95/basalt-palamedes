@@ -23,11 +23,12 @@ name = "InProgress"
 globs = ["InProgress.+"]
 
 # Basalt provides the generator representation Palamedes synthesizes onto: the `Gen` typeclass,
-# the `SPMF` proof interpretation (and `SPMF.support`), and the executable `Plausible.Gen` instance.
+# the `SPMF` proof interpretation (and `SPMF.support`), the executable `Plausible.Gen` instance,
+# and the `#genstats` diagnostics command. Tracks `main`; re-pin with `lake update basalt`.
 [[require]]
 name = "basalt"
 git = "https://github.com/hgoldstein95/basalt"
-rev = "v4.32.0-rc1"
+rev = "main"
 
 [[require]]
 name = "mathlib"

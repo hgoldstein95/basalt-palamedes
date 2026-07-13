@@ -7,7 +7,7 @@ section TypeDef
 inductive Color where
   | red
   | black
-deriving DecidableEq
+deriving DecidableEq, Repr
 
 @[simp]
 theorem Color.exists_color {P : Color → Prop} : (∃ c, P c) ↔ P .red ∨ P .black := by

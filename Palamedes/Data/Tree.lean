@@ -13,6 +13,7 @@ section TypeDef
 inductive Tree (α : Type) where
   | leaf : Tree α
   | node : (l : Tree α) → (x : α) → (r : Tree α) → Tree α
+deriving Repr
 
 end TypeDef
 
