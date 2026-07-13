@@ -81,6 +81,62 @@ instance : Monad Gen where
 def pick (x y : Gen α) : Gen α :=
   ⟨fun {_G} _ _ => RandomChoice.pick (fun () => x.run) (fun () => y.run)⟩
 
+/-- Weighted n-ary choice. Branch `(wⱼ, gⱼ)` is selected with probability `wⱼ / Σw`. The optimizer
+flattens `pick` chains into `frequency` so that a k-way choice is a function of the weights rather
+than of how the chain was associated. -/
+def frequency (gs : List (Nat × Gen α)) (h : 0 < (gs.map Prod.fst).sum := by simp) : Gen α :=
+  ⟨fun {_G} _ _ =>
+    _root_.frequency (gs.map fun p => (p.1, fun _ => p.2.run))
+      (by simpa [List.map_map, Function.comp_def] using h)⟩
+
+/-- Uniform n-ary choice: `frequency` with all weights 1. -/
+def oneOf (gs : List (Gen α)) (h : gs ≠ [] := by simp) : Gen α :=
+  frequency (gs.map fun g => (1, g)) (by cases gs <;> simp_all)
+
+section Delab
+
+open Lean PrettyPrinter Delaborator SubExpr
+
+/-! The side-condition arguments of `frequency`/`oneOf` are autoParams (`by simp`), so an
+application that omits them still elaborates whenever `simp` can discharge the condition. The
+delaborators below therefore drop the argument in that case rather than rendering it. -/
+
+@[app_delab Palamedes.Gen.oneOf]
+def delabOneOf : Delab := do
+  let e ← getExpr
+  guard <| e.isAppOfArity ``Palamedes.Gen.oneOf 3
+  guard <| (e.getArg! 1).isAppOf ``List.cons
+  let gs ← withNaryArg 1 delab
+  let fn := mkIdent (← unresolveNameGlobal ``Palamedes.Gen.oneOf)
+  `($fn $gs)
+
+def natLit? (e : Expr) : Option Nat :=
+  match e.nat? with
+  | some n => some n
+  | none => match_expr e with
+    | OfNat.ofNat _ n _ => n.nat?
+    | _ => none
+
+private partial def weightSum? (l : Expr) : Option Nat :=
+  match_expr l with
+  | List.nil _ => some 0
+  | List.cons _ hd tl => do
+    let_expr Prod.mk _ _ w _ := hd | none
+    return (← natLit? w) + (← weightSum? tl)
+  | _ => none
+
+@[app_delab Palamedes.Gen.frequency]
+def delabFrequency : Delab := do
+  let e ← getExpr
+  guard <| e.isAppOfArity ``Palamedes.Gen.frequency 3
+  let some total := weightSum? (e.getArg! 1) | failure
+  guard <| 0 < total
+  let gs ← withNaryArg 1 delab
+  let fn := mkIdent (← unresolveNameGlobal ``Palamedes.Gen.frequency)
+  `($fn $gs)
+
+end Delab
+
 /-- The empty generator: produces nothing. It is the `Fail` capability's `fail`; in `SPMF` that is
 `⊥` (mass 0), and in an executable interpretation it is a generation failure, which is what makes
 `assume`'s `else` branch act as a local backtracking point. It is computable whenever the chosen
@@ -152,6 +208,35 @@ theorem support_pick :
   show a ∈ SPMF.support (RandomChoice.pick (fun () => x.run) (fun () => y.run)) ↔ _
   simp only [SPMF.support_pick, Set.mem_union]
   rfl
+
+@[simp]
+theorem support_frequency {gs : List (Nat × Gen α)} (h) :
+    support (frequency gs h) = fun a => ∃ w g, (w, g) ∈ gs ∧ 0 < w ∧ support g a := by
+  funext a
+  apply propext
+  show a ∈ SPMF.support (_root_.frequency (gs.map fun p => (p.1, fun _ => p.2.run))
+      (by simpa [List.map_map, Function.comp_def] using h)) ↔ _
+  rw [SPMF.support_frequency]
+  simp only [Set.mem_setOf_eq, List.mem_map, Prod.mk.injEq]
+  constructor
+  · rintro ⟨w, g, ⟨⟨w', g'⟩, hmem, hw', hg'⟩, hw, ha⟩
+    subst hw'
+    subst hg'
+    exact ⟨w', g', hmem, hw, ha⟩
+  · rintro ⟨w, g, hmem, hw, ha⟩
+    exact ⟨w, fun _ => g.run, ⟨⟨w, g⟩, hmem, rfl, rfl⟩, hw, ha⟩
+
+@[simp]
+theorem support_oneOf {gs : List (Gen α)} (h) :
+    support (oneOf gs h) = fun a => ∃ g ∈ gs, support g a := by
+  funext a
+  simp only [oneOf, support_frequency, List.mem_map, eq_iff_iff, Prod.mk.injEq]
+  constructor
+  · rintro ⟨w, g, ⟨g', hmem, hw, hg⟩, _, ha⟩
+    subst hg
+    exact ⟨g', hmem, ha⟩
+  · rintro ⟨g, hmem, ha⟩
+    exact ⟨1, g, ⟨g, hmem, rfl, rfl⟩, Nat.one_pos, ha⟩
 
 @[simp]
 theorem support_empty :

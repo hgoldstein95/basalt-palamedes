@@ -31,10 +31,27 @@ def gt (lo : Nat) : Gen Nat := (lo + 1 + · ) <$> arbNat
 def mod2 (r : Nat) (_ : r < 2) : Gen Nat := (2 * · + r) <$> arbNat
 
 def choose (lo hi : Nat) (h : lo ≤ hi := by simp) : Gen Nat :=
-  if h' : lo = hi then pure lo else pick (pure lo) (choose (lo + 1) hi (by omega))
+  ⟨fun {_G} _ _ => RandomChoice.choose lo hi h >>= fun r => Pure.pure r.down.val⟩
+
+def TGen.choose (lo hi : Nat) (h : lo ≤ hi := by simp) : TGen Nat :=
+  ⟨fun {_G} _ => RandomChoice.choose lo hi h >>= fun r => Pure.pure r.down.val⟩
 
 def lt (hi : Nat) (_ : hi > 0) : Gen Nat :=
   choose 0 (hi - 1) (by simp)
+
+open Lean PrettyPrinter Delaborator SubExpr in
+/-- Hide `choose`'s bounds proof when both bounds are literals with `lo ≤ hi`. -/
+@[app_delab Palamedes.Gen.choose]
+def delabChoose : Delab := do
+  let e ← getExpr
+  guard <| e.isAppOfArity ``Palamedes.Gen.choose 3
+  let some lo := natLit? (e.getArg! 0) | failure
+  let some hi := natLit? (e.getArg! 1) | failure
+  guard <| lo ≤ hi
+  let loStx ← withNaryArg 0 delab
+  let hiStx ← withNaryArg 1 delab
+  let fn := mkIdent (← unresolveNameGlobal ``Palamedes.Gen.choose)
+  `($fn $loStx $hiStx)
 
 @[simp]
 theorem support_arbNat :
@@ -78,31 +95,15 @@ theorem support_mod2 :
 @[simp]
 theorem support_choose :
     support (choose lo hi h) = fun a => lo ≤ a ∧ a ≤ hi := by
-  generalize hn : hi - lo = n
   funext v
-  induction n generalizing lo hi v with
-  | zero =>
-    unfold choose
-    split <;> simp <;> omega
-  | succ n' ih =>
-    unfold choose
-    split
-    . simp
-      omega
-    . simp
-      apply Iff.intro
-      . intro hv
-        cases hv with
-        | inl hv => simp_all
-        | inr hv =>
-          have h : hi - (lo + 1) = n' := by omega
-          rw [ih h] at hv
-          omega
-      . intro hbw
-        by_cases v = lo
-        . left; assumption
-        . right
-          rw [ih _] <;> omega
+  apply propext
+  show v ∈ SPMF.support (RandomChoice.choose lo hi h >>= fun r => Pure.pure r.down.val) ↔ _
+  simp only [SPMF.support_bind, SPMF.mem_support_choose_iff, SPMF.support_pure]
+  constructor
+  · rintro ⟨⟨a, ha⟩, -, rfl⟩
+    exact ha
+  · intro hv
+    exact ⟨⟨v, hv⟩, trivial, rfl⟩
 
 @[simp]
 theorem support_lt :
@@ -194,21 +195,7 @@ orthogonal fact; see the Basalt library.) -/
 theorem total_arbNat : total arbNat := ⟨TGen.arbNat, by ext; rfl⟩
 
 @[simp, aesop safe (rule_sets := [totality])]
-theorem total_choose : total (choose lo hi h) := by
-  generalize hn : hi - lo = n
-  induction n generalizing lo hi h with
-  | zero =>
-    unfold choose
-    have : lo = hi := by omega
-    simp [this]
-  | succ n' ih =>
-    unfold choose
-    split
-    . simp
-    . apply total_pick
-      . simp
-      . apply ih
-        omega
+theorem total_choose : total (choose lo hi h) := ⟨TGen.choose lo hi h, by ext; rfl⟩
 
 @[simp, aesop safe (rule_sets := [totality])]
 theorem total_gt : total (gt lo) := by simp [gt]

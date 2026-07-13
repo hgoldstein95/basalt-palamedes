@@ -105,4 +105,25 @@ theorem support_assume_true
     support (assume b f) = support (f h) := by
   simp only [assume, dif_pos h]
 
+theorem support_pick_flatten (x y : Gen α) :
+    support (pick x y) = support (oneOf [x, y] (by simp)) := by
+  aesop
+
+theorem support_pick_flatten_left
+    (x : Gen α) (xs : List (Gen α)) (hx : x :: xs ≠ []) (y : Gen α) :
+    support (pick (oneOf (x :: xs) hx) y) = support (oneOf (x :: (xs ++ [y])) (by simp)) := by
+  aesop
+
+theorem support_pick_flatten_right
+    (x y : Gen α) (ys : List (Gen α)) (hy : y :: ys ≠ []) :
+    support (pick x (oneOf (y :: ys) hy)) = support (oneOf (x :: y :: ys) (by simp)) := by
+  aesop
+
+theorem support_pick_flatten_both
+    (x : Gen α) (xs : List (Gen α)) (hx : x :: xs ≠ [])
+    (y : Gen α) (ys : List (Gen α)) (hy : y :: ys ≠ []) :
+    support (pick (oneOf (x :: xs) hx) (oneOf (y :: ys) hy))
+      = support (oneOf (x :: (xs ++ y :: ys)) (by simp)) := by
+  aesop
+
 end Palamedes

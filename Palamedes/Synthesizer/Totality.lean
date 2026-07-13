@@ -34,6 +34,12 @@ elab "totality" : tactic => open Lean Elab Tactic in do
         | apply total_pure
         | apply total_bind
         | apply total_pick
+        | apply total_oneOf
+        | apply total_frequency
+        | apply totalList_cons
+        | apply totalList_nil
+        | apply totalWeighted_cons
+        | apply totalWeighted_nil
         | apply total_map
         | apply total_dite
         | apply total_arbBool

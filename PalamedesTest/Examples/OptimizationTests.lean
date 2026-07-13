@@ -44,14 +44,14 @@ private axiom f : Nat → Gen Nat
 #assert_optimizes!
   pick (assume ((2 : Nat) == 2) (fun _ => (pure 3 : Gen Nat))) (pure 4)
   goes_to
-  if _ : (2 == 2) then pick (pure 3) (pure 4) else pure 4
+  if _ : (2 == 2) then oneOf [pure 3, pure 4] else pure 4
 
 -- TODO: Can we do better? Ideally we could apply a heuristic here to try to figure out which one is
 -- easier to satisfy...
 #assert_optimizes!
   pick (assume ((2 : Nat) == 2) (fun _ => (pure 2 : Gen Nat))) (assume ((3 : Nat) == 3) (fun _ => pure 3))
   goes_to
-  if ((2 : Nat) == 2) then if ((3 : Nat) == 3) then pick (pure 2) (pure 3) else pure 2 else assume ((3 : Nat) == 3) (fun _ => pure 3)
+  if _ : ((2 : Nat) == 2) then oneOf [pure 2, pure 3] else pure 3
 
 #assert_optimizes!
   (assume ((2 : Nat) == 2) (fun _ => pure 3)) >>= f
@@ -66,4 +66,26 @@ private axiom f : Nat → Gen Nat
 #assert_optimizes!
   pick (pure 4 : Gen Nat) (assume ((2 : Nat) == 2) (fun _ => pure 3))
   goes_to
-  if _ : ((2 : Nat) == 2) then pick (pure 4) (pure 3) else pure 4
+  if _ : ((2 : Nat) == 2) then oneOf [pure 4, pure 3] else pure 4
+
+#assert_optimizes!
+  pick (pure 1) (pick (pure 2) (pick (pure 3 : Gen Nat) (pure 4)))
+  goes_to
+  oneOf [pure 1, pure 2, pure 3, pure 4]
+
+#assert_optimizes!
+  pick (pick (pick (pure 1 : Gen Nat) (pure 2)) (pure 3)) (pure 4)
+  goes_to
+  oneOf [pure 1, pure 2, pure 3, pure 4]
+
+#assert_optimizes!
+  pick (pick (pure 1 : Gen Nat) (pure 2)) (pick (pure 3) (pure 4))
+  goes_to
+  oneOf [pure 1, pure 2, pure 3, pure 4]
+
+-- A lone binary choice also lands in `oneOf`: the distribution is unchanged (uniform either way),
+-- and every choice point ends up in the one node kind that weights can attach to.
+#assert_optimizes!
+  pick (pure 1 : Gen Nat) (pure 2)
+  goes_to
+  oneOf [pure 1, pure 2]

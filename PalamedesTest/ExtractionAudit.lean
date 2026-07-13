@@ -25,12 +25,18 @@ argument into the generator). Matcher auxiliaries (e.g. `Gen.CorrectGen.List.s_u
 are exempt: they are ordinary case splits that legitimately appear in `s_unfold` generators.
 Proof auxiliaries (`…._proof_i`, abstracted out of combinator bodies by the definition
 elaborator) are exempt too: they are compiler-erased proofs of `Prop`s, never a combinator
-wrapper (those are `Type`-valued). -/
+wrapper (those are `Type`-valued).
+
+`Gen.pick` is residue too, of the optimizer rather than of extraction: the flatten pass rewrites
+every `pick` tree into a uniform n-ary `oneOf` (proposal 04), so a `pick` surviving in a compiled
+synthesized generator means a chain escaped flattening — and with it the `½, ¼, ⅛, …` distribution
+skew the pass exists to remove. -/
 def isResidue (c : Name) : Bool :=
   if (c.toString.splitOn ".match_").length > 1 then false
   else if (c.toString.splitOn "._proof_").length > 1 then false
   else
     c == ``Subtype.val || c == ``Eq.mpr || c == ``Eq.rec || c == ``Palamedes.CorrectGen ||
+    c == ``Palamedes.Gen.pick ||
     (`Palamedes.Gen.CorrectGen).isPrefixOf c
 
 run_cmd liftTermElabM do

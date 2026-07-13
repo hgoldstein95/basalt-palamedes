@@ -38,6 +38,14 @@ protected def bind (x : TGen α) (f : α → TGen β) : TGen β :=
 def pick (x y : TGen α) : TGen α :=
   ⟨fun {_G} _ => RandomChoice.pick (fun () => x.run) (fun () => y.run)⟩
 
+def frequency (gs : List (Nat × TGen α)) (h : 0 < (gs.map Prod.fst).sum := by simp) : TGen α :=
+  ⟨fun {_G} _ =>
+    _root_.frequency (gs.map fun p => (p.1, fun _ => p.2.run))
+      (by simpa [List.map_map, Function.comp_def] using h)⟩
+
+def oneOf (gs : List (TGen α)) (h : gs ≠ [] := by simp) : TGen α :=
+  frequency (gs.map fun g => (1, g)) (by cases gs <;> simp_all)
+
 /-- `Gen`'s `Functor.map` is the `Monad` default (`bind` then `pure`), so the witness must mirror that
 shape rather than `G`'s native `<$>` to coerce definitionally. -/
 protected def map (f : α → β) (x : TGen α) : TGen β :=
@@ -51,6 +59,11 @@ namespace Gen
 failure-free witness whose coercion is `g`. Equivalently, `g` is definable without `Fail`, i.e. it
 never uses `assume`/`empty`. -/
 def total (g : Gen α) : Prop := ∃ t : TGen α, t.toGen = g
+
+def totalList (gs : List (Gen α)) : Prop := ∃ ts : List (TGen α), ts.map TGen.toGen = gs
+
+def totalWeighted (gs : List (Nat × Gen α)) : Prop :=
+  ∃ ts : List (Nat × TGen α), ts.map (fun p => (p.1, p.2.toGen)) = gs
 
 namespace Total
 
@@ -77,6 +90,46 @@ theorem total_pick
   obtain ⟨tx, rfl⟩ := hx
   obtain ⟨ty, rfl⟩ := hy
   exact ⟨TGen.pick tx ty, by ext; rfl⟩
+
+@[simp, aesop safe (rule_sets := [totality])]
+theorem totalList_nil : totalList ([] : List (Gen α)) := ⟨[], rfl⟩
+
+@[simp, aesop safe (rule_sets := [totality])]
+theorem totalList_cons {x : Gen α} {gs : List (Gen α)}
+    (hx : total x)
+    (hgs : totalList gs) :
+    totalList (x :: gs) := by
+  obtain ⟨tx, rfl⟩ := hx
+  obtain ⟨ts, rfl⟩ := hgs
+  exact ⟨tx :: ts, rfl⟩
+
+@[simp, aesop safe (rule_sets := [totality])]
+theorem totalWeighted_nil : totalWeighted ([] : List (Nat × Gen α)) := ⟨[], rfl⟩
+
+@[simp, aesop safe (rule_sets := [totality])]
+theorem totalWeighted_cons {w : Nat} {g : Gen α} {gs : List (Nat × Gen α)}
+    (hg : total g)
+    (hgs : totalWeighted gs) :
+    totalWeighted ((w, g) :: gs) := by
+  obtain ⟨tg, rfl⟩ := hg
+  obtain ⟨ts, rfl⟩ := hgs
+  exact ⟨(w, tg) :: ts, rfl⟩
+
+@[simp, aesop safe (rule_sets := [totality])]
+theorem total_frequency {gs : List (Nat × Gen α)} {h}
+    (hgs : totalWeighted gs) :
+    total (frequency gs h) := by
+  obtain ⟨ts, rfl⟩ := hgs
+  refine ⟨TGen.frequency ts (by simpa [List.map_map, Function.comp_def] using h), ?_⟩
+  ext
+  simp only [TGen.toGen, TGen.frequency, frequency, List.map_map, Function.comp_def]
+
+@[simp, aesop safe (rule_sets := [totality])]
+theorem total_oneOf {gs : List (Gen α)} {h}
+    (hgs : totalList gs) :
+    total (oneOf gs h) := by
+  obtain ⟨ts, rfl⟩ := hgs
+  exact total_frequency ⟨ts.map fun t => (1, t), by simp [List.map_map, Function.comp_def]⟩
 
 @[simp, aesop safe (rule_sets := [totality])]
 theorem total_map

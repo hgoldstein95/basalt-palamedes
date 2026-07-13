@@ -8,6 +8,7 @@ import PalamedesTest.Examples.Simple.Eq2
 import PalamedesTest.Examples.Simple.Eq2'
 import PalamedesTest.Examples.Simple.Eq2Or5
 import PalamedesTest.Examples.Simple.Eq2Or5'
+import PalamedesTest.Examples.Simple.OneOfFour
 import PalamedesTest.Examples.Simple.ThreePlusOne
 
 import PalamedesTest.Examples.Tuple.Pairs

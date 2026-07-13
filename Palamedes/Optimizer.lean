@@ -183,6 +183,66 @@ def optimizePick? (x y : Expr) : MetaM (Option GenRewriteResult) :=
       return some (← mkAppM ``dite #[c, fPos, fNeg], ``support_pick_assume)
     | _ => return none
 
+/-! ## Pick-chain flattening -/
+
+/-- Elements of a literal `List` expression (`a :: b :: … :: []`), or `none` if any spine node is
+not a `cons`/`nil` constructor application. -/
+private partial def listLitElems? (e : Expr) : Option (List Expr) :=
+  match e.getAppFnArgs with
+  | (``List.cons, #[_, h, t]) => (h :: ·) <$> listLitElems? t
+  | (``List.nil, #[_]) => some []
+  | _ => none
+
+/-- Match `oneOf (x :: xs) h` with a literal branch list — the shape the flatten pass itself emits —
+returning the head `x`, the tail expression `xs`, its elements, and the nonemptiness proof `h`. -/
+private def oneOfLit? (e : Expr) : Option (Expr × Expr × List Expr × Expr) :=
+  match e.getAppFnArgs with
+  | (``Gen.oneOf, #[_, gs, h]) =>
+    match gs.getAppFnArgs with
+    | (``List.cons, #[_, x, xs]) => do
+      let elems ← listLitElems? xs
+      return (x, xs, elems, h)
+    | _ => none
+  | _ => none
+
+/-- Flatten-pass head rewrite of `pick x y`: collect both arms' branches — an arm contributes its
+elements when it is itself a literal `oneOf` (an already-flattened subtree), and itself otherwise —
+and emit one uniform `oneOf` over all of them. Because children are flattened before their parent,
+this collapses an arbitrarily nested `pick` tree (either spine direction) into a single n-ary
+uniform choice.
+
+Returns the rewritten expression together with its support-preservation proof: the twin lemmas'
+statements mention `++`, which `mkLeafProof`'s unifier cannot invert against the flat literal list
+we emit, so the proof is instantiated explicitly here instead of found by unification. The two
+sides remain definitionally equal (`++` on literals reduces), which is all downstream proof
+composition needs. -/
+private def flattenPick? (e : Expr) : MetaM (Option (Expr × Expr)) := do
+  match_expr e with
+  | Gen.pick _ x y => do
+    let (elems, proof) ←
+      match oneOfLit? x, oneOfLit? y with
+      | none, none => do
+        pure ([x, y], ← mkAppM ``support_pick_flatten #[x, y])
+      | some (xh, xt, xelems, hx), none => do
+        pure (xh :: xelems ++ [y], ← mkAppM ``support_pick_flatten_left #[xh, xt, hx, y])
+      | none, some (yh, yt, yelems, hy) => do
+        pure (x :: yh :: yelems, ← mkAppM ``support_pick_flatten_right #[x, yh, yt, hy])
+      | some (xh, xt, xelems, hx), some (yh, yt, yelems, hy) => do
+        pure (xh :: xelems ++ yh :: yelems,
+          ← mkAppM ``support_pick_flatten_both #[xh, xt, hx, yh, yt, hy])
+    let tl ← mkListLit (← inferType x) elems.tail
+    let gs ← mkAppM ``List.cons #[elems.head!, tl]
+    let hne ← mkAppM ``List.cons_ne_nil #[elems.head!, tl]
+    let e' ← mkAppM ``Gen.oneOf #[gs, hne]
+    return some (e', proof)
+  | _ => return none
+
+/-- The two head-rewrite sets a traversal can apply. `.main` is the assume-floating / monad-law
+set; `.flatten` collapses `pick` trees into `oneOf` and must run as a separate later pass, because
+`.main`'s bind-distribution rules create and extend `pick` chains (and need the picks intact to
+float assumes out of them). -/
+inductive OptPass | main | flatten
+
 /-! ## Proof-carrying traversal -/
 
 /-- `support e`. -/
@@ -272,19 +332,19 @@ mutual
 
 /-- Reduce `e0` (so `match_expr` sees through reducible defs) and optimize it to a fixed point,
 returning the rewritten term and a proof that its `support` is unchanged. -/
-private partial def optimize (table : Array CongrRule) (e0 : Expr) : MetaM OptResult := do
-  optimizeReduced table (← withReducible (reduce e0))
+private partial def optimize (pass : OptPass) (table : Array CongrRule) (e0 : Expr) : MetaM OptResult := do
+  optimizeReduced pass table (← withReducible (reduce e0))
 
 /-- Optimize `e`, which is assumed *already reduced*. Optimize children (their subterms are already
 reduced too), attempt one head rewrite, and — since a rewrite can introduce new redexes (e.g. the
 `pure a >>= f ~> f a` beta) — re-`optimize` (re-reduce) the result. Reducing only here and at the
 top avoids re-reducing each subtree once per level of depth. -/
-private partial def optimizeReduced (table : Array CongrRule) (e : Expr) : MetaM OptResult := do
-  let cong ← optimizeChildren table e
-  match ← tryHeadRewrite cong.expr with
+private partial def optimizeReduced (pass : OptPass) (table : Array CongrRule) (e : Expr) : MetaM OptResult := do
+  let cong ← optimizeChildren pass table e
+  match ← tryHeadRewrite pass cong.expr with
   | none => return cong
   | some (e', headPf) =>
-    let rest ← optimize table e'
+    let rest ← optimize pass table e'
     let proof? ← chainProofs #[cong.proof?, some headPf, rest.proof?]
     return { expr := rest.expr, proof? }
 
@@ -296,7 +356,7 @@ If `e`'s head has no registered congruence lemma, skipping is correct *only* whe
 to descend into; if `e` carries a `Gen`-valued argument we would silently drop an optimization (and
 potentially mask synthesis residue), so we fail loudly instead — the fix is to tag that head's
 support-congruence lemma `@[gen_congr]`. -/
-private partial def optimizeChildren (table : Array CongrRule) (e : Expr) : MetaM OptResult := do
+private partial def optimizeChildren (pass : OptPass) (table : Array CongrRule) (e : Expr) : MetaM OptResult := do
   let some head := e.getAppFn.constName? | return { expr := e, proof? := none }
   let some (_, congrName, diff) := table.find? (·.1 == head)
     | do
@@ -317,7 +377,7 @@ private partial def optimizeChildren (table : Array CongrRule) (e : Expr) : Meta
   let mut hyps := #[]
   let mut changed := false
   for i in diff do
-    let (arg', h?) ← optimizeBinder table args[i]!
+    let (arg', h?) ← optimizeBinder pass table args[i]!
     newArgs := newArgs.set! i arg'
     match h? with
     | some h => hyps := hyps.push h; changed := true
@@ -329,11 +389,11 @@ private partial def optimizeChildren (table : Array CongrRule) (e : Expr) : Meta
 /-- Optimize a child argument: under any leading binders (`f : dom₁ → … → Gen _`) when it is a
 function, or directly when it is a plain `Gen`. Returns the rebuilt argument and, when something
 changed, a proof `∀ xs, support (arg xs) = support (arg' xs)`. -/
-private partial def optimizeBinder (table : Array CongrRule) (f : Expr) : MetaM (Expr × Option Expr) := do
+private partial def optimizeBinder (pass : OptPass) (table : Array CongrRule) (f : Expr) : MetaM (Expr × Option Expr) := do
   forallTelescope (← inferType f) fun xs _ => do
     -- `f` is a subterm of an already-reduced node, so `f.beta xs` is reduced (the substituted `xs`
     -- are atomic fvars); descend with `optimizeReduced` to avoid re-reducing it.
-    let r ← optimizeReduced table (f.beta xs)
+    let r ← optimizeReduced pass table (f.beta xs)
     let f' ← mkLambdaFVars xs r.expr
     match r.proof? with
     | none => return (f', none)
@@ -341,27 +401,35 @@ private partial def optimizeBinder (table : Array CongrRule) (f : Expr) : MetaM 
 
 /-- Attempt a single head rewrite on `e`, returning the rewritten term and a proof
 `support e = support e'`. -/
-private partial def tryHeadRewrite (e : Expr) : MetaM (Option (Expr × Expr)) := do
-  let res? ←
-    match_expr e with
-    | bind _ _ _ _ x f => optimizeBind? x f
-    | pick _ x y => optimizePick? x y
-    | assume _ b f => optimizeAssume? b f
-    | _ => pure none
-  match res? with
-  | none => return none
-  | some (e', lemmaName) => return some (e', ← mkLeafProof lemmaName e e')
+private partial def tryHeadRewrite (pass : OptPass) (e : Expr) : MetaM (Option (Expr × Expr)) := do
+  match pass with
+  | .flatten => flattenPick? e
+  | .main =>
+    let res? ←
+      match_expr e with
+      | bind _ _ _ _ x f => optimizeBind? x f
+      | pick _ x y => optimizePick? x y
+      | assume _ b f => optimizeAssume? b f
+      | _ => pure none
+    match res? with
+    | none => return none
+    | some (e', lemmaName) => return some (e', ← mkLeafProof lemmaName e e')
 
 end
 
 /-- Optimize a raw `Gen` term, returning the optimized term together with a proof that its
-`support` equals that of the input. -/
+`support` equals that of the input. Runs the `.main` (assume-floating / monad-law) pass to a fixed
+point first, then the `.flatten` pass, which collapses the `pick` chains the main pass leaves (and
+may have extended, via bind-distribution) into single uniform `oneOf` nodes. -/
 def optimizeGen (e : Expr) : MetaM (Expr × Expr) := do
-  let r ← optimize (getGenCongrRules (← getEnv)) e
+  let table := getGenCongrRules (← getEnv)
+  let r1 ← optimize .main table e
+  let r2 ← optimize .flatten table r1.expr
+  let expr := r2.expr
   let proof ←
-    match r.proof? with
-    | some p => mkExpectedTypeHint p (← mkEq (← mkSupport e) (← mkSupport r.expr))
+    match ← chainProofs #[r1.proof?, r2.proof?] with
+    | some p => mkExpectedTypeHint p (← mkEq (← mkSupport e) (← mkSupport expr))
     | none => mkSupportRefl e
-  return (r.expr, proof)
+  return (expr, proof)
 
 end Palamedes
