@@ -22,7 +22,7 @@ end CorrectGen
 
 namespace Total
 
-@[simp, aesop safe (rule_sets := [totality])]
+@[simp, total]
 theorem total_arbUnit : total arbUnit := by
   simp [arbUnit]
 

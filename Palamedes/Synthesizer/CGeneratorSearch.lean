@@ -323,8 +323,8 @@ private def caseSplitWith (goal : MVarId) (scrut : Expr) (lemmaName : Name) :
 
 /-- For `CorrectGen (fun a => _ ∨ _)` goal it offers one rule application per candidate scrutinee — each
     local hypothesis that occurs in the predicate and whose type is a supported datatype — and lets
-    Aesop's own search pick the one whose case subgoals close. This subsumes the old
-    `clear_unused_assumptions; nth_assumption k` brute-force enumeration. -/
+    Aesop's own search pick the one whose case subgoals close. This replaced a brute-force
+    enumeration over the local context. -/
 @[aesop unsafe 5% (rule_sets := [synthesis]) tactic]
 def caseSplitRuleTac : RuleTac := fun input => do
   input.goal.withContext do
@@ -358,17 +358,21 @@ section AesopRules
 
 /-
 
-For performance, we want to abide by two heuristics:
-1) `simp` as infrequently as possible, and
-2) prune the search tree as often as possible.
+Two performance heuristics:
+1) `simp` as infrequently as possible — achieved by factoring the `simp` steps out into the
+   normalization tactics above;
+2) prune the search tree as often as possible — achieved by trying rules that can *close* a goal
+   before any rule that opens new subgoals.
 
-We accomplish goal 1 by factoring out the `simp` steps in the normalization
-tactics above, and we accomplish goal 2 here by trying every `arb` lemma
-that can close a goal before trying any lemmas that generate new subgoals.
+Most synthesis rules are `@[aesop]`-tagged at their definition sites (see the `Data/` modules), which
+is what lets a new datatype join the search without editing this file. The rules below stay
+enumerated on purpose: Aesop tries rules in registration order within a tier, which for tagged rules
+means *import* order, and these are deliberately ordered against `normalize_and_apply{,_unfold}`. A
+different order does not make the search wrong — it makes it find a *different*, often larger,
+generator that then blows `maxRecDepth` downstream. (Two of them could not be attributes anyway:
+`s_between` takes a discharging tactic, `s_elements_partial` needs a `convert` wrapper.)
 
 -/
--- The `s_arb*` closers that used to be enumerated here are now `@[aesop safe apply]` tags on
--- the definitions themselves (see the `Data/` modules).
 add_aesop_rules safe (rule_sets := [synthesis]) [
   (by (repeat apply duncurry); intro),
 ]
@@ -396,12 +400,6 @@ section API
 macro "cgenerator_search" : tactic =>
   `(tactic|
     aesop
-      (rule_sets := [-default, -builtin, synthesis])
-      (config := {enableSimp := false, maxRuleApplications := 1000}))
-
-macro "cgenerator_search?" : tactic =>
-  `(tactic|
-    aesop?
       (rule_sets := [-default, -builtin, synthesis])
       (config := {enableSimp := false, maxRuleApplications := 1000}))
 

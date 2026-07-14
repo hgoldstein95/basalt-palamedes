@@ -16,8 +16,8 @@ globs = ["Palamedes", "Palamedes.+"]
 name = "PalamedesTest"
 globs = ["PalamedesTest.+"]
 
-# Work-in-progress examples that do not yet synthesize. Deliberately excluded from the default
-# build (and therefore from CI); build on demand with `lake build InProgress`.
+# Exploratory spikes — design questions being answered in code, not examples pending synthesis.
+# Excluded from the default build (and so from CI); build on demand with `lake build InProgress`.
 [[lean_lib]]
 name = "InProgress"
 globs = ["InProgress.+"]

@@ -316,6 +316,15 @@ partial def branchHoles (holes : Std.HashMap Name Nat) (e : Expr) : MetaM Nat :=
   | Gen.oneOf _ gs _ =>
     let some elems := listLitElems? gs | return 0
     elems.foldlM (init := 0) fun acc g => return max acc (← branchHoles holes g)
+  -- Children are descended into before the head rewrite, so an inner choice is already a `frequency`
+  -- by the time the outer one is scored. Omitting this case scores it 0 holes — the unsafe direction
+  -- (`decayPolicy` would grow a recursive branch's weight fastest with depth).
+  | Gen.frequency _ gs _ =>
+    let some elems := listLitElems? gs | return 0
+    elems.foldlM (init := 0) fun acc p => do
+      match p.getAppFnArgs with
+      | (``Prod.mk, #[_, _, _, g]) => return max acc (← branchHoles holes g)
+      | _ => return acc
   | _ => return 0
 
 /-- Build the weight expression `a + b * d`. -/
@@ -456,12 +465,21 @@ private def chainProofs (ps : Array (Option Expr)) : MetaM (Option Expr) :=
     | some a, none => pure (some a)
     | some a, some b => some <$> mkEqTrans a b
 
-/-- Is `e` a `Gen` or a (curried) function returning a `Gen`? Used to decide, at a node the
-optimizer cannot descend through, whether there was actually anything to descend into. -/
-private def isGenValued (e : Expr) : MetaM Bool := do
-  forallTelescopeReducing (← inferType e) fun _ body => do
-    let head := body.getAppFn
-    return head.isConstOf ``Gen
+/-- Does `e` contain a `Gen` — directly, under binders, or in a `List`/`Prod`? Used by the guard in
+`optimizeChildren` to tell "nothing to descend into" from "silently skipped a child".
+
+The `List`/`Prod` cases change no answer today (`oneOf`/`frequency` are the only list-carrying heads,
+and the guard exempts them by name). They are there so the *next* such combinator trips the guard
+instead of slipping past a check that saw `List` at the head and concluded "no `Gen` here". -/
+private partial def isGenValued (e : Expr) : MetaM Bool := do
+  forallTelescopeReducing (← inferType e) fun _ body => go body
+where
+  go (ty : Expr) : MetaM Bool := do
+    match ty.getAppFn.constName? with
+    | some ``Gen => return true
+    | some ``List => return (← ty.getAppArgs[0]?.mapM go).getD false
+    | some ``Prod => ty.getAppArgs.anyM go
+    | _ => return false
 
 /-- The traversal context: the depth binder currently in scope, if any, together with the datatype
 whose recursion introduced it. A nested unfold rebinds it to the inner depth — innermost wins. -/
@@ -489,9 +507,52 @@ private partial def optimizeReduced (pass : OptPass) (table : Array CongrRule) (
     let proof? ← chainProofs #[cong.proof?, some headPf, rest.proof?]
     return { expr := rest.expr, proof? }
 
+/-- Descend into a `oneOf`'s branches, rebuilding the choice from the optimized ones.
+
+`oneOf` cannot use the `@[gen_congr]` table: that table rebuilds a node by swapping the arguments it
+descended into, but `oneOf`'s nonemptiness proof `h : gs ≠ []` is *dependent* on the branch list, so
+a new list paired with the old proof is ill-typed. Hence the by-hand rebuild.
+
+Without this, `optimizeChildren` skipped every `oneOf`, so nothing nested inside a choice's branch
+was ever visited — which is why `installWeights` could not reach a choice under a choice. -/
+private partial def optimizeOneOfChildren? (pass : OptPass) (table : Array CongrRule) (depth : Depth)
+    (e : Expr) : MetaM (Option OptResult) := do
+  let_expr Gen.oneOf α gs h := e | return none
+  -- The flatten pass builds every branch list with `mkListLit`, so a non-literal one would mean
+  -- silently skipping a choice's branches. Throw rather than assert it cannot happen.
+  let some elems := listLitElems? gs
+    | throwError "optimizer: `oneOf` with a non-literal branch list; cannot descend into\
+        {indentExpr gs}"
+  if elems.isEmpty then return none
+  let rs ← elems.mapM (optimizeReduced pass table depth)
+  unless rs.any (·.proof?.isSome) do return none
+  let elems' := rs.map (·.expr)
+  let genα ← mkAppM ``Gen #[α]
+  let gs' ← mkListLit genα elems'
+  -- `gs'` is a literal cons, so its nonemptiness is exactly `List.cons_ne_nil`.
+  let h' ← mkAppOptM ``List.cons_ne_nil #[genα, elems'.head!, ← mkListLit genα elems'.tail!]
+  -- `gs.map support = gs'.map support`, folded from the per-branch proofs. Both lists are literal,
+  -- so each `List.map` reduces and the folded proof type-checks against the `map` form by defeq.
+  let propTy ← mkArrow α (mkSort .zero)
+  let consFn := mkAppN (mkConst ``List.cons [Level.zero]) #[propTy]
+  let mut hgMap ← mkEqRefl (← mkListLit propTy [])
+  for (g, r) in (elems.zip rs).reverse do
+    let pg ← match r.proof? with
+      | some p => pure p
+      | none   => mkEqRefl (← mkSupport g)
+    hgMap ← mkCongr (← mkCongrArg consFn pg) hgMap
+  let hg ← mkExpectedTypeHint hgMap
+    (← mkEq (← mkAppM ``List.map #[← mkAppOptM ``Gen.support #[α], gs])
+            (← mkAppM ``List.map #[← mkAppOptM ``Gen.support #[α], gs']))
+  let e' ← mkAppOptM ``Gen.oneOf #[α, gs', h']
+  let proof ← mkAppOptM ``support_oneOf_congr #[α, gs, gs', hg, h, h']
+  return some { expr := e', proof? := some proof }
+
 /-- Optimize the children of `e` and reassemble, proving the result has the same `support` via the
 `@[gen_congr]` lemma registered for `e`'s head constant. No head rewrite is attempted here. This
-single generic case subsumes every `Gen` constructor and recursion-scheme combinator.
+single generic case subsumes every `Gen` constructor and recursion-scheme combinator — except
+`oneOf`/`frequency`, whose dependent side-condition proofs it cannot rebuild (see
+`optimizeOneOfChildren?`).
 
 If `e`'s head has no registered congruence lemma, skipping is correct *only* when there is nothing
 to descend into; if `e` carries a `Gen`-valued argument we would silently drop an optimization (and
@@ -499,6 +560,7 @@ potentially mask synthesis residue), so we fail loudly instead — the fix is to
 support-congruence lemma `@[gen_congr]`. -/
 private partial def optimizeChildren (pass : OptPass) (table : Array CongrRule) (depth : Depth)
     (e : Expr) : MetaM OptResult := do
+  if let some r ← optimizeOneOfChildren? pass table depth e then return r
   let some head := e.getAppFn.constName? | return { expr := e, proof? := none }
   -- Under a registered `X.unfold`, the argument we descend into is its step, whose binder 0 is the
   -- recursion's depth.
@@ -507,13 +569,20 @@ private partial def optimizeChildren (pass : OptPass) (table : Array CongrRule) 
     | do
         -- Compiler-generated eliminators (matchers, recursors) carry Gen-valued arms but are
         -- descended into structurally by neither the old nor the new optimizer; don't flag them.
-        -- For an *ordinary* combinator a Gen-valued argument with no congruence lemma signals a
-        -- missing `@[gen_congr]` tag, so fail loudly rather than silently skipping it.
         let isRec := match (← getEnv).find? head with
           | some (.recInfo _) => true
           | _ => false
         let auxiliary := (← Meta.getMatcherInfo? head).isSome || isRec
-        if !auxiliary && (← e.getAppArgs.anyM isGenValued) then
+        -- The two list-carrying combinators, exempt because neither is actually skipped:
+        -- `optimizeOneOfChildren?` handles `oneOf` (declining only when no branch changed), and a
+        -- `frequency` reaching here was produced by `installWeights` from an already-descended
+        -- `oneOf`. The gap: a hand-written `frequency` in a *reducible* position would be silently
+        -- skipped. Today the only one is inside `arbTy`, which is `@[irreducible]` and so never
+        -- opened. If you write another, give `frequency` a real descent rather than widening this.
+        let listCarrier := head == ``Gen.oneOf || head == ``Gen.frequency
+        -- For any *other* combinator, a Gen-valued argument with no congruence lemma means we would
+        -- silently drop an optimization (and could mask synthesis residue): fail loudly instead.
+        if !auxiliary && !listCarrier && (← e.getAppArgs.anyM isGenValued) then
           throwError "optimizer: `{head}` has a Gen-valued argument but no `@[gen_congr]` \
             congruence lemma to descend through it; tag its support-congruence lemma `@[gen_congr]`"
         return { expr := e, proof? := none }

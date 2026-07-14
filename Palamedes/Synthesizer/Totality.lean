@@ -11,22 +11,23 @@ open Palamedes Palamedes.Gen Palamedes.Gen.Total
 /-- Prove `Gen.total g` by reconstructing a `TGen` (`Fail`-free) witness over `g`'s combinator spine.
 
 Each `total_*` lemma maps one `Gen` combinator to its `TGen` twin and closes by `ext; rfl`, so the
-`apply` cascade is the structural reconstruction. `optimizeGen` has already eliminated every satisfiable
-`assume`, so an `assume` reaching this tactic denotes a genuine filter and reconstruction fails (the
-generator is partial; synthesize it with `allow_partial`).
+`apply` cascade is the structural reconstruction. `optimizeGen` has already eliminated every
+satisfiable `assume`, so an `assume` reaching this tactic denotes a genuine filter and reconstruction
+fails (the generator is partial; synthesize it with `allow_partial`).
 
-`split`/`simp` handle recursion: a per-datatype `unfold` step is wrapped in a constructor `match`
-(`ListF.casesOn …`), and `(casesOn a …).toGen = casesOn a (…toGen)` is not definitional — it needs
-`cases a`. `split` performs that case analysis and `simp` discharges the resulting leaves via the
-`@[simp]` `total_*` lemmas.
+Two things about the cascade below are not obvious:
 
-The per-datatype `total_unfold` steps are read from the `unfold_strategy` registry (see
-`Palamedes.UnfoldStrategy`), which `derive_palamedes` populates. -/
+* **The combinator basis is ordered.** `total_oneOf` must precede `total_frequency`: `oneOf` is
+  definitionally a `frequency`, so the latter would capture the goal and leave a stuck
+  `totalWeighted (List.map …)`. That is why the basis is hard-coded here rather than registered.
+* **The per-datatype rules are not**, so they come from the `@[total]` registry, and a new datatype
+  needs no edit to this file. Their goal shapes are pairwise disjoint, so at most one can ever apply.
+
+`split`/`simp` at the end handle recursion: an `unfold` step is wrapped in a constructor `match`, and
+`(casesOn a …).toGen = casesOn a (…toGen)` is not definitional — it needs `cases a`. -/
 elab "totality" : tactic => open Lean Elab Tactic in do
-  let entries := Palamedes.unfoldStrategies (← getEnv)
-  let alts ← entries.mapM fun e => do
-    let tu : Lean.Term := mkIdent (`_root_ ++ e.totalUnfold)
-    `(tactic| apply $tu:term)
+  let leaves ← (Palamedes.totalLemmas (← getEnv)).mapM fun n =>
+    `(tactic| apply $(mkIdent (`_root_ ++ n)):term)
   evalTactic (← `(tactic|
     repeat'
       first
@@ -42,17 +43,6 @@ elab "totality" : tactic => open Lean Elab Tactic in do
         | apply totalWeighted_nil
         | apply total_map
         | apply total_dite
-        | apply total_arbBool
-        | apply total_Bool_rec
-        | apply total_arbColor
-        | apply total_arbNat
-        | apply total_choose
-        | apply total_gt
-        | apply total_lt
-        | apply total_arbLabel
-        | apply total_elements
-        | apply total_arbTy
-        | apply total_Ty_caseTy
-        $[| $alts:tactic]*
+        $[| $leaves:tactic]*
         | split
         | simp (config := {singlePass := true})))

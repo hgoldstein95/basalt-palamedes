@@ -107,7 +107,7 @@ end CorrectGen
 
 namespace Total
 
-@[simp, aesop safe (rule_sets := [totality])]
+@[simp, total]
 theorem total_arbTy : total arbTy := by
   simp only [Gen.arbTy]
   apply _root_.Ty.total_unfold
@@ -115,7 +115,7 @@ theorem total_arbTy : total arbTy := by
   exact total_frequency
     (totalWeighted_cons (total_pure _) (totalWeighted_cons (total_pure _) totalWeighted_nil))
 
-@[simp, aesop safe (rule_sets := [totality])]
+@[simp, total]
 theorem total_Ty_caseTy
     {gu : (τ = Ty.unit) → Gen α}
     {ga : (τ₁ τ₂ : Ty) → (τ = Ty.arrow τ₁ τ₂) → Gen α}

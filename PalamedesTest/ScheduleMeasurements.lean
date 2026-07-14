@@ -3,21 +3,21 @@ import Palamedes.Stats
 import PalamedesTest.Examples.STLC.WellTyped.WellTyped
 
 /-!
-# Measurement harness for depth-indexed weighting
+# Regression test for depth-indexed weight schedules (`with_schedules`)
 
-Measures the real library generators — the depth-threaded `unfold`, `arbTy`, and the synthesized
-`genWellTyped` — against the bar for schedules: sample without diverging, median term size ≥ 4, and
-≥ 70% of terms containing at least one application. Termination alone is not success.
+The guard on `installWeights` and on `decayPolicy`'s hand-tuned coefficients — nothing else pins
+them, so this file is what notices if they are retuned. The bar: sample without diverging, median
+term size ≥ 4, and ≥ 70% of terms containing an application. **Termination alone is not success** —
+a generator that decays too fast terminates by emitting nothing but leaves.
 
-`#genstats` already covers outcomes and the size distribution, and its output is seed-deterministic,
-so it goes under `#guard_msgs` as a regression test. What it cannot cover is anything
-domain-specific: whether an `app` occurs *anywhere* (its histogram is over head constructors only),
-the fraction of trivial terms, the size of type annotations (a second size metric over the same
-value), and the per-depth application rate. Those four are what this file adds.
+`#genstats` covers outcomes and size. `measureShape` below adds the four things it cannot express,
+all domain-specific: whether an `app` occurs *anywhere* (the histogram sees head constructors only),
+the fraction of trivial terms, the total size of type annotations, and the per-depth application
+rate.
 
 **Keep this file free of proofs.** It is all `#eval`/`#genstats`, which re-run on every elaboration,
-so a generator that regresses into diverging makes every draw burn its full fuel budget and this
-file take minutes. That is a fine price for a measurement and a bad one for a typo fix in a proof.
+so a generator that regresses into diverging makes every draw burn its full fuel budget and this file
+take minutes.
 -/
 
 open Palamedes Palamedes.Gen
@@ -55,15 +55,22 @@ info: (toStatGen arbTy) — 3000 draws (seed 0, fuel 10000)
 #genstats (draws := 3000) (fuel := 10000) (toStatGen arbTy)
 
 /-! Before schedules, `genWellTyped` diverged on 54.3% of draws and its median output was a single
-node. The `outcomes` and `size` lines below are the bar it now has to clear. -/
+node. The `outcomes` and `size` lines below are the bar it now has to clear.
+
+The `app rate by depth` row in the `measureShape` report further down is the sharper reading. It
+fell at `d2` and below (7.5% → 6.7% at `d2`, 2.2% → 1.1% at `d7`) once `optimizeOneOfChildren?`
+let `installWeights` descend into a `oneOf`'s branches: the choice nested inside the `unit` case's
+`dite` had until then been the one site no schedule could reach, so it kept recursing at a flat
+rate while everything around it decayed. The head-constructor distribution is untouched by that fix
+— it is a *depth* effect, not a top-level one. -/
 
 /--
 info: (toStatGen (WellTyped.genWellTyped [])) — 3000 draws (seed 0, fuel 10000)
 
   outcomes    ok 3000 (100.0%)
-  size        mean 5.6   p50 5   p95 12   max 26
-  choices     mean 10.1   p50 9   p95 22   max 54
-  distinct    511 / 3000
+  size        mean 5.5   p50 5   p95 12   max 26
+  choices     mean 10.0   p50 9   p95 22   max 54
+  distinct    496 / 3000
 
   head constructor
     app     80.3%  (2408)
@@ -87,7 +94,7 @@ info: (toStatGen (WellTyped.genWellTyped [])) — 3000 draws (seed 0, fuel 10000
 
 /-! ## The four STLC-specific observables `#genstats` cannot express -/
 
-namespace MeasureSchedules
+namespace ScheduleMeasurements
 
 def Ty.size : Ty → Nat
   | .unit => 1
@@ -161,12 +168,12 @@ def measureShape (g : Palamedes.Gen Term) (draws := 3000) (fuel := 10000) : IO U
 
 /--
 info: ── shape of 3000 completed draws
-   ≥ 1 application      80.6%   [want ≥ 70%]
+   ≥ 1 application      80.5%   [want ≥ 70%]
    trivial (≤ 2 nodes)  18.5%
-   type-annotation size  mean 3.6   max 33
-   app rate by depth     d0:80.2% d1:17.6% d2:7.5% d3:5.5% d4:3.7% d5:1.7% d6:0.8% d7:2.2%
+   type-annotation size  mean 3.5   max 33
+   app rate by depth     d0:80.2% d1:17.6% d2:6.7% d3:4.6% d4:2.9% d5:1.7% d6:0.4% d7:1.1%
 -/
 #guard_msgs in
 #eval measureShape (WellTyped.genWellTyped [])
 
-end MeasureSchedules
+end ScheduleMeasurements

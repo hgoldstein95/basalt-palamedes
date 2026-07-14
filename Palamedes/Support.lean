@@ -126,6 +126,24 @@ theorem support_pick_flatten_both
       = support (oneOf (x :: (xs ++ y :: ys)) (by simp)) := by
   aesop
 
+theorem support_oneOf_congr {α : Type} {gs gs' : List (Gen α)}
+    (hg : gs.map support = gs'.map support) (h : gs ≠ []) (h' : gs' ≠ []) :
+    support (oneOf gs h) = support (oneOf gs' h') := by
+  rw [Gen.Support.support_oneOf, Gen.Support.support_oneOf]
+  funext a
+  apply propext
+  constructor
+  · rintro ⟨g, hmem, ha⟩
+    have hs : support g ∈ gs'.map support := by
+      rw [← hg]; exact List.mem_map.mpr ⟨g, hmem, rfl⟩
+    obtain ⟨g', hmem', he⟩ := List.mem_map.mp hs
+    exact ⟨g', hmem', he ▸ ha⟩
+  · rintro ⟨g, hmem, ha⟩
+    have hs : support g ∈ gs.map support := by
+      rw [hg]; exact List.mem_map.mpr ⟨g, hmem, rfl⟩
+    obtain ⟨g', hmem', he⟩ := List.mem_map.mp hs
+    exact ⟨g', hmem', he ▸ ha⟩
+
 /-- An affine schedule `a + b·d` is positive at every depth whenever its base `a` is. -/
 theorem weight_pos (a b d : Nat) (ha : 0 < a) : 0 < a + b * d :=
   Nat.lt_of_lt_of_le ha (Nat.le_add_right _ _)

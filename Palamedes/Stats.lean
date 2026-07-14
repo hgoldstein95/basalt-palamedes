@@ -6,12 +6,19 @@ import Palamedes.Gen
 Basalt's `#genstats` command draws from a generator many times and summarizes the distribution it
 produces (see `Basalt.GenStats`). Its interpretation monad, `GenStats.StatGen`, is an instance of
 Basalt's `Gen` typeclass; all a Palamedes generator additionally needs is a `Fail` instance, which
-this file provides.
+this file provides. Wrap the generator in `toStatGen`:
 
 ```
-#genstats (genBST 0 10).run
-#genstats (draws := 10000) (genRBT 4 0 10).run
+#genstats (toStatGen (genBST 0 10))
+#genstats (draws := 3000) (fuel := 10000) (toStatGen (genWellTyped []))
 ```
+
+The report separates a failing `assume` (a terminating `failed` draw, so `ok` is an acceptance rate)
+from `fuel-exhausted` (divergence) — a distinction the `SPMF` semantics cannot make, since both are
+bottom there.
+
+Output is seed-deterministic, so it works under `#guard_msgs`: see `PalamedesTest/Measurements.lean`
+and `PalamedesTest/ScheduleMeasurements.lean`.
 -/
 
 namespace Palamedes

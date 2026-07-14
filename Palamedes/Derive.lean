@@ -717,7 +717,7 @@ def genTotalUnfold (ctx : Ctx) : CommandElabM Unit := do
   binders := binders.push (← impB #[b] (β : Term))
   binders := binders.push (← impB #[d₀] (← `(Nat)))
   addCmd (← `(command|
-    @[aesop safe (rule_sets := [totality])]
+    @[total]
     theorem $(ctx.declId "total_unfold"):ident $binders:bracketedBinder*
         ($h : ∀ $d:ident $x:ident, Palamedes.Gen.total ($g $d $x)) :
         Palamedes.Gen.total ($(ctx.ref "unfold") $g $b $d₀) := by
@@ -1517,8 +1517,9 @@ def elabDerivePalamedes : CommandElab := fun stx => do
   genFoldAccuFunction ctx
   genFoldAccuFunctionTrue ctx
   genSUnfold ctx
-  -- register the type with the synthesizer: `normalize_and_apply_unfold` and `totality` read
-  -- this entry, so the derived type participates in synthesis with no synthesizer edits
+  -- register the type with the synthesizer: `normalize_and_apply_unfold` reads this entry, so the
+  -- derived type participates in unfold synthesis with no synthesizer edits. (Totality goes through
+  -- the sibling registry — `total_unfold` is emitted with an `@[total]` tag above.)
   liftCoreM <| Palamedes.registerUnfoldStrategy {
     typeName := ctx.xName
     sUnfold := ctx.name "s_unfold"
@@ -1527,7 +1528,6 @@ def elabDerivePalamedes : CommandElab := fun stx => do
     merge := ctx.name "merge_accuM"
     convert := #[ctx.name "fold_accu_Option_true", ctx.name "fold_accu_Option_function",
                  ctx.name "fold_accu_Option_function_true", ctx.name "fold_accu_Option_basic"]
-    totalUnfold := ctx.name "total_unfold"
     unfoldName := ctx.name "unfold"
   }
 

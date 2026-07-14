@@ -1,9 +1,22 @@
 import Lean
-import Aesop
 
-open Lean Tactic Elab Meta Tactic
+/-!
+# Meta-level helpers shared by the synthesizer and `derive_palamedes`
 
--- From Kyle Miller
+Two tactics, both used to close goals that arise from *elaborating against a metavariable* rather
+than from the object logic:
+
+* `rflm` closes `?f a₁ … aₙ = rhs` by assigning `?f := fun x₁ … xₙ => rhs[aᵢ := xᵢ]`. This is how the
+  case-split rule synthesizes the motive `P` in `∀ {a}, P a scrut = Q a` (`CGeneratorSearch.lean`)
+  and how `derive_palamedes` discharges the corresponding premise in its emitted scripts.
+* `unfold_matches` unfolds the compiler-generated `match_*` auxiliaries that a `fold`/`accuM`
+  equation leaves behind, so that `simp` can see through them.
+
+`ensureLHSIsMVar` and `mkLambdaGeneralizeFVars` exist only to support `rflm`. (Both, and `rflm`
+itself, are due to Kyle Miller.)
+-/
+
+open Lean Elab Meta Tactic
 
 def ensureLHSIsMVar (g : MVarId) : MetaM (Expr × Expr × MVarId) :=
   g.withContext do
@@ -32,6 +45,8 @@ def mkLambdaGeneralizeFVars (exprs : Array Expr) (fvars : Array Expr) (e : Expr)
     throwError "failed to generalize expression"
   return (← getLCtx).mkBinding (isLambda := true) fvars e
 
+/-- Close `?f a₁ … aₙ = rhs` by assigning `?f := fun x₁ … xₙ => rhs[aᵢ := xᵢ]` — i.e. solve for the
+function, not for the value. `rfl` cannot do this: it needs `?f` to already be determined. -/
 elab "rflm" : tactic => do
 let g ← popMainGoal
   let (lhs, rhs, g) ← ensureLHSIsMVar g
@@ -55,34 +70,7 @@ let g ← popMainGoal
     -- Given that that succeeded, now both sides are unified, so Eq.refl must work.
     g.assign (← mkEqRefl rhs)
 
-elab "nth_assumption " n:num : tactic => do
-  withMainContext do
-    let n := n.getNat
-    let goalType ← getMainTarget
-    let ctx ← getLCtx
-    let ms ← ctx.decls.toList.filterMapM fun decl: Option LocalDecl => do
-      let .some decl := decl | return none
-      let declExpr := decl.toExpr
-      let declType ← inferType declExpr
-      if ← isDefEq declType goalType then
-        return some declExpr
-      return none
-    if n >= ms.length then
-      throwError "no matching assumption with that index"
-    closeMainGoal `assumption_1 ms.reverse[n]!
-
-elab "clear_unused_assumptions" : tactic => do
-  withMainContext do
-    let g ← getMainGoal
-    let goalType ← getMainTarget
-    let ctx ← getLCtx
-    let g' ← ctx.foldrM (init := g) fun decl (g : MVarId) => do
-      if goalType.hasAnyFVar (· == decl.fvarId) then
-        pure g
-      else
-        g.clear decl.fvarId
-    replaceMainGoal [g']
-
+/-- Unfold every compiler-generated `match_*` auxiliary appearing in the goal. -/
 elab "unfold_matches" : tactic =>
   withMainContext do
     let goalType ← getMainTarget
@@ -90,92 +78,3 @@ elab "unfold_matches" : tactic =>
     let ms := consts.filter (fun n => n.components.any (·.getString!.startsWith "match_"))
     for m in ms do
       unfoldTarget m
-
-/-- Extracts the conjuncts of an ∧-expression.
-
-    NOTE: This needs to be in `MetaM`, although I'm not 100% sure why. I think it may have
-    something to do with how `match_expr` works under the hood? -/
-partial def getConjuncts (e : Expr) : MetaM (List Expr) := do
-  match_expr e with
-  | And p q => return (← getConjuncts p) ++ (← getConjuncts q)
-  | _ => return [e]
-
-/-- Proves a goal of the form `?a ∧ ?b = e` by partitioning the conjuncts in `e` based on whether or
-  not they contain `v`.
-
-  E.g., the goal `?a ∧ ?b = v < 3 ∧ x = 5 ∧ 1 < v` is solved with
-  ```
-  ?a = (x = 5)
-  ?b = (v < 3 ∧ 1 < v)
-  ```
-  -/
-elab "partition_conjuncts " v:ident : tactic =>
-  withMainContext do
-    let g ← getMainGoal
-    let goalDecl ← g.getDecl
-    let goalTy := goalDecl.type
-    let var ← elabAsFVar v
-    match_expr goalTy with
-    | Eq _α _lhs rhs =>
-      -- Get and partition the conjuncts
-      let conjuncts ← getConjuncts rhs
-      let (varIn, varNotIn) := conjuncts.partition (·.containsFVar var)
-
-      -- Create a new `rhs` with the appropriate grouping of conjuncts
-      let rhs' := mkAppN (.const ``And []) #[
-          varNotIn.foldr (fun a b => mkAppN (.const ``And []) #[a, b]) (.const ``True []),
-          varIn.foldr (fun a b => mkAppN (.const ``And []) #[a, b]) (.const ``True []),
-        ]
-
-      -- Assert that our goal's type is actually `rhs' = rhs` and prove the equality with aesop
-      let goalTy' ← mkAppM ``Eq #[rhs', rhs]
-      if ← isDefEq goalTy goalTy' then
-        let ([], _) ← runTactic g (← `(tactic| aesop))
-          | throwError "aesop could not prove {← instantiateMVars goalTy'}"
-
-    | _ => pure ()
-
-
-theorem exists_swap_2nd' {α β : Type}(P : α → β → Prop) : (∃ x: α, ∃ y: β, P x y) = (∃ y: β, ∃ x: α, P x y) := by
- simp_all only [eq_iff_iff]
- apply Iff.intro
- · intro a
-   obtain ⟨w, h⟩ := a
-   obtain ⟨w_1, h⟩ := h
-   apply Exists.intro
-   · apply Exists.intro
-     · exact h
- · intro a
-   obtain ⟨w, h⟩ := a
-   obtain ⟨w_1, h⟩ := h
-   apply Exists.intro
-   · apply Exists.intro
-     · exact h
-
-syntax "exists_swap_2nd" : tactic
-macro_rules
-| `(tactic| exists_swap_2nd) => `(tactic| conv => congr; intro v; rw[exists_swap_2nd'])
-
-theorem exists_swap_3rd' {α β γ : Type}(P : α → β → γ → Prop) : (∃ x: α, ∃ y : β, ∃ z : γ,  P x y z) = (∃ z : γ, ∃ x: α, ∃ y: β,  P x y z) := by
-  simp_all only [eq_iff_iff]
-  apply Iff.intro
-  · intro a
-    obtain ⟨w, h⟩ := a
-    obtain ⟨w_1, h⟩ := h
-    obtain ⟨w_2, h⟩ := h
-    apply Exists.intro
-    · apply Exists.intro
-      · apply Exists.intro
-        · exact h
-  · intro a
-    obtain ⟨w, h⟩ := a
-    obtain ⟨w_1, h⟩ := h
-    obtain ⟨w_2, h⟩ := h
-    apply Exists.intro
-    · apply Exists.intro
-      · apply Exists.intro
-        · exact h
-
-syntax "exists_swap_3rd" : tactic
-macro_rules
-| `(tactic| exists_swap_3rd) => `(tactic| conv => congr; intro v; rw[exists_swap_3rd'])

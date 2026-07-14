@@ -89,3 +89,19 @@ private axiom f : Nat → Gen Nat
   pick (pure 1 : Gen Nat) (pure 2)
   goes_to
   oneOf [pure 1, pure 2]
+
+-- The optimizer descends into a `oneOf`'s branches (`optimizeOneOfChildren?`, a bespoke descent —
+-- the `@[gen_congr]` table cannot rebuild a `oneOf`). `#assert_optimizes!` also type-checks the
+-- carried support proof, so a mis-built congruence term fails here rather than silently skewing a
+-- distribution.
+#assert_optimizes!
+  oneOf [(pure 5 : Gen Nat) >>= fun x => pure (x + 1), pure 2]
+  goes_to
+  oneOf [(fun x => pure (x + 1)) 5, pure 2]
+
+-- ...and recursively: a choice nested in another choice's branch is reachable. It used to be that
+-- `installWeights` could not see the inner `oneOf` at all.
+#assert_optimizes!
+  oneOf [oneOf [(pure 5 : Gen Nat) >>= fun x => pure (x + 1), pure 2], pure 3]
+  goes_to
+  oneOf [oneOf [(fun x => pure (x + 1)) 5, pure 2], pure 3]

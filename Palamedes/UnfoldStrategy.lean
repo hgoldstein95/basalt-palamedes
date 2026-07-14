@@ -3,11 +3,12 @@ import Lean
 /-!
 # The `unfold_strategy` registry
 
-The per-datatype data that `normalize_and_apply_unfold` and `totality` used to hard-code — which
-`s_unfold` to apply, which fold/coercion/merge/conversion lemmas to normalize with, which
-`total_unfold` witnesses totality — lives in a persistent environment extension keyed by the
-datatype name. `derive_palamedes` registers the standard entry for every type it derives, so a
-new datatype needs **no synthesizer edits** to participate in unfold synthesis.
+The per-datatype data that `normalize_and_apply_unfold` used to hard-code — which `s_unfold` to
+apply, and which fold/coercion/merge/conversion lemmas to normalize with — lives in a persistent
+environment extension keyed by the datatype name. `derive_palamedes` registers the standard entry
+for every type it derives, so a new datatype needs **no synthesizer edits** to participate in unfold
+synthesis. (Totality is the sibling registry: `X.total_unfold` is tagged `@[total]` and read by the
+`totality` tactic — see `Palamedes.RuleSets`.)
 
 Two commands amend an entry with the hand-written extras the derive command deliberately does
 not generate:
@@ -35,8 +36,6 @@ structure UnfoldStrategy where
   merge : Name
   /-- The `fold_accu_Option_*` conversion lemmas, tried in order. -/
   convert : Array Name
-  /-- `X.total_unfold`, applied by the `totality` reconstruction. -/
-  totalUnfold : Name
   /-- `X.unfold` itself, so the optimizer can recognize a recursion in the term it is rewriting. -/
   unfoldName : Name
   /-- The conditional-fold normal form (`X.fold_accu_cond`), if the type has one. -/

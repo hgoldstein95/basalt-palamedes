@@ -68,7 +68,7 @@ end CorrectGen
 
 namespace Total
 
-@[simp, aesop safe (rule_sets := [totality])]
+@[simp, total]
 theorem total_arbLabel : total arbLabel := by
   simp [arbLabel]
 

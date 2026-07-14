@@ -61,8 +61,6 @@ structure TGen (α : Type) : Type 1 where
 /-- Forget that a failure-free generator never needed `Fail`, viewing it as a `Gen`. -/
 def TGen.toGen (t : TGen α) : Gen α := ⟨fun {_G} _ _ => t.run⟩
 
-instance : Coe (TGen α) (Gen α) := ⟨TGen.toGen⟩
-
 namespace Gen
 
 @[ext] theorem ext {x y : Gen α} (h : ∀ {G} [_root_.Gen G] [Fail G], x.run = (y.run : G α)) : x = y := by
@@ -157,19 +155,21 @@ end Delab
 interpretation's `Fail` instance is. -/
 def empty : Gen α := ⟨fun {_G} _ _ => Fail.fail⟩
 
-/-- A guarded generator. When `b` holds, behaves like `f`; otherwise it is `empty`. This is how a
-`Bool`-valued side condition is woven into a generator: the failing branch discards (backtracks)
-rather than producing a value. -/
+/-- A guarded generator: `f` when `b` holds, `empty` otherwise — so the failing branch contributes
+nothing to the support. This is how a `Bool`-valued side condition is woven into a generator.
+
+Operationally it is a *filter*, not a backtracking point: the sampler has no backtracking, so a
+failing `assume` throws (`Palamedes/Sample.lean`). An `assume` the optimizer could not discharge is
+therefore a real filter, which is what `allow_partial` exists to permit. -/
 def assume (b : Bool) (f : b → Gen α) : Gen α :=
   if h : b then f h else empty
 
 /-! ## Recursion
 
 Recursion is *not* a single core combinator. Following Basalt, each recursive datatype defines its
-own `unfold` operator as a direct `partial_fixpoint` over Basalt's CCPO (see `Palamedes/Data/`), with
-its own `support` lemma and its own totality proof. The generic helpers below (`support_bot`,
-`admissible_support_subset`) are the reusable building blocks those per-datatype fixpoint proofs
-share. -/
+own `unfold` operator as a direct `partial_fixpoint` over Basalt's CCPO, along with its own `support`
+lemma and totality proof. `derive_palamedes` emits all of that per datatype (see
+`Palamedes/Derive.lean`); `Palamedes/Data/` just invokes it. -/
 
 /-! ## The `SPMF` interpretation
 
@@ -186,9 +186,6 @@ noncomputable instance : Fail SPMF := ⟨Lean.Order.bot⟩
 def support (g : Gen α) : α → Prop := SPMF.support g.run
 
 namespace Support
-
-/-- `support g a` unfolds to membership in the `SPMF` interpretation's support. -/
-theorem support_def (g : Gen α) (a : α) : support g a ↔ a ∈ SPMF.support (g.run (G := SPMF)) := Iff.rfl
 
 /-- The `SPMF` interpretation of `empty` is the bottom distribution, whose support is empty. -/
 theorem support_bot : SPMF.support (Lean.Order.bot : SPMF α) = (∅ : Set α) := by
@@ -276,16 +273,6 @@ theorem support_map :
   show b ∈ SPMF.support (x.run >>= fun a => Pure.pure (f a)) ↔ _
   simp only [SPMF.support_bind, SPMF.support_pure, Set.mem_setOf_eq, Set.mem_singleton_iff]
   rfl
-
-/-- "Support is contained in `T`" is an admissible predicate (it passes to chain suprema), because a
-value in the support of a supremum already lies in the support of some chain element. This is the
-key reusable ingredient for the `⊆` direction of a per-datatype `unfold`'s support proof (via
-`fix_induct`). -/
-theorem admissible_support_subset (T : Set α) :
-    admissible (fun (p : SPMF α) => p.support ⊆ T) := by
-  intro c hc hall a ha
-  obtain ⟨p, hcp, hap⟩ := (SPMF.mem_support_csup hc).mp ha
-  exact hall p hcp hap
 
 end Support
 

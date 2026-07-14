@@ -44,7 +44,7 @@ end CorrectGen
 
 namespace Total
 
-@[simp, aesop safe (rule_sets := [totality])]
+@[simp, total]
 theorem total_elements :
     (Gen.total (elements xs h)) := by
   induction xs <;> simp at h

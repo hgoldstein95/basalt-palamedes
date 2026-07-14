@@ -66,11 +66,11 @@ end CorrectGen
 
 namespace Total
 
-@[simp, aesop safe (rule_sets := [totality])]
+@[simp, total]
 theorem total_arbColor : total (arbColor : Gen Color) := by
   simp [arbColor]
 
-@[simp, aesop safe (rule_sets := [totality])]
+@[simp, total]
 theorem total_color_rec (hf : total gr) (ht : total gb) : total (Color.rec gr gb c) := by
   cases c <;> simp_all
 

@@ -5,9 +5,11 @@ import Plausible
 /-!
 # Executable sampling for Palamedes generators
 
-A `Palamedes.Gen α` is a thin wrapper around a polymorphic Basalt generator
-(`∀ {G} [Gen G], G α`). Basalt provides a `Gen Plausible.Gen` instance (`Basalt.PlausibleGen`), so we
-sample by instantiating the generator at `Plausible.Gen` and running it with Plausible's sampler.
+A `Palamedes.Gen α` is a thin wrapper around a polymorphic Basalt generator that may also fail
+(`∀ {G} [Gen G] [Fail G], G α` — the `Fail` is what distinguishes it from `TGen`). Basalt provides a
+`Gen Plausible.Gen` instance (`Basalt.PlausibleGen`), so we sample by instantiating the generator at
+`Plausible.Gen` and running it with Plausible's sampler; the `Fail Plausible.Gen` instance below
+supplies the other half.
 
 The filtering combinators (`Gen.assume`/`Gen.empty`) bottom out at the `Fail` capability's `fail`.
 The `Fail Plausible.Gen` instance below interprets that as a thrown `GenError` (via Plausible's
@@ -24,8 +26,14 @@ propagates straight out. Two consequences:
   branch, with no backtracking to recover (e.g. `genAVL`, `genRBT`).
 * **Recursion can diverge.** `total` here means *assume-free*, not *terminating* (almost-sure
   termination, `SPMF.IsPMF`, is a separate property the synthesizer does not yet establish). A total
-  but non-a.s.-terminating generator — typically branching recursion with no size decay — can fail to
-  terminate when sampled (e.g. `genWellTyped`).
+  but non-a.s.-terminating generator — branching recursion whose mean offspring count does not fall
+  below 1 — can fail to terminate when sampled.
+
+  `generator_search … with_schedules` is the practical answer: depth-indexed weight schedules make
+  the branching subcritical, which is what took `genWellTyped` from diverging on 54.3% of draws to
+  0/3000 (see `PalamedesTest/ScheduleMeasurements.lean`). It is a *measured* fix, not a proved one —
+  nothing yet certifies a.s. termination, so a generator that does not ask for schedules, or one
+  whose schedule is badly tuned, can still hang here.
 
 Generators that are both non-filtering and a.s.-terminating (e.g. `genBST`, `genSortedBetween`,
 `genWellScoped`) sample fine. A size-bounded / backtracking sampler is left as future work.
