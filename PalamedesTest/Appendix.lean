@@ -22,7 +22,7 @@ def genOneOrInRange_manual (lo hi : Nat) : Gen Nat :=
 
 def genCompleteTree (n : Nat) : Gen (Palamedes.Tree Nat) :=
   Palamedes.Tree.unfold
-    (fun x =>
+    (fun _d x =>
       if x.snd = 0 then pure TreeF.leaf
       else do
         let a <- arbNat
@@ -35,7 +35,7 @@ Differences:
 -/
 def genComplete_manual (n : Nat) : Gen (Palamedes.Tree Nat) :=
   Palamedes.Tree.unfold
-    (fun height =>
+    (fun _d height =>
       if height = 0 then
         pure TreeF.leaf
       else do
@@ -45,7 +45,7 @@ def genComplete_manual (n : Nat) : Gen (Palamedes.Tree Nat) :=
 
 def genSortedBetween (lo hi : Nat) : Gen (List Nat) :=
   List.unfold
-    (fun x =>
+    (fun _d x =>
       if h : decide (x.snd.fst <= x.snd.snd) = true then
         pick (pure ListF.nil) do
           let a <- choose x.2.1 x.2.2 (s_between_partial._proof_1 h)
@@ -61,7 +61,7 @@ Differences:
 -/
 def genSortedBetween_manual (lo hi : Nat) : Gen (List Nat) :=
   List.unfold
-    (fun (lo, hi) =>
+    (fun _d (lo, hi) =>
       if h : lo <= hi then
         pick
           (pure ListF.nil)
@@ -74,7 +74,7 @@ def genSortedBetween_manual (lo hi : Nat) : Gen (List Nat) :=
 
 def genLengthKAllTwos (k : Nat): Gen (List Nat) :=
   List.unfold
-    (fun x =>
+    (fun _d x =>
       if x.fst.fst = 0 then pure ListF.nil
       else pure (ListF.cons 2 ((Nat.pred x.1.1, PUnit.unit), PUnit.unit, PUnit.unit)))
     ((k, PUnit.unit), PUnit.unit, PUnit.unit)
@@ -85,7 +85,7 @@ Differences:
 -/
 def genLengthKAllTwos_manual (k : Nat): Gen (List Nat) :=
   List.unfold
-    (fun len =>
+    (fun _d len =>
       if len = 0 then
         pure ListF.nil
       else
@@ -94,7 +94,7 @@ def genLengthKAllTwos_manual (k : Nat): Gen (List Nat) :=
 
 def genAVL (height lo hi : Nat) : Gen (Palamedes.Tree Nat) :=
   Palamedes.Tree.unfold
-    (fun x => do
+    (fun _d x => do
       let __do_lift <-
         if x.snd.snd = 0 then pure TreeF.leaf
           else
@@ -123,7 +123,7 @@ Differences:
 -/
 def genAVL_manual (height lo hi : Nat) : Gen (Palamedes.Tree Nat) :=
   Palamedes.Tree.unfold
-    (fun (lo, hi, height) => do
+    (fun _d (lo, hi, height) => do
       match height with
       | 0 => pure TreeF.leaf
       | 1 =>

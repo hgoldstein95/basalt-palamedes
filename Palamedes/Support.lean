@@ -126,4 +126,41 @@ theorem support_pick_flatten_both
       = support (oneOf (x :: (xs ++ y :: ys)) (by simp)) := by
   aesop
 
+/-- An affine schedule `a + b·d` is positive at every depth whenever its base `a` is. -/
+theorem weight_pos (a b d : Nat) (ha : 0 < a) : 0 < a + b * d :=
+  Nat.lt_of_lt_of_le ha (Nat.le_add_right _ _)
+
+/-- `frequency`'s side-goal, which needs only the *first* weight to be positive (unlike
+`support_oneOf_reweight` below, which needs all of them). -/
+theorem sum_fst_pos_cons (α : Type) (w : Nat) (g : Gen α) (gs : List (Nat × Gen α)) (hw : 0 < w) :
+    0 < (((w, g) :: gs).map Prod.fst).sum := by
+  simp only [List.map_cons, List.sum_cons]
+  omega
+
+theorem allPos_nil (α : Type) : ∀ p ∈ ([] : List (Nat × Gen α)), 0 < p.1 := by simp
+
+theorem allPos_cons (α : Type) (w : Nat) (g : Gen α) (gs : List (Nat × Gen α))
+    (hw : 0 < w) (hgs : ∀ p ∈ gs, 0 < p.1) : ∀ p ∈ ((w, g) :: gs), 0 < p.1 := by
+  intro p hp
+  rcases List.mem_cons.mp hp with he | he
+  · cases he; exact hw
+  · exact hgs p he
+
+/-- The correctness lemma for the optimizer's `installWeights` pass: installing all-positive weights
+on a uniform `oneOf` preserves its support exactly, so `support = P` survives reweighting. -/
+theorem support_oneOf_reweight (α : Type) (gs : List (Gen α)) (gs' : List (Nat × Gen α))
+    (hsnd : gs'.map Prod.snd = gs) (hpos : ∀ p ∈ gs', 0 < p.1) (h) (h') :
+    support (oneOf gs h) = support (frequency gs' h') := by
+  subst hsnd
+  rw [Gen.Support.support_oneOf, Gen.Support.support_frequency]
+  funext a
+  apply propext
+  constructor
+  · rintro ⟨g, hmem, ha⟩
+    obtain ⟨⟨w, g'⟩, hmem', hg⟩ := List.mem_map.mp hmem
+    cases hg
+    exact ⟨w, g', hmem', hpos _ hmem', ha⟩
+  · rintro ⟨w, g, hmem, _, ha⟩
+    exact ⟨g, List.mem_map.mpr ⟨(w, g), hmem, rfl⟩, ha⟩
+
 end Palamedes

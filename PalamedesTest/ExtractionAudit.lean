@@ -28,7 +28,7 @@ elaborator) are exempt too: they are compiler-erased proofs of `Prop`s, never a 
 wrapper (those are `Type`-valued).
 
 `Gen.pick` is residue too, of the optimizer rather than of extraction: the flatten pass rewrites
-every `pick` tree into a uniform n-ary `oneOf` (proposal 04), so a `pick` surviving in a compiled
+every `pick` tree into a uniform n-ary `oneOf`, so a `pick` surviving in a compiled
 synthesized generator means a chain escaped flattening — and with it the `½, ¼, ⅛, …` distribution
 skew the pass exists to remove. -/
 def isResidue (c : Name) : Bool :=

@@ -438,12 +438,15 @@ def genUnfoldFamily (ctx : Ctx) : CommandElabM Unit := do
   let t := gid "t"
   let f := gid "f"
   let x := gid "x"
+  let d := gid "d"
+  let d₀ := gid "d₀"
   let goRef := ctx.ref "unfoldGo"
   let unfoldRef := ctx.ref "unfold"
   let tgenRef := rootedIdent ctx.tgenUnfoldName
   let self ← ctx.selfTy
   let baseβ ← ctx.baseTy (β : Term)
-  -- unfoldGo
+  -- unfoldGo: the depth `d` is an argument of the recursion, not part of the seed `β`, so seed
+  -- types are unchanged. Children are unfolded at `d + 1`.
   let alts ← ctx.ctors.mapM fun c => do
     let pat ← `($(c.fCtor) $(c.fieldIds)*)
     let recFs := c.recFields
@@ -459,7 +462,7 @@ def genUnfoldFamily (ctx : Ctx) : CommandElabM Unit := do
         mkArgs := mkArgs.push (fd.id : Term)
     let mut rhs ← `(pure ($(c.xCtor) $mkArgs*))
     for j in (List.range recFs.size).reverse do
-      rhs ← `($goRef $step $((recFs[j]!).id) >>= fun $(vIds[j]!) => $rhs)
+      rhs ← `($goRef $step ($d + 1) $((recFs[j]!).id) >>= fun $(vIds[j]!) => $rhs)
     `(matchAltExpr| | $pat:term => $rhs:term)
   let suffix ← `(Lean.Parser.Termination.suffix| partial_fixpoint)
   let mut goBinders : Array BB := #[]
@@ -468,34 +471,43 @@ def genUnfoldFamily (ctx : Ctx) : CommandElabM Unit := do
   goBinders := goBinders ++ (← ctx.paramBinders)
   goBinders := goBinders.push (← impB #[β] (← `(Type)))
   addCmd (← `(command|
-    def $(ctx.declId "unfoldGo"):ident $goBinders:bracketedBinder* ($step : $β → $G $baseβ) ($b : $β) :
+    def $(ctx.declId "unfoldGo"):ident $goBinders:bracketedBinder*
+        ($step : Nat → $β → $G $baseβ) ($d : Nat) ($b : $β) :
         $G $self :=
-      $step $b >>= fun $t => match $t:ident with $alts:matchAlt*
+      $step $d $b >>= fun $t => match $t:ident with $alts:matchAlt*
     $suffix:suffix))
-  -- unfold
+  -- unfold. The starting depth `d₀` defaults to `0`, so existing call sites are unchanged; a
+  -- nested unfold can pass a nonzero one to inherit its caller's depth.
   let mut uBinders : Array BB := (← ctx.paramBinders)
   uBinders := uBinders.push (← impB #[β] (← `(Type)))
+  let d₀Binder : BB := ⟨(← `(explicitBinderF| ($d₀ : Nat := 0))).raw⟩
   addCmd (← `(command|
     def $(ctx.declId "unfold"):ident $uBinders:bracketedBinder*
-        ($f : $β → Palamedes.Gen $baseβ) ($b : $β) : Palamedes.Gen $self :=
-      ⟨fun {_G} _ _ => $goRef (fun $x => ($f $x).run) $b⟩))
+        ($f : Nat → $β → Palamedes.Gen $baseβ) ($b : $β) $d₀Binder:bracketedBinder :
+        Palamedes.Gen $self :=
+      ⟨fun {_G} _ _ => $goRef (fun $d $x => ($f $d $x).run) $d₀ $b⟩))
   -- TGen unfold
   addCmd (← `(command|
     def $tgenRef:ident $uBinders:bracketedBinder*
-        ($f : $β → Palamedes.TGen $baseβ) ($b : $β) : Palamedes.TGen $self :=
-      ⟨fun {_G} _ => $goRef (fun $x => ($f $x).run) $b⟩))
+        ($f : Nat → $β → Palamedes.TGen $baseβ) ($b : $β) $d₀Binder:bracketedBinder :
+        Palamedes.TGen $self :=
+      ⟨fun {_G} _ => $goRef (fun $d $x => ($f $d $x).run) $d₀ $b⟩))
   -- run_unfold
   addCmd (← `(command|
     @[simp] theorem $(ctx.declId "run_unfold"):ident $uBinders:bracketedBinder*
-        ($f : $β → Palamedes.Gen $baseβ) ($b : $β)
+        ($f : Nat → $β → Palamedes.Gen $baseβ) ($b : $β) ($d₀ : Nat)
         ($G : Type → Type) [_root_.Gen $G] [Palamedes.Fail $G] :
-        ($unfoldRef $f $b).run (G := $G) = $goRef (fun $x => ($f $x).run) $b := rfl))
+        ($unfoldRef $f $b $d₀).run (G := $G) = $goRef (fun $d $x => ($f $d $x).run) $d₀ $b := rfl))
 
+/-- `X.unfold_support P d b t`: the support characterization of an unfold, indexed by the depth the
+step is read at. `P` is a depth-indexed step support (`fun d x => support (f d x)`), and a child at
+depth `d` is characterized at `d + 1`, mirroring `unfoldGo`. -/
 def genUnfoldSupport (ctx : Ctx) : CommandElabM Unit := do
   let β := gid "β"
   let P := gid "P"
   let b := gid "b"
   let t := gid "t"
+  let d := gid "d"
   let usRef := ctx.ref "unfold_support"
   let self ← ctx.selfTy
   let baseβ ← ctx.baseTy (β : Term)
@@ -503,7 +515,7 @@ def genUnfoldSupport (ctx : Ctx) : CommandElabM Unit := do
     let pat ← `($(c.xCtor) $(c.fieldIds)*)
     let recFs := c.recFields
     if recFs.isEmpty then
-      let rhs ← `($P $b ($(c.fCtor) $(c.fieldIds)*))
+      let rhs ← `($P $d $b ($(c.fCtor) $(c.fieldIds)*))
       `(matchAltExpr| | $pat:term => $rhs:term)
     else
       let bIds := (Array.range recFs.size).map fun j => gid s!"b{j+1}"
@@ -516,8 +528,8 @@ def genUnfoldSupport (ctx : Ctx) : CommandElabM Unit := do
           bIdx := bIdx + 1
         else
           fArgs := fArgs.push (fd.id : Term)
-      let head ← `($P $b ($(c.fCtor) $fArgs*))
-      let recs ← recFs.mapIdxM fun j fd => `($usRef $P $(bIds[j]!) $(fd.id))
+      let head ← `($P $d $b ($(c.fCtor) $fArgs*))
+      let recs ← recFs.mapIdxM fun j fd => `($usRef $P ($d + 1) $(bIds[j]!) $(fd.id))
       let body ← mkAnds (#[head] ++ recs)
       let rhs ← mkExists bIds body
       `(matchAltExpr| | $pat:term => $rhs:term)
@@ -525,15 +537,23 @@ def genUnfoldSupport (ctx : Ctx) : CommandElabM Unit := do
   binders := binders.push (← impB #[β] (← `(Type)))
   addCmd (← `(command|
     @[simp] def $(ctx.declId "unfold_support"):ident $binders:bracketedBinder*
-        ($P : $β → $baseβ → Prop) ($b : $β) ($t : $self) : Prop :=
+        ($P : Nat → $β → $baseβ → Prop) ($d : Nat) ($b : $β) ($t : $self) : Prop :=
       match $t:ident with $alts:matchAlt*))
 
+/-- `X.support_unfold` — the support characterization, by a generated per-constructor induction.
+
+Because `unfold_support`'s step predicate is itself depth-indexed, the characterization holds at
+every depth *unconditionally*: no depth-independence hypothesis is needed, and the per-constructor
+scripts below are the same ones they were before depth threading. All the statement needs is a `d₀`
+binder and `generalizing d₀` on the induction. -/
 def genSupportUnfold (ctx : Ctx) : CommandElabM Unit := do
   let β := gid "β"
   let b := gid "b"
   let f := gid "f"
   let w := gid "w"
   let x := gid "x"
+  let d := gid "d"
+  let d₀ := gid "d₀"
   let goRef := ctx.ref "unfoldGo"
   let usRef := ctx.ref "unfold_support"
   let baseβ ← ctx.baseTy (β : Term)
@@ -641,17 +661,18 @@ def genSupportUnfold (ctx : Ctx) : CommandElabM Unit := do
   let proofTail ← seqTac cases
   let mut binders : Array BB := (← ctx.paramBinders)
   binders := binders.push (← impB #[β] (← `(Type)))
-  binders := binders.push (← impB #[f] (← `($β → Palamedes.Gen $baseβ)))
+  binders := binders.push (← impB #[f] (← `(Nat → $β → Palamedes.Gen $baseβ)))
   binders := binders.push (← impB #[b] (β : Term))
+  binders := binders.push (← impB #[d₀] (← `(Nat)))
   addCmd (← `(command|
     @[simp] theorem $(ctx.declId "support_unfold"):ident $binders:bracketedBinder* :
-        Palamedes.Gen.support ($(ctx.ref "unfold") $f $b)
-          = $usRef (fun $x => Palamedes.Gen.support ($f $x)) $b := by
+        Palamedes.Gen.support ($(ctx.ref "unfold") $f $b $d₀)
+          = $usRef (fun $d $x => Palamedes.Gen.support ($f $d $x)) $d₀ $b := by
       funext $w:ident
       apply propext
-      show $w ∈ SPMF.support ($goRef (fun $x => ($f $x).run) $b) ↔
-        $usRef (fun $x => Palamedes.Gen.support ($f $x)) $b $w
-      induction $w:ident generalizing $b:ident
+      show $w ∈ SPMF.support ($goRef (fun $d $x => ($f $d $x).run) $d₀ $b) ↔
+        $usRef (fun $d $x => Palamedes.Gen.support ($f $d $x)) $d₀ $b $w
+      induction $w:ident generalizing $b:ident $d₀:ident
       $proofTail:tactic))
 
 def genSupportUnfoldCongr (ctx : Ctx) : CommandElabM Unit := do
@@ -661,16 +682,20 @@ def genSupportUnfoldCongr (ctx : Ctx) : CommandElabM Unit := do
   let f' := gid "f'"
   let hf := gid "hf"
   let x := gid "x"
+  let d := gid "d"
+  let d₀ := gid "d₀"
   let baseβ ← ctx.baseTy (β : Term)
   let mut binders : Array BB := (← ctx.paramBinders)
   binders := binders.push (← impB #[β] (← `(Type)))
-  binders := binders.push (← impB #[f, f'] (← `($β → Palamedes.Gen $baseβ)))
+  binders := binders.push (← impB #[f, f'] (← `(Nat → $β → Palamedes.Gen $baseβ)))
   binders := binders.push (← impB #[b] (β : Term))
+  binders := binders.push (← impB #[d₀] (← `(Nat)))
   addCmd (← `(command|
     @[gen_congr] theorem $(ctx.declId "support_unfold_congr"):ident $binders:bracketedBinder*
-        ($hf : ∀ {$x:ident}, Palamedes.Gen.support ($f $x) = Palamedes.Gen.support ($f' $x)) :
-        Palamedes.Gen.support ($(ctx.ref "unfold") $f $b)
-          = Palamedes.Gen.support ($(ctx.ref "unfold") $f' $b) := by
+        ($hf : ∀ {$d:ident $x:ident},
+          Palamedes.Gen.support ($f $d $x) = Palamedes.Gen.support ($f' $d $x)) :
+        Palamedes.Gen.support ($(ctx.ref "unfold") $f $b $d₀)
+          = Palamedes.Gen.support ($(ctx.ref "unfold") $f' $b $d₀) := by
       aesop))
 
 def genTotalUnfold (ctx : Ctx) : CommandElabM Unit := do
@@ -682,21 +707,26 @@ def genTotalUnfold (ctx : Ctx) : CommandElabM Unit := do
   let hg := gid "hg"
   let x := gid "x"
   let y := gid "y"
+  let d := gid "d"
+  let d₀ := gid "d₀"
   let heq := gid "heq"
   let baseβ ← ctx.baseTy (β : Term)
   let mut binders : Array BB := (← ctx.paramBinders)
   binders := binders.push (← impB #[β] (← `(Type)))
-  binders := binders.push (← impB #[g] (← `($β → Palamedes.Gen $baseβ)))
+  binders := binders.push (← impB #[g] (← `(Nat → $β → Palamedes.Gen $baseβ)))
   binders := binders.push (← impB #[b] (β : Term))
+  binders := binders.push (← impB #[d₀] (← `(Nat)))
   addCmd (← `(command|
     @[aesop safe (rule_sets := [totality])]
     theorem $(ctx.declId "total_unfold"):ident $binders:bracketedBinder*
-        ($h : ∀ $x:ident, Palamedes.Gen.total ($g $x)) :
-        Palamedes.Gen.total ($(ctx.ref "unfold") $g $b) := by
+        ($h : ∀ $d:ident $x:ident, Palamedes.Gen.total ($g $d $x)) :
+        Palamedes.Gen.total ($(ctx.ref "unfold") $g $b $d₀) := by
       choose $tg:ident $hg:ident using $h
-      have $heq:ident : $g = fun $y => ($tg $y).toGen := funext fun $y => ($hg $y).symm
+      have $heq:ident : $g = fun $d $y => ($tg $d $y).toGen := by
+        funext $d:ident $y:ident
+        exact ($hg $d $y).symm
       subst $heq:ident
-      exact ⟨$(mkIdent ctx.tgenUnfoldName) $tg $b, by ext; rfl⟩))
+      exact ⟨$(mkIdent ctx.tgenUnfoldName) $tg $b $d₀, by ext; rfl⟩))
 
 def genCoerceToFold (ctx : Ctx) : CommandElabM Unit := do
   let β := gid "β"
@@ -1297,6 +1327,7 @@ def genSUnfold (ctx : Ctx) : CommandElabM Unit := do
   let β := gid "β"; let σ := gid "σ"; let s := gid "s"; let b := gid "b"
   let g := gid "g"; let bg := gid "bg"; let sg := gid "sg"
   let tv := gid "tv"; let p := gid "p"; let v := gid "v"; let h := gid "h"
+  let dv := gid "d"
   let accuRef := ctx.ref "accuM"
   let unfoldRef := ctx.ref "unfold"
   let opt := mkIdent `Option
@@ -1350,7 +1381,13 @@ def genSUnfold (ctx : Ctx) : CommandElabM Unit := do
             mix := mix.push (fd.id : Term)
         `(pure ($(c.fCtor) $mix*))
     `(matchAltExpr| | $pat:term => $rhs:term)
-  let stepLam ← `(fun $p => ($g (($p).1) (($p).2)).val >>= fun $tv =>
+  -- The synthesized step ignores the depth — nothing the search produces is depth-dependent — but
+  -- the binder must be here, and must be binder 0, for the optimizer's `installWeights` pass to
+  -- find a depth to schedule this step's weights against. It is named `d` rather than `_d` even
+  -- though it starts out unused: `installWeights` puts it in the weights of the very generators
+  -- one reads, and a binder that renames itself depending on a later pass is worse than one that
+  -- is occasionally unused.
+  let stepLam ← `(fun $dv $p => ($g (($p).1) (($p).2)).val >>= fun $tv =>
     match $tv:ident with $alts:matchAlt*)
   let stfArgs : Array Term :=
     (sts.filterMap id).map (fun i => (i : Term)) ++ fIds.map (fun i => (i : Term))
@@ -1434,8 +1471,12 @@ def genSUnfold (ctx : Ctx) : CommandElabM Unit := do
         Palamedes.CorrectGen (fun $v => $accuRef $stfArgs* $v $s = some $b) :=
       Subtype.mk ($unfoldRef $stepLam ($b, $s)) <| by
         rw [$(ctx.ref "support_unfold"):term]
+        -- the unfold starts at depth `0` but characterizes a child at `d + 1`, so the induction
+        -- has to run at an arbitrary depth
+        generalize (0 : Nat) = $dv
         funext $v:ident
-        induction $v:ident generalizing $b:ident $s:ident <;> simp_all [-Bool.exists_bool]
+        induction $v:ident generalizing $b:ident $s:ident $dv:ident <;>
+          simp_all [-Bool.exists_bool]
         $proofTail:tactic))
   -- the @[extract] value lemma
   let mut sArgs : Array Term := #[]
@@ -1487,6 +1528,7 @@ def elabDerivePalamedes : CommandElab := fun stx => do
     convert := #[ctx.name "fold_accu_Option_true", ctx.name "fold_accu_Option_function",
                  ctx.name "fold_accu_Option_function_true", ctx.name "fold_accu_Option_basic"]
     totalUnfold := ctx.name "total_unfold"
+    unfoldName := ctx.name "unfold"
   }
 
 end Palamedes.Derive

@@ -117,20 +117,34 @@ def natLit? (e : Expr) : Option Nat :=
     | OfNat.ofNat _ n _ => n.nat?
     | _ => none
 
-private partial def weightSum? (l : Expr) : Option Nat :=
+/-- Is `w` positive for *every* value of the variables in it, by inspection? A positive numeral, a
+sum with a positive summand, or a product of positives. Weights are not always closed: the affine
+schedules `a + b * d` that `installWeights` emits mention the recursion's depth, so a delaborator
+that could only add up numerals would give up on precisely the generators that need weights. -/
+private partial def weightPos (w : Expr) : Bool :=
+  match natLit? w with
+  | some n => 0 < n
+  | none =>
+    match_expr w with
+    | HAdd.hAdd _ _ _ _ x y => weightPos x || weightPos y
+    | HMul.hMul _ _ _ _ x y => weightPos x && weightPos y
+    | _ => false
+
+/-- Does `l` have a branch whose weight is positive by inspection? Then `0 < Σw`, which is what the
+autoParam has to re-derive, so the proof can be dropped. -/
+private partial def someWeightPos (l : Expr) : Bool :=
   match_expr l with
-  | List.nil _ => some 0
-  | List.cons _ hd tl => do
-    let_expr Prod.mk _ _ w _ := hd | none
-    return (← natLit? w) + (← weightSum? tl)
-  | _ => none
+  | List.cons _ hd tl =>
+    (match_expr hd with
+      | Prod.mk _ _ w _ => weightPos w
+      | _ => false) || someWeightPos tl
+  | _ => false
 
 @[app_delab Palamedes.Gen.frequency]
 def delabFrequency : Delab := do
   let e ← getExpr
   guard <| e.isAppOfArity ``Palamedes.Gen.frequency 3
-  let some total := weightSum? (e.getArg! 1) | failure
-  guard <| 0 < total
+  guard <| someWeightPos (e.getArg! 1)
   let gs ← withNaryArg 1 delab
   let fn := mkIdent (← unresolveNameGlobal ``Palamedes.Gen.frequency)
   `($fn $gs)

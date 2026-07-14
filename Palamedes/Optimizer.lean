@@ -1,6 +1,7 @@
 import Palamedes.Gen
 import Palamedes.Support
 import Palamedes.OptimizeCongr
+import Palamedes.UnfoldStrategy
 
 open Lean Elab Command Term Meta
 
@@ -237,11 +238,145 @@ private def flattenPick? (e : Expr) : MetaM (Option (Expr × Expr)) := do
     return some (e', proof)
   | _ => return none
 
-/-- The two head-rewrite sets a traversal can apply. `.main` is the assume-floating / monad-law
-set; `.flatten` collapses `pick` trees into `oneOf` and must run as a separate later pass, because
+/-! ## `installWeights` — depth-indexed weighting
+
+The flatten pass leaves every k-way choice as a uniform `oneOf`. `installWeights` replaces those
+constant weights with affine schedules `wⱼ(d) = aⱼ + bⱼ · d`, read at the recursion's depth, so the
+mean offspring starts above 1 near the root and falls below 1 with depth.
+
+It runs *after* the other passes because those move terms (bind distributes through `pick`; assumes
+float up), and a weight mentioning the depth binder can only be placed once the shape is final.
+
+Decay is base-weight *growth*, never recursive-weight shrinkage: weights are `Nat`s, and a weight
+reaching `0` would drop its branch from the support. Growing the other weights drives `p_rec → 0`
+with every weight still `≥ 1`, so a deep recursion becomes rarer, never impossible. -/
+
+/-- An affine weight schedule `d ↦ base + growth · d`. Invariant: `base ≥ 1`. -/
+structure Schedule where
+  base : Nat
+  growth : Nat
+  deriving Repr, Inhabited
+
+/-- Is this schedule the uniform weight `1` that the flatten pass already emits? -/
+def Schedule.isUniform (s : Schedule) : Bool := s.base == 1 && s.growth == 0
+
+/-- How to weight a branch, as a function of how many recursive children it has.
+
+A policy is untrusted: it can only tune the distribution, never the support, since the
+support-preservation proof is composed regardless of what it proposes. -/
+structure SchedulePolicy where
+  weight : Nat → Schedule
+
+/-- The default decay policy: a branch that closes the recursion grows fastest with depth, one with
+a single child grows more slowly, and a branch with two or more is held constant — decayed
+*relative to* the others, never toward zero.
+
+The coefficients are hand-tuned on STLC. Eventually a drift solve should compute them per site. -/
+def decayPolicy : SchedulePolicy where
+  weight
+    | 0 => { base := 1, growth := 30 }
+    | 1 => { base := 1, growth := 14 }
+    | _ => { base := 4, growth := 0 }
+
+/-- Recursive-field counts for each constructor of a base functor `XF`: a field is a hole when its
+type is the carrier (the last parameter of `XF`). -/
+def baseCtorHoles (fName : Name) : MetaM (Std.HashMap Name Nat) := do
+  let iv ← getConstInfoInduct fName
+  let mut m : Std.HashMap Name Nat := {}
+  for cn in iv.ctors do
+    let ci ← getConstInfoCtor cn
+    let n ← forallBoundedTelescope ci.type iv.numParams fun params body => do
+      let some carrier := params.back? | return 0
+      forallTelescope body fun fields _ =>
+        fields.foldlM (init := 0) fun acc f => do
+          return if (← inferType f) == carrier then acc + 1 else acc
+    m := m.insert cn n
+  return m
+
+/-- How many recursive children one branch of a step generator produces: walk it to the
+`pure (XF.c …)` it ends in and read the count off `c`.
+
+A branch ending in several constructors (it contains a nested choice or a `dite`) is scored by its
+largest count. Over-counting is the safe direction — it biases the branch toward a constant weight,
+which can only make the generator terminate more readily. -/
+partial def branchHoles (holes : Std.HashMap Name Nat) (e : Expr) : MetaM Nat := do
+  let underBinder (f : Expr) : MetaM Nat := do
+    forallBoundedTelescope (← inferType f) (some 1) fun xs _ => do
+      let #[x] := xs | return 0
+      branchHoles holes (f.beta #[x])
+  match_expr ← withReducible (reduce e) with
+  | pure _ _ _ a =>
+    let some c := a.getAppFn.constName? | return 0
+    return holes.getD c 0
+  | bind _ _ _ _ _ f => underBinder f
+  | assume _ _ f => underBinder f
+  | dite _ _ _ t f => return max (← underBinder t) (← underBinder f)
+  | ite _ _ _ t f => return max (← branchHoles holes t) (← branchHoles holes f)
+  | Gen.pick _ x y => return max (← branchHoles holes x) (← branchHoles holes y)
+  | Gen.oneOf _ gs _ =>
+    let some elems := listLitElems? gs | return 0
+    elems.foldlM (init := 0) fun acc g => return max acc (← branchHoles holes g)
+  | _ => return 0
+
+/-- Build the weight expression `a + b * d`. -/
+private def mkWeight (s : Schedule) (depth : Expr) : MetaM Expr := do
+  mkAppM ``HAdd.hAdd #[mkNatLit s.base, ← mkAppM ``HMul.hMul #[mkNatLit s.growth, depth]]
+
+/-- `∀ p ∈ gs', 0 < p.1` for a literal weighted branch list whose weights are all `a + b*d` with
+`a ≥ 1` — built by folding `allPos_cons`, one link per branch. -/
+private def mkAllPos (α : Expr) (pairs : List (Expr × Expr)) (scheds : List Schedule)
+    (depth : Expr) : MetaM Expr := do
+  match pairs, scheds with
+  | [], _ => mkAppM ``allPos_nil #[α]
+  | (w, g) :: ps, s :: ss =>
+    let tl ← mkListLit (← mkAppM ``Prod #[mkConst ``Nat, ← mkAppM ``Gen #[α]])
+      (← ps.mapM fun (w, g) => mkAppM ``Prod.mk #[w, g])
+    let ha ← mkDecideProof (← mkAppM ``LT.lt #[mkNatLit 0, mkNatLit s.base])
+    let hw ← mkAppM ``weight_pos #[mkNatLit s.base, mkNatLit s.growth, depth, ha]
+    mkAppM ``allPos_cons #[α, w, g, tl, hw, ← mkAllPos α ps ss depth]
+  | _, _ => throwError "installWeights: branch/schedule length mismatch"
+
+/-- The `installWeights` head rewrite: a uniform `oneOf` under a depth binder becomes a `frequency`
+whose weights are each branch's schedule read at that depth, paired with its support-preservation
+proof. Outside a recursion there is no depth to schedule against, and nothing happens. -/
+private def installWeights? (policy : SchedulePolicy) (depth? : Option (Expr × Name)) (e : Expr) :
+    MetaM (Option (Expr × Expr)) := do
+  let some (depth, typeName) := depth? | return none
+  match_expr e with
+  | Gen.oneOf α gs h => do
+    let some elems := listLitElems? gs | return none
+    if elems.isEmpty then return none
+    let holes ← baseCtorHoles (typeName.appendAfter "F")
+    let hs ← elems.mapM (branchHoles holes)
+    let scheds := hs.map policy.weight
+    -- A schedule the same for every branch is the uniform choice the `oneOf` already makes, so
+    -- installing it would only add noise. (This is what happens to a choice that is not between
+    -- constructors: every branch has the same hole count.)
+    if scheds.all Schedule.isUniform then return none
+    if hs.all (· == hs.head!) then return none
+    let ws ← scheds.mapM (mkWeight · depth)
+    let pairs := ws.zip elems
+    let pairExprs ← pairs.mapM fun (w, g) => mkAppM ``Prod.mk #[w, g]
+    let gs' ← mkListLit (← mkAppM ``Prod #[mkConst ``Nat, ← mkAppM ``Gen #[α]]) pairExprs
+    -- the `frequency` side-goal `0 < Σ wⱼ(d)`, from the first weight's positivity alone
+    let s0 := scheds.head!
+    let ha ← mkDecideProof (← mkAppM ``LT.lt #[mkNatLit 0, mkNatLit s0.base])
+    let hw ← mkAppM ``weight_pos #[mkNatLit s0.base, mkNatLit s0.growth, depth, ha]
+    let tl ← mkListLit (← mkAppM ``Prod #[mkConst ``Nat, ← mkAppM ``Gen #[α]]) pairExprs.tail!
+    let h' ← mkAppM ``sum_fst_pos_cons #[α, ws.head!, elems.head!, tl, hw]
+    let e' ← mkAppM ``Gen.frequency #[gs', h']
+    let hpos ← mkAllPos α pairs scheds depth
+    let hsnd ← mkEqRefl gs
+    let proof ← mkAppM ``support_oneOf_reweight #[α, gs, gs', hsnd, hpos, h, h']
+    return some (e', proof)
+  | _ => return none
+
+/-- The head-rewrite sets a traversal can apply. `.main` is the assume-floating / monad-law set;
+`.flatten` collapses `pick` trees into `oneOf` and must run as a separate later pass, because
 `.main`'s bind-distribution rules create and extend `pick` chains (and need the picks intact to
-float assumes out of them). -/
-inductive OptPass | main | flatten
+float assumes out of them); `.installWeights` reweights what `.flatten` leaves, and must run last,
+on the final term. -/
+inductive OptPass | main | flatten | installWeights (policy : SchedulePolicy)
 
 /-! ## Proof-carrying traversal -/
 
@@ -328,23 +463,29 @@ private def isGenValued (e : Expr) : MetaM Bool := do
     let head := body.getAppFn
     return head.isConstOf ``Gen
 
+/-- The traversal context: the depth binder currently in scope, if any, together with the datatype
+whose recursion introduced it. A nested unfold rebinds it to the inner depth — innermost wins. -/
+private abbrev Depth := Option (Expr × Name)
+
 mutual
 
 /-- Reduce `e0` (so `match_expr` sees through reducible defs) and optimize it to a fixed point,
 returning the rewritten term and a proof that its `support` is unchanged. -/
-private partial def optimize (pass : OptPass) (table : Array CongrRule) (e0 : Expr) : MetaM OptResult := do
-  optimizeReduced pass table (← withReducible (reduce e0))
+private partial def optimize (pass : OptPass) (table : Array CongrRule) (depth : Depth) (e0 : Expr) :
+    MetaM OptResult := do
+  optimizeReduced pass table depth (← withReducible (reduce e0))
 
 /-- Optimize `e`, which is assumed *already reduced*. Optimize children (their subterms are already
 reduced too), attempt one head rewrite, and — since a rewrite can introduce new redexes (e.g. the
 `pure a >>= f ~> f a` beta) — re-`optimize` (re-reduce) the result. Reducing only here and at the
 top avoids re-reducing each subtree once per level of depth. -/
-private partial def optimizeReduced (pass : OptPass) (table : Array CongrRule) (e : Expr) : MetaM OptResult := do
-  let cong ← optimizeChildren pass table e
-  match ← tryHeadRewrite pass cong.expr with
+private partial def optimizeReduced (pass : OptPass) (table : Array CongrRule) (depth : Depth)
+    (e : Expr) : MetaM OptResult := do
+  let cong ← optimizeChildren pass table depth e
+  match ← tryHeadRewrite pass depth cong.expr with
   | none => return cong
   | some (e', headPf) =>
-    let rest ← optimize pass table e'
+    let rest ← optimize pass table depth e'
     let proof? ← chainProofs #[cong.proof?, some headPf, rest.proof?]
     return { expr := rest.expr, proof? }
 
@@ -356,8 +497,12 @@ If `e`'s head has no registered congruence lemma, skipping is correct *only* whe
 to descend into; if `e` carries a `Gen`-valued argument we would silently drop an optimization (and
 potentially mask synthesis residue), so we fail loudly instead — the fix is to tag that head's
 support-congruence lemma `@[gen_congr]`. -/
-private partial def optimizeChildren (pass : OptPass) (table : Array CongrRule) (e : Expr) : MetaM OptResult := do
+private partial def optimizeChildren (pass : OptPass) (table : Array CongrRule) (depth : Depth)
+    (e : Expr) : MetaM OptResult := do
   let some head := e.getAppFn.constName? | return { expr := e, proof? := none }
+  -- Under a registered `X.unfold`, the argument we descend into is its step, whose binder 0 is the
+  -- recursion's depth.
+  let entering := (unfoldNameMap (← getEnv))[head]?
   let some (_, congrName, diff) := table.find? (·.1 == head)
     | do
         -- Compiler-generated eliminators (matchers, recursors) carry Gen-valued arms but are
@@ -377,7 +522,7 @@ private partial def optimizeChildren (pass : OptPass) (table : Array CongrRule) 
   let mut hyps := #[]
   let mut changed := false
   for i in diff do
-    let (arg', h?) ← optimizeBinder pass table args[i]!
+    let (arg', h?) ← optimizeBinder pass table depth entering args[i]!
     newArgs := newArgs.set! i arg'
     match h? with
     | some h => hyps := hyps.push h; changed := true
@@ -388,12 +533,20 @@ private partial def optimizeChildren (pass : OptPass) (table : Array CongrRule) 
 
 /-- Optimize a child argument: under any leading binders (`f : dom₁ → … → Gen _`) when it is a
 function, or directly when it is a plain `Gen`. Returns the rebuilt argument and, when something
-changed, a proof `∀ xs, support (arg xs) = support (arg' xs)`. -/
-private partial def optimizeBinder (pass : OptPass) (table : Array CongrRule) (f : Expr) : MetaM (Expr × Option Expr) := do
+changed, a proof `∀ xs, support (arg xs) = support (arg' xs)`.
+
+`entering` is set when this argument is a registered unfold's step, in which case its binder 0 is
+the depth for everything underneath. -/
+private partial def optimizeBinder (pass : OptPass) (table : Array CongrRule) (depth : Depth)
+    (entering : Option Name) (f : Expr) : MetaM (Expr × Option Expr) := do
   forallTelescope (← inferType f) fun xs _ => do
+    let depth :=
+      match entering, xs[0]? with
+      | some typeName, some d => some (d, typeName)
+      | _, _ => depth
     -- `f` is a subterm of an already-reduced node, so `f.beta xs` is reduced (the substituted `xs`
     -- are atomic fvars); descend with `optimizeReduced` to avoid re-reducing it.
-    let r ← optimizeReduced pass table (f.beta xs)
+    let r ← optimizeReduced pass table depth (f.beta xs)
     let f' ← mkLambdaFVars xs r.expr
     match r.proof? with
     | none => return (f', none)
@@ -401,9 +554,11 @@ private partial def optimizeBinder (pass : OptPass) (table : Array CongrRule) (f
 
 /-- Attempt a single head rewrite on `e`, returning the rewritten term and a proof
 `support e = support e'`. -/
-private partial def tryHeadRewrite (pass : OptPass) (e : Expr) : MetaM (Option (Expr × Expr)) := do
+private partial def tryHeadRewrite (pass : OptPass) (depth : Depth) (e : Expr) :
+    MetaM (Option (Expr × Expr)) := do
   match pass with
   | .flatten => flattenPick? e
+  | .installWeights policy => installWeights? policy depth e
   | .main =>
     let res? ←
       match_expr e with
@@ -420,14 +575,20 @@ end
 /-- Optimize a raw `Gen` term, returning the optimized term together with a proof that its
 `support` equals that of the input. Runs the `.main` (assume-floating / monad-law) pass to a fixed
 point first, then the `.flatten` pass, which collapses the `pick` chains the main pass leaves (and
-may have extended, via bind-distribution) into single uniform `oneOf` nodes. -/
-def optimizeGen (e : Expr) : MetaM (Expr × Expr) := do
+may have extended, via bind-distribution) into single uniform `oneOf` nodes. When `policy?` is
+given, a third `.installWeights` pass then replaces those uniform weights with depth-indexed
+schedules.
+
+Where `installWeights` finds no depth it does nothing, which costs a well-tuned distribution but
+never correctness — every pass composes a support-preservation proof regardless. -/
+def optimizeGen (e : Expr) (policy? : Option SchedulePolicy := none) : MetaM (Expr × Expr) := do
   let table := getGenCongrRules (← getEnv)
-  let r1 ← optimize .main table e
-  let r2 ← optimize .flatten table r1.expr
-  let expr := r2.expr
+  let r1 ← optimize .main table none e
+  let r2 ← optimize .flatten table none r1.expr
+  let r3? ← policy?.mapM fun policy => optimize (.installWeights policy) table none r2.expr
+  let expr := (r3?.getD r2).expr
   let proof ←
-    match ← chainProofs #[r1.proof?, r2.proof?] with
+    match ← chainProofs #[r1.proof?, r2.proof?, r3?.bind (·.proof?)] with
     | some p => mkExpectedTypeHint p (← mkEq (← mkSupport e) (← mkSupport expr))
     | none => mkSupportRefl e
   return (expr, proof)

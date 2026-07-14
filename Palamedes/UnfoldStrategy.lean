@@ -37,6 +37,8 @@ structure UnfoldStrategy where
   convert : Array Name
   /-- `X.total_unfold`, applied by the `totality` reconstruction. -/
   totalUnfold : Name
+  /-- `X.unfold` itself, so the optimizer can recognize a recursion in the term it is rewriting. -/
+  unfoldName : Name
   /-- The conditional-fold normal form (`X.fold_accu_cond`), if the type has one. -/
   cond : Option Name := none
   deriving Inhabited, Repr
@@ -63,6 +65,11 @@ def unfoldStrategies (env : Environment) : Array UnfoldStrategy := Id.run do
 
 def registerUnfoldStrategy (entry : UnfoldStrategy) : CoreM Unit :=
   modifyEnv fun env => unfoldStrategyExt.addEntry env entry
+
+/-- Map from each registered `X.unfold` constant to its datatype, so a traversal can tell when it
+is descending into a recursion. -/
+def unfoldNameMap (env : Environment) : Std.HashMap Name Name :=
+  (unfoldStrategies env).foldl (init := {}) fun m e => m.insert e.unfoldName e.typeName
 
 private def getStrategyFor (env : Environment) (typeName : Name) : CoreM UnfoldStrategy := do
   let some e := (unfoldStrategies env).find? (·.typeName == typeName)

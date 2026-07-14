@@ -10,13 +10,6 @@ inductive Ty : Type where
 
 end TypeDef
 
-/- The recursion-scheme template (`TyF`, `fold`, `accuM`, `unfold`, the support
-characterization, and the fusion lemmas) is generated, and `Ty` is registered with the
-synthesizer's `unfold_strategy` registry — so recursive predicates over `Ty` can synthesize via
-`s_unfold`, and `arbTy` below is built on the generated `Ty.unfold`. What remains hand-written
-in this module is the scalar template: `arbTy`/`caseTy` and their support/totality lemmas, plus
-the `Ty.rec` normal-form lemmas (`as_or`, `deforest_eq`) that end users `simp` with when a
-predicate case-analyzes a `Ty`. -/
 derive_palamedes Ty
 
 namespace Palamedes
@@ -27,9 +20,9 @@ namespace Gen
 
 @[irreducible]
 def arbTy : Gen Ty := Ty.unfold
-  (fun _ => pick
-    (pure TyF.unit)
-    (pure (TyF.arrow PUnit.unit PUnit.unit)))
+  (fun d _ => frequency
+    [(2 + 3 * d, pure TyF.unit),
+     (1, pure (TyF.arrow PUnit.unit PUnit.unit))])
   PUnit.unit
 
 def caseTy
@@ -44,9 +37,18 @@ def caseTy
 @[simp]
 theorem support_arbTy :
     support arbTy = fun _ => True := by
-  simp [arbTy]
+  simp only [arbTy, Ty.support_unfold]
+  generalize (0 : Nat) = d
   funext v
-  induction v <;> simp_all
+  induction v generalizing d with
+  | unit =>
+    simp only [Ty.unfold_support, eq_iff_iff, iff_true, Support.support_frequency]
+    exact ⟨2 + 3 * d, pure TyF.unit, by simp, by omega, by simp⟩
+  | arrow τ₁ τ₂ ih₁ ih₂ =>
+    simp only [Ty.unfold_support, eq_iff_iff, iff_true]
+    refine ⟨PUnit.unit, PUnit.unit, ?_, of_eq_true (ih₁ (d + 1)), of_eq_true (ih₂ (d + 1))⟩
+    simp only [Support.support_frequency]
+    exact ⟨1, pure (TyF.arrow PUnit.unit PUnit.unit), by simp, by omega, by simp⟩
 
 @[simp]
 theorem support_Ty_caseTy
@@ -109,8 +111,9 @@ namespace Total
 theorem total_arbTy : total arbTy := by
   simp only [Gen.arbTy]
   apply _root_.Ty.total_unfold
-  intro b
-  simp
+  intro _d _b
+  exact total_frequency
+    (totalWeighted_cons (total_pure _) (totalWeighted_cons (total_pure _) totalWeighted_nil))
 
 @[simp, aesop safe (rule_sets := [totality])]
 theorem total_Ty_caseTy

@@ -48,27 +48,38 @@ example : {m : Type → Type} → [Monad m] → {α β σ : Type} →
     (α → σ → σ × σ) → (σ → m β) → (β → α → β → σ → m β) → MyTree α → σ → m β :=
   @MyTree.accuM
 
+-- The recursion threads a `Nat` depth: `unfoldGo` hands it to the step and unfolds children at
+-- `d + 1`, while `unfold` takes a starting depth defaulting to `0`. The seed type is unchanged.
+
 example : {G : Type → Type} → [_root_.Gen G] → {α β : Type} →
-    (β → G (MyTreeF α β)) → β → G (MyTree α) :=
+    (Nat → β → G (MyTreeF α β)) → Nat → β → G (MyTree α) :=
   @MyTree.unfoldGo
 
-example : {α β : Type} → (β → Gen (MyTreeF α β)) → β → Gen (MyTree α) := @MyTree.unfold
+example : {α β : Type} → (Nat → β → Gen (MyTreeF α β)) → β → Nat → Gen (MyTree α) := @MyTree.unfold
 
-example : {α β : Type} → (β → TGen (MyTreeF α β)) → β → TGen (MyTree α) := @TGen.MyTree.unfold
+example : {α β : Type} → (Nat → β → TGen (MyTreeF α β)) → β → Nat → TGen (MyTree α) :=
+  @TGen.MyTree.unfold
 
-example : {α β : Type} → (β → MyTreeF α β → Prop) → β → MyTree α → Prop := @MyTree.unfold_support
+-- the starting depth is an optional argument: existing call sites are untouched
+example {α β : Type} (f : Nat → β → Gen (MyTreeF α β)) (b : β) :
+    MyTree.unfold f b = MyTree.unfold f b 0 := rfl
 
-example : ∀ {α β : Type} {f : β → Gen (MyTreeF α β)} {b : β},
-    support (MyTree.unfold f b) = MyTree.unfold_support (fun x => support (f x)) b :=
+example : {α β : Type} → (Nat → β → MyTreeF α β → Prop) → Nat → β → MyTree α → Prop :=
+  @MyTree.unfold_support
+
+-- `support_unfold` is unconditional: no depth-independence hypothesis is needed to state it.
+example : ∀ {α β : Type} {f : Nat → β → Gen (MyTreeF α β)} {b : β} {d₀ : Nat},
+    support (MyTree.unfold f b d₀)
+      = MyTree.unfold_support (fun d x => support (f d x)) d₀ b :=
   @MyTree.support_unfold
 
-example : ∀ {α β : Type} {f f' : β → Gen (MyTreeF α β)} {b : β},
-    (∀ {x}, support (f x) = support (f' x)) →
-    support (MyTree.unfold f b) = support (MyTree.unfold f' b) :=
+example : ∀ {α β : Type} {f f' : Nat → β → Gen (MyTreeF α β)} {b : β} {d₀ : Nat},
+    (∀ {d x}, support (f d x) = support (f' d x)) →
+    support (MyTree.unfold f b d₀) = support (MyTree.unfold f' b d₀) :=
   fun h => MyTree.support_unfold_congr h
 
-example : ∀ {α β : Type} {g : β → Gen (MyTreeF α β)} {b : β},
-    (∀ x, total (g x)) → total (MyTree.unfold g b) :=
+example : ∀ {α β : Type} {g : Nat → β → Gen (MyTreeF α β)} {b : β} {d₀ : Nat},
+    (∀ d x, total (g d x)) → total (MyTree.unfold g b d₀) :=
   fun h => MyTree.total_unfold h
 
 -- ── the generated proofs are axiom-clean (no `sorryAx`) ──
@@ -165,7 +176,7 @@ example {α β σ : Type} {st : α → σ → σ} {fn : σ → Option β} {fc : 
       (fun (t : MyListF α β) =>
         (fn sg = some bg ∧ t = .nil) ∨ (∃ a w, fc a w sg = some bg ∧ t = .cons a w))) :
     (MyList.s_unfold (st_cons := st) (s := s) (b := b) g).val
-      = MyList.unfold (fun p => (g p.1 p.2).val >>= fun tv =>
+      = MyList.unfold (fun _d p => (g p.1 p.2).val >>= fun tv =>
           match tv with
           | .nil => pure .nil
           | .cons a w => pure (.cons a (w, st a p.2))) (b, s) :=

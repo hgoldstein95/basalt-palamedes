@@ -52,7 +52,8 @@ def generatorSearchElab
     (stx : Syntax)
     (t : Lean.Term)
     (checkTotal : Bool)
-    (tryThis : Bool) :
+    (tryThis : Bool)
+    (schedules : Bool := false) :
     TacticM Unit := do
   let opts ← getOptions
   let verbose := palamedes.debug.get opts
@@ -99,7 +100,8 @@ def generatorSearchElab
     logInfo m!"Synthesized generator:\n{(← ppExpr gen)}"
   let gen' ←
     try
-      let (gen', proof) ← Palamedes.optimizeGen gen
+      let (gen', proof) ←
+        Palamedes.optimizeGen gen (if schedules then some Palamedes.decayPolicy else none)
       Lean.Meta.check proof
       withReducible (reduce gen')
     catch e =>
@@ -127,22 +129,32 @@ def generatorSearchElab
 
   closeMainGoal `generator_search gen'
 
-syntax (name := generatorSearch) "generator_search " term " allow_partial"? : tactic
+syntax (name := generatorSearch) "generator_search " term " allow_partial"? " with_schedules"? :
+  tactic
 
 @[tactic generatorSearch]
 def expandGeneratorSearch : Tactic := fun stx =>
   match stx with
+  | `(tactic| generator_search $t allow_partial with_schedules) =>
+    generatorSearchElab stx t false false (schedules := true)
+  | `(tactic| generator_search $t with_schedules) =>
+    generatorSearchElab stx t true false (schedules := true)
   | `(tactic| generator_search $t allow_partial) =>
     generatorSearchElab stx t false false
   | `(tactic| generator_search $t) =>
     generatorSearchElab stx t true false
   | _ => throwError "invalid syntax"
 
-syntax (name := generatorSearch?) "generator_search? " term " allow_partial"? : tactic
+syntax (name := generatorSearch?) "generator_search? " term " allow_partial"? " with_schedules"? :
+  tactic
 
 @[tactic generatorSearch?]
 def expandGeneratorSearch? : Tactic := fun stx =>
   match stx with
+  | `(tactic| generator_search? $t allow_partial with_schedules) =>
+    generatorSearchElab stx t false true (schedules := true)
+  | `(tactic| generator_search? $t with_schedules) =>
+    generatorSearchElab stx t true true (schedules := true)
   | `(tactic| generator_search? $t allow_partial) =>
     generatorSearchElab stx t false true
   | `(tactic| generator_search? $t) =>
