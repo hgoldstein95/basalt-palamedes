@@ -3,10 +3,10 @@ import Palamedes.Stats
 import PalamedesTest.Examples.STLC.WellTyped.WellTyped
 
 /-!
-# Regression test for depth-indexed weight schedules (`with_schedules`)
+# Regression test for depth-indexed weight schedules (`with_policy`)
 
-The guard on `installWeights` and on `decayPolicy`'s hand-tuned coefficients — nothing else pins
-them, so this file is what notices if they are retuned. The bar: sample without diverging, median
+The guard on `installWeights` and on `SchedulePolicy.stlc`'s hand-tuned coefficients — nothing else
+pins them, so this file is what notices if they are retuned. The bar: sample without diverging, median
 term size ≥ 4, and ≥ 70% of terms containing an application. **Termination alone is not success** —
 a generator that decays too fast terminates by emitting nothing but leaves.
 

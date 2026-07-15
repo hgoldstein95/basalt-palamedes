@@ -267,12 +267,42 @@ support-preservation proof is composed regardless of what it proposes. -/
 structure SchedulePolicy where
   weight : Nat → Schedule
 
-/-- The default decay policy: a branch that closes the recursion grows fastest with depth, one with
-a single child grows more slowly, and a branch with two or more is held constant — decayed
-*relative to* the others, never toward zero.
+/-- A general, datatype-agnostic decay family, keyed only on whether a branch *closes* the recursion.
 
-The coefficients are hand-tuned on STLC. Eventually a drift solve should compute them per site. -/
-def decayPolicy : SchedulePolicy where
+Continuing branches (≥1 recursive child) are held at the constant `root`; closing branches (0
+children) grow as `1 + rate·d`. So at the root the recursion is favored `root : 1` — mean offspring
+starts supercritical when `root > 1` — and as depth grows the closing branches dominate and mean
+offspring falls to 0, forcing termination. Two knobs, both interpretable:
+
+* `root` — how bushy the top of the value is (the root branching bias);
+* `rate` — how fast the recursion is driven closed with depth.
+
+Unlike `SchedulePolicy.stlc` this makes no per-arity distinction, so it carries no tuning specific to
+any one datatype. The named points below (`gentle`/`moderate`/`steep`) are the ready-made choices. -/
+def SchedulePolicy.decayBy (root rate : Nat) : SchedulePolicy where
+  weight
+    | 0 => { base := 1, growth := rate }
+    | _ => { base := root, growth := 0 }
+
+/-- Slow decay: the recursion stays live several levels down, giving deeper and larger values. -/
+def SchedulePolicy.gentle : SchedulePolicy := .decayBy 3 4
+
+/-- The general-purpose default. A middle decay rate: supercritical at the root, closed within a few
+levels. What `with_policy` uses when no policy is named. -/
+def SchedulePolicy.moderate : SchedulePolicy := .decayBy 3 12
+
+/-- Fast decay: the recursion closes almost immediately, giving shallow values that terminate hard. -/
+def SchedulePolicy.steep : SchedulePolicy := .decayBy 3 30
+
+/-- The STLC-tuned policy: a branch that closes the recursion grows fastest with depth, one with a
+single child grows more slowly, and a branch with two or more is held constant — decayed *relative
+to* the others, never toward zero.
+
+The coefficients are hand-tuned on `genWellTyped`, and its distribution is pinned in
+`ScheduleMeasurements.lean`; this is *not* a good general default (it encodes an arity preference
+specific to STLC's term type). Reach for it with `with_policy SchedulePolicy.stlc`. Eventually a
+drift solve should compute coefficients like these per site. -/
+def SchedulePolicy.stlc : SchedulePolicy where
   weight
     | 0 => { base := 1, growth := 30 }
     | 1 => { base := 1, growth := 14 }
@@ -317,8 +347,8 @@ partial def branchHoles (holes : Std.HashMap Name Nat) (e : Expr) : MetaM Nat :=
     let some elems := listLitElems? gs | return 0
     elems.foldlM (init := 0) fun acc g => return max acc (← branchHoles holes g)
   -- Children are descended into before the head rewrite, so an inner choice is already a `frequency`
-  -- by the time the outer one is scored. Omitting this case scores it 0 holes — the unsafe direction
-  -- (`decayPolicy` would grow a recursive branch's weight fastest with depth).
+  -- by the time the outer one is scored. Omitting this case scores it 0 holes — the unsafe direction,
+  -- since a decay policy grows a 0-hole branch's weight fastest, which on a recursive branch is wrong.
   | Gen.frequency _ gs _ =>
     let some elems := listLitElems? gs | return 0
     elems.foldlM (init := 0) fun acc p => do
@@ -388,7 +418,7 @@ on the final term.
 
 `.flatten`'s `distribute` flag additionally pushes a choice into a `dite`/`ite` arm
 (`distributeChoiceDite?`) so a choice nested under a case split becomes a flat `oneOf` per branch. It
-is on only under `with_schedules` (i.e. when an `installWeights` pass follows to reweight the result);
+is on only under `with_policy` (i.e. when an `installWeights` pass follows to reweight the result);
 plain flattening leaves it off, so every generator not asking for schedules is byte-identical. -/
 inductive OptPass | main | flatten (distribute : Bool) | installWeights (policy : SchedulePolicy)
 
@@ -429,7 +459,7 @@ private def matchDite? (e : Expr) : Option (Expr × Expr × Expr × Expr) :=
   | dite _ P inst t f => some (P, inst, t, f)
   | _ => none
 
-/-- Flatten-pass distribution of a choice into a `dite` arm, run only under `with_schedules` (when a
+/-- Flatten-pass distribution of a choice into a `dite` arm, run only under `with_policy` (when a
 schedule policy will follow). The synthesizer emits a state class's choice as `pick x (dite c t f)`
 when one constructor (`x`) is unconditional and others are gated on a context condition `c`. Left as
 is, `flattenPick?` collapses it to `oneOf [x, dite c (oneOf ..) ..]` — a choice *nested* under the

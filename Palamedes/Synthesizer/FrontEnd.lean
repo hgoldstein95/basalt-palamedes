@@ -47,12 +47,31 @@ def solveGoalWithTactic (goalType : Expr) (tactic : TSyntax `tactic) : TacticM E
     throwError "goals left unsolved: {unsolved}"
   instantiateMVars m
 
+/-- Evaluate a term to a `SchedulePolicy` value at elaboration time (the native impl, swapped in by
+`@[implemented_by]`; the safe body below is never run). -/
+unsafe def evalSchedulePolicyImpl (e : Expr) : MetaM Palamedes.SchedulePolicy :=
+  evalExpr' Palamedes.SchedulePolicy ``Palamedes.SchedulePolicy e
+
+@[implemented_by evalSchedulePolicyImpl]
+def evalSchedulePolicy (e : Expr) : MetaM Palamedes.SchedulePolicy :=
+  throwError "evalSchedulePolicy: unreachable (native impl expected via implemented_by)"
+
+/-- Resolve the optional policy term of a `with_policy` clause to a `SchedulePolicy` value. A bare
+`with_policy` (no term) uses the general-purpose default, `SchedulePolicy.moderate`; a present
+`with_policy` always selects a policy, so this returns `some`, reserving `none` for "no schedules
+at all". The term is any expression of type `SchedulePolicy` — the standard ones live under
+`SchedulePolicy.*` (`gentle`/`moderate`/`steep`/`stlc`), but a user may pass their own. -/
+def resolveSchedulePolicy (p? : Option Lean.Term) : TacticM (Option Palamedes.SchedulePolicy) := do
+  let some pStx := p? | return some Palamedes.SchedulePolicy.moderate
+  let e ← withRef pStx <| elabTermEnsuringType pStx (mkConst ``Palamedes.SchedulePolicy)
+  return some (← evalSchedulePolicy (← instantiateMVars e))
+
 def generatorSearchElab
     (stx : Syntax)
     (t : Lean.Term)
     (checkTotal : Bool)
     (tryThis : Bool)
-    (schedules : Bool := false) :
+    (policy? : Option Palamedes.SchedulePolicy := none) :
     TacticM Unit := do
   let opts ← getOptions
   let verbose := palamedes.debug.get opts
@@ -100,7 +119,7 @@ def generatorSearchElab
   let gen' ←
     try
       let (gen', proof) ←
-        Palamedes.optimizeGen gen (if schedules then some Palamedes.decayPolicy else none)
+        Palamedes.optimizeGen gen policy?
       Lean.Meta.check proof
       withReducible (reduce gen')
     catch e =>
@@ -145,25 +164,29 @@ Two modifiers, in this order:
   `Gen.assume` — i.e. one that *filters*. Such a generator can fail when sampled (the sampler does
   not backtrack), so this is opt-in. Needed by `genAVL` and `genRBT`.
 
-* **`with_schedules`** weights each choice under a recursion by depth (`w(d) = a + b·d`) so that
+* **`with_policy`** weights each choice under a recursion by depth (`w(d) = a + b·d`) so that
   branching starts supercritical near the root and decays, which is what makes a *static- or
   growing-seed* generator terminate in practice — `genWellTyped` diverged on 54.3% of draws without
   it. Leave it off for a *shrinking-seed* generator (`genBST`, `genLengthK`, `Range`), which already
   terminates and would only lose size to the decay. Nothing infers which you have; it is your call.
   Support is unaffected either way.
 
+  An optional term picks the decay policy — any expression of type `SchedulePolicy`. The standard
+  ones live under `SchedulePolicy.*`: the general `gentle` / `moderate` / `steep` family (slower to
+  faster decay) and the STLC-tuned `stlc`. Bare `with_policy` uses `SchedulePolicy.moderate`.
+
 Totality failure is a *warning*, not an error.
 -/
-syntax (name := generatorSearch) "generator_search " term " allow_partial"? " with_schedules"? :
-  tactic
+syntax (name := generatorSearch) "generator_search " term " allow_partial"?
+  (" with_policy" (ppSpace term)?)? : tactic
 
 @[tactic generatorSearch]
-def expandGeneratorSearch : Tactic := fun stx =>
+def expandGeneratorSearch : Tactic := fun stx => do
   match stx with
-  | `(tactic| generator_search $t allow_partial with_schedules) =>
-    generatorSearchElab stx t false false (schedules := true)
-  | `(tactic| generator_search $t with_schedules) =>
-    generatorSearchElab stx t true false (schedules := true)
+  | `(tactic| generator_search $t allow_partial with_policy $[$p]?) =>
+    generatorSearchElab stx t false false (← resolveSchedulePolicy p)
+  | `(tactic| generator_search $t with_policy $[$p]?) =>
+    generatorSearchElab stx t true false (← resolveSchedulePolicy p)
   | `(tactic| generator_search $t allow_partial) =>
     generatorSearchElab stx t false false
   | `(tactic| generator_search $t) =>
@@ -173,16 +196,16 @@ def expandGeneratorSearch : Tactic := fun stx =>
 /-- `generator_search?` is `generator_search` (same modifiers, same result) that additionally emits
 the synthesized generator as a "Try this" suggestion, so the term can be pasted in place of the
 tactic call. Useful for inspecting what the search actually produced. -/
-syntax (name := generatorSearch?) "generator_search? " term " allow_partial"? " with_schedules"? :
-  tactic
+syntax (name := generatorSearch?) "generator_search? " term " allow_partial"?
+  (" with_policy" (ppSpace term)?)? : tactic
 
 @[tactic generatorSearch?]
-def expandGeneratorSearch? : Tactic := fun stx =>
+def expandGeneratorSearch? : Tactic := fun stx => do
   match stx with
-  | `(tactic| generator_search? $t allow_partial with_schedules) =>
-    generatorSearchElab stx t false true (schedules := true)
-  | `(tactic| generator_search? $t with_schedules) =>
-    generatorSearchElab stx t true true (schedules := true)
+  | `(tactic| generator_search? $t allow_partial with_policy $[$p]?) =>
+    generatorSearchElab stx t false true (← resolveSchedulePolicy p)
+  | `(tactic| generator_search? $t with_policy $[$p]?) =>
+    generatorSearchElab stx t true true (← resolveSchedulePolicy p)
   | `(tactic| generator_search? $t allow_partial) =>
     generatorSearchElab stx t false true
   | `(tactic| generator_search? $t) =>

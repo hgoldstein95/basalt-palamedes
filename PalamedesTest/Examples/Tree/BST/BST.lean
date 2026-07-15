@@ -14,6 +14,6 @@ def isBST : Palamedes.Tree Nat → (Nat × Nat) → Bool := fun t ⟨lo, hi⟩ =
     isBST r ⟨x + 1, hi⟩
 
 def genBST (lo hi : Nat) : Gen (Palamedes.Tree Nat) := by
-  generator_search (fun t => isBST t (lo, hi) = true)
+  generator_search (fun t => isBST t (lo, hi) = true) with_policy
 
 end BST

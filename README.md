@@ -77,7 +77,7 @@ Useful variants:
   (and paste) what the search actually produced.
 - `generator_search P allow_partial` skips the *totality check*, admitting a generator that still
   *filters* — one containing a `Gen.assume` that can fail. Needed by `genAVL` and `genRBT`.
-- `generator_search P with_schedules` turns on depth-indexed weight schedules, which make a
+- `generator_search P with_policy` turns on depth-indexed weight schedules, which make a
   recursive generator's branching subcritical so that it terminates in practice. Use it for a
   generator whose seed does not shrink (`genWellTyped` diverged on 54.3% of draws without it); leave
   it off for one whose seed does (`genBST`, `genLengthK`), where decay would only shrink the
@@ -139,7 +139,7 @@ Rejected by design, loudly: mutual, nested, and indexed inductives. (A rose tree
   `CorrectGen` term. The optimizer is a **proof-carrying** rewriter: every rewrite composes a
   support-preservation proof, which is type-checked before the goal is closed. Three passes: monad
   laws and assume-floating, then collapsing `pick` trees into uniform `oneOf`s, then — only under
-  `with_schedules` — installing depth-indexed weights. `Support.lean` holds the proof-side twin
+  `with_policy` — installing depth-indexed weights. `Support.lean` holds the proof-side twin
   lemma for each rewrite.
 - **`Palamedes/Total.lean`** — `TGen`, `Gen.total`, and the combinator-wise totality lemmas that
   stage 4 reconstructs a witness from.

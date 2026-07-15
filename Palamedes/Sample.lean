@@ -29,7 +29,7 @@ propagates straight out. Two consequences:
   but non-a.s.-terminating generator — branching recursion whose mean offspring count does not fall
   below 1 — can fail to terminate when sampled.
 
-  `generator_search … with_schedules` is the practical answer: depth-indexed weight schedules make
+  `generator_search … with_policy` is the practical answer: depth-indexed weight schedules make
   the branching subcritical, which is what took `genWellTyped` from diverging on 54.3% of draws to
   0/3000 (see `PalamedesTest/ScheduleMeasurements.lean`). It is a *measured* fix, not a proved one —
   nothing yet certifies a.s. termination, so a generator that does not ask for schedules, or one
