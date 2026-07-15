@@ -126,6 +126,24 @@ theorem support_pick_flatten_both
       = support (oneOf (x :: (xs ++ y :: ys)) (by simp)) := by
   aesop
 
+/-- Distribute a choice into a `dite`'s right arm: `pick x (dite c t f)` becomes
+`dite c (pick x t) (pick x f)`. Composed with the flatten lemmas, this turns a choice nested under a
+case split (`oneOf [x, dite c (oneOf [..]) ..]`) into a flat choice *inside* each branch — the shape
+`installWeights` can reweight per constructor. Only the non-conditional arm `x` is duplicated; the
+conditional arms `t`, `f` each stay in their one branch. -/
+theorem support_pick_dite_right {α : Type} {P : Prop} [Decidable P]
+    (x : Gen α) (t : P → Gen α) (f : ¬ P → Gen α) :
+    support (pick x (if h : P then t h else f h))
+      = support (if h : P then pick x (t h) else pick x (f h)) := by
+  by_cases h : P <;> simp [h]
+
+/-- Distribute a choice into a `dite`'s left arm. Mirror of `support_pick_dite_right`. -/
+theorem support_pick_dite_left {α : Type} {P : Prop} [Decidable P]
+    (y : Gen α) (t : P → Gen α) (f : ¬ P → Gen α) :
+    support (pick (if h : P then t h else f h) y)
+      = support (if h : P then pick (t h) y else pick (f h) y) := by
+  by_cases h : P <;> simp [h]
+
 theorem support_oneOf_congr {α : Type} {gs gs' : List (Gen α)}
     (hg : gs.map support = gs'.map support) (h : gs ≠ []) (h' : gs' ≠ []) :
     support (oneOf gs h) = support (oneOf gs' h') := by

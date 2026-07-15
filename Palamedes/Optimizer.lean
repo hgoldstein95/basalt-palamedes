@@ -384,8 +384,13 @@ private def installWeights? (policy : SchedulePolicy) (depth? : Option (Expr × 
 `.flatten` collapses `pick` trees into `oneOf` and must run as a separate later pass, because
 `.main`'s bind-distribution rules create and extend `pick` chains (and need the picks intact to
 float assumes out of them); `.installWeights` reweights what `.flatten` leaves, and must run last,
-on the final term. -/
-inductive OptPass | main | flatten | installWeights (policy : SchedulePolicy)
+on the final term.
+
+`.flatten`'s `distribute` flag additionally pushes a choice into a `dite`/`ite` arm
+(`distributeChoiceDite?`) so a choice nested under a case split becomes a flat `oneOf` per branch. It
+is on only under `with_schedules` (i.e. when an `installWeights` pass follows to reweight the result);
+plain flattening leaves it off, so every generator not asking for schedules is byte-identical. -/
+inductive OptPass | main | flatten (distribute : Bool) | installWeights (policy : SchedulePolicy)
 
 /-! ## Proof-carrying traversal -/
 
@@ -417,6 +422,53 @@ private def mkLeafProof (lemmaName : Name) (lhs rhs : Expr) : MetaM Expr := do
   if let some pf ← tryOrient rhsS lhsS then return (← mkEqSymm pf)
   throwError "optimizer: twin lemma `{lemmaName}` matches neither orientation of goal\
     {indentExpr (← mkEq lhsS rhsS)}"
+
+/-- Match `@dite α P inst t f`, returning `(P, inst, t, f)`. -/
+private def matchDite? (e : Expr) : Option (Expr × Expr × Expr × Expr) :=
+  match_expr e with
+  | dite _ P inst t f => some (P, inst, t, f)
+  | _ => none
+
+/-- Flatten-pass distribution of a choice into a `dite` arm, run only under `with_schedules` (when a
+schedule policy will follow). The synthesizer emits a state class's choice as `pick x (dite c t f)`
+when one constructor (`x`) is unconditional and others are gated on a context condition `c`. Left as
+is, `flattenPick?` collapses it to `oneOf [x, dite c (oneOf ..) ..]` — a choice *nested* under the
+`dite`, which `installWeights` cannot reweight per constructor (the inner `oneOf` keeps uniform
+weights). Distributing gives `dite c (pick x t) (pick x f)`; re-flattening each arm then yields a
+flat `oneOf` per branch, which `installWeights` reweights.
+
+**Duplication is bounded on purpose.** Distribution copies the *non-conditional* arm (`x`/`y`) into
+both branches, so it fires only when that arm is a leaf — a branch whose base-functor constructor has
+no recursive child (0 holes). A recursive arm is left nested rather than duplicated: the site stays
+less-well-tuned, never blown up, and support is preserved either way. Requires a depth in scope, so
+`holes` is meaningful and reweighting has somewhere to land; outside a recursion it declines. -/
+private def distributeChoiceDite? (depth : Option (Expr × Name)) (e : Expr) :
+    MetaM (Option (Expr × Expr)) := do
+  let some (_, typeName) := depth | return none
+  let_expr Gen.pick _ x y := e | return none
+  let holes ← baseCtorHoles (typeName.appendAfter "F")
+  -- `dite P inst (fun h => mkT h) (fun h => mkF h)`, preserving the original decidability instance.
+  let mkDite (P inst : Expr) (mkT mkF : Expr → MetaM Expr) : MetaM Expr := do
+    let t' ← withLocalDecl `h .default P fun h => do mkLambdaFVars #[h] (← mkT h)
+    let f' ← withLocalDecl `h .default (.app (.const ``Not []) P) fun h => do
+      mkLambdaFVars #[h] (← mkF h)
+    mkAppOptM ``dite #[none, P, inst, t', f']
+  match matchDite? y with
+  -- `pick x (dite c t f)` with `x` a leaf → `dite c (pick x (t h)) (pick x (f h))`.
+  | some (P, inst, t, f) =>
+    if (← branchHoles holes x) != 0 then return none
+    let e' ← mkDite P inst (fun h => mkAppM ``pick #[x, .app t h])
+                           (fun h => mkAppM ``pick #[x, .app f h])
+    return some (e', ← mkLeafProof ``support_pick_dite_right e e')
+  | none =>
+  match matchDite? x with
+  -- `pick (dite c t f) y` with `y` a leaf → `dite c (pick (t h) y) (pick (f h) y)`.
+  | some (P, inst, t, f) =>
+    if (← branchHoles holes y) != 0 then return none
+    let e' ← mkDite P inst (fun h => mkAppM ``pick #[.app t h, y])
+                           (fun h => mkAppM ``pick #[.app f h, y])
+    return some (e', ← mkLeafProof ``support_pick_dite_left e e')
+  | none => return none
 
 /-- Lift the child proofs `hyps` through a constructor with congruence lemma `lemmaName`, proving
 `support node = support node'`. The lemma's structural arguments are solved by unifying its
@@ -626,7 +678,13 @@ private partial def optimizeBinder (pass : OptPass) (table : Array CongrRule) (d
 private partial def tryHeadRewrite (pass : OptPass) (depth : Depth) (e : Expr) :
     MetaM (Option (Expr × Expr)) := do
   match pass with
-  | .flatten => flattenPick? e
+  | .flatten distribute => do
+    -- Try distribution first: catch `pick x (dite ..)` before `flattenPick?` would bury the choice
+    -- in a nested `oneOf`. On success the result is a `dite` whose arms are `pick`s, which the
+    -- pass's re-optimization then flattens.
+    if distribute then
+      if let some r ← distributeChoiceDite? depth e then return some r
+    flattenPick? e
   | .installWeights policy => installWeights? policy depth e
   | .main =>
     let res? ←
@@ -653,7 +711,9 @@ never correctness — every pass composes a support-preservation proof regardles
 def optimizeGen (e : Expr) (policy? : Option SchedulePolicy := none) : MetaM (Expr × Expr) := do
   let table := getGenCongrRules (← getEnv)
   let r1 ← optimize .main table none e
-  let r2 ← optimize .flatten table none r1.expr
+  -- Distribute choices into `dite` arms only when schedules will follow, so a plain flatten stays
+  -- byte-identical (`distributeChoiceDite?` is the only thing gated on `policy?.isSome`).
+  let r2 ← optimize (.flatten policy?.isSome) table none r1.expr
   let r3? ← policy?.mapM fun policy => optimize (.installWeights policy) table none r2.expr
   let expr := (r3?.getD r2).expr
   let proof ←

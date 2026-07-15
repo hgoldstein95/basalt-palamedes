@@ -57,20 +57,24 @@ info: (toStatGen arbTy) — 3000 draws (seed 0, fuel 10000)
 /-! Before schedules, `genWellTyped` diverged on 54.3% of draws and its median output was a single
 node. The `outcomes` and `size` lines below are the bar it now has to clear.
 
-The `app rate by depth` row in the `measureShape` report further down is the sharper reading. It
-fell at `d2` and below (7.5% → 6.7% at `d2`, 2.2% → 1.1% at `d7`) once `optimizeOneOfChildren?`
-let `installWeights` descend into a `oneOf`'s branches: the choice nested inside the `unit` case's
-`dite` had until then been the one site no schedule could reach, so it kept recursing at a flat
-rate while everything around it decayed. The head-constructor distribution is untouched by that fix
-— it is a *depth* effect, not a top-level one. -/
+The distribution's sharper tell is `var`. The `unit`-goal state's choice is `unit` against a `dite`
+on whether a variable of the goal type is in context, with `var`/`app` chosen inside it. That choice
+is now distributed *through* the `dite` (`distributeChoiceDite?` in the optimizer), so `unit`, `var`,
+and `app` sit in a single flat `oneOf` and each carries its own schedule — `var` and `unit` a leaf
+weight (`1 + 30d`), `app` the constant recursive weight `4`. So `var` is a live option wherever a
+variable is available: the `most common` table splits the old single `app (abs unit unit) unit` into
+a `unit`-bodied and a `var 0`-bodied form, and `distinct` rises (496 → 666). While `var` was buried
+in the `dite` it split the branch 50/50 with `app` at a flat rate; freeing it restores the intended
+per-depth curve (`d2` 6.7% → 7.6%, back to proposal 09's prototype numbers). The head-constructor
+distribution is a depth-0 effect and is untouched. -/
 
 /--
 info: (toStatGen (WellTyped.genWellTyped [])) — 3000 draws (seed 0, fuel 10000)
 
   outcomes    ok 3000 (100.0%)
-  size        mean 5.5   p50 5   p95 12   max 26
-  choices     mean 10.0   p50 9   p95 22   max 54
-  distinct    496 / 3000
+  size        mean 5.6   p50 5   p95 12   max 26
+  choices     mean 10.3   p50 9   p95 23   max 51
+  distinct    666 / 3000
 
   head constructor
     app     80.3%  (2408)
@@ -78,14 +82,14 @@ info: (toStatGen (WellTyped.genWellTyped [])) — 3000 draws (seed 0, fuel 10000
     abs      6.5%   (194)
 
   most common
-     23.3%  (698)  Term.app (Term.abs (Ty.unit) (Term.unit)) (Term.unit)
      13.3%  (398)  Term.unit
-      6.5%  (196)  Term.app (Term.abs (Ty.arrow (Ty.unit) (Ty.unit)) (Term.unit)) (Term.abs (Ty.unit) (Term.…
-      6.2%  (186)  Term.app (Term.abs (Ty.unit) (Term.abs (Ty.unit) (Term.unit))) (Term.unit)
-      4.0%  (120)  Term.abs (Ty.unit) (Term.unit)
+     12.2%  (367)  Term.app (Term.abs (Ty.unit) (Term.unit)) (Term.unit)
+     11.8%  (354)  Term.app (Term.abs (Ty.unit) (Term.var 0)) (Term.unit)
+      3.6%  (108)  Term.app (Term.abs (Ty.arrow (Ty.unit) (Ty.unit)) (Term.unit)) (Term.abs (Ty.unit) (Term.…
+      3.3%   (98)  Term.app (Term.abs (Ty.arrow (Ty.unit) (Ty.unit)) (Term.unit)) (Term.abs (Ty.unit) (Term.…
 
   samples
-    Term.abs (Ty.unit) (Term.unit)
+    Term.abs (Ty.unit) (Term.var 0)
     Term.app (Term.abs (Ty.arrow (Ty.unit) (Ty.arrow (Ty.unit) (Ty.unit))) (Term.unit)) (Term…
     Term.app (Term.abs (Ty.arrow (Ty.unit) (Ty.unit)) (Term.unit)) (Term.abs (Ty.unit) (Term.…
 -/
@@ -168,10 +172,10 @@ def measureShape (g : Palamedes.Gen Term) (draws := 3000) (fuel := 10000) : IO U
 
 /--
 info: ── shape of 3000 completed draws
-   ≥ 1 application      80.5%   [want ≥ 70%]
-   trivial (≤ 2 nodes)  18.5%
-   type-annotation size  mean 3.5   max 33
-   app rate by depth     d0:80.2% d1:17.6% d2:6.7% d3:4.6% d4:2.9% d5:1.7% d6:0.4% d7:1.1%
+   ≥ 1 application      80.9%   [want ≥ 70%]
+   trivial (≤ 2 nodes)  18.2%
+   type-annotation size  mean 3.6   max 32
+   app rate by depth     d0:80.2% d1:17.7% d2:7.6% d3:5.3% d4:3.7% d5:2.8% d6:1.1% d7:0.9%
 -/
 #guard_msgs in
 #eval measureShape (WellTyped.genWellTyped [])
