@@ -1,4 +1,5 @@
 import Palamedes.Gen
+import Palamedes.Failure
 import Basalt.PlausibleGen
 import Plausible
 
@@ -6,56 +7,68 @@ import Plausible
 # Executable sampling for Palamedes generators
 
 A `Palamedes.Gen α` is a thin wrapper around a polymorphic Basalt generator that may also fail
-(`∀ {G} [Gen G] [Fail G], G α` — the `Fail` is what distinguishes it from `TGen`). Basalt provides a
-`Gen Plausible.Gen` instance (`Basalt.PlausibleGen`), so we sample by instantiating the generator at
-`Plausible.Gen` and running it with Plausible's sampler; the `Fail Plausible.Gen` instance below
-supplies the other half.
+(`∀ {G} [Gen G] [Fail G], G α` — the `Fail` is what distinguishes it from `TGen`). We sample by
+interpreting it through the **explicit `Option` layer** (`Gen.totalize`, `Palamedes/Failure.lean`):
+`totalize g` at `Plausible.Gen` is a `Plausible.Gen (Option α)` in which a failed `assume` is an
+ordinary `none` value. This is the *same* failure the `SPMF`/`massSome` semantics reasons about — one
+uniform failure story (`Fail (OptionT G) := pure none`) across proofs and sampling — rather than a
+separate `throw`-based `Fail Plausible.Gen`.
 
-The filtering combinators (`Gen.assume`/`Gen.empty`) bottom out at the `Fail` capability's `fail`.
-The `Fail Plausible.Gen` instance below interprets that as a thrown `GenError` (via Plausible's
-`MonadExcept`) — a *computable* failure, so filtered generators can be sampled.
+## Retry on failure (global restart)
 
-## Known limitation: no fuel or backtracking (deferred)
+A draw that yields `none` is a failed `assume`. The sampler **retries on failure**: it redraws the
+whole value (a global restart, in the sense of Basalt's `SPMF.retry`) up to `maxAttempts`
+times. We reuse Plausible's own `Gen.runUntil` for the loop, surfacing a `none` as a `GenError` only at
+the boundary (`toPlausible`) so `runUntil` can drive it — the `throw` is a retry-loop mechanism, not
+the generator's notion of failure. So a generator synthesized with `allow_partial` — one that contains
+a genuinely failing `assume`, e.g. `genAVL` or `genRBT` — *samples* instead of failing on the first
+failing path. Only if **every** attempt fails does `sample` throw "out of attempts"; `sample?` returns
+`none` in that case instead.
 
-This is a deliberately minimal sampler: it does **not** bound recursion depth or retry on failure —
-Basalt's `Plausible.Gen` interpretation of `pick` commits to one branch, and a thrown `Fail`
-propagates straight out. Two consequences:
+The acceptance rate (empirical `massSome`) is what governs how many attempts a draw needs; it is
+reported directly by `#genstats` (the `ok` vs `failed` split), so it is a *measurable tuning
+objective*, not a sampler-design problem. Deep filtering regimes (`genRBT` at height ≥ 3, `genAVL` at
+height ≥ 5) have vanishing acceptance and will exhaust `maxAttempts` — that is intrinsic to the
+generator, not the sampler, and it is *reported* (a thrown "out of attempts" / a `none`) rather than a
+silent hang.
 
-* **Filtering generators can fail outright.** A generator synthesized with `allow_partial` (so it
-  contains a genuinely failing `assume`) throws `GenError` whenever a random path hits the failing
-  branch, with no backtracking to recover (e.g. `genAVL`, `genRBT`).
-* **Recursion can diverge.** `total` here means *assume-free*, not *terminating* (almost-sure
-  termination, `SPMF.IsPMF`, is a separate property the synthesizer does not yet establish). A total
-  but non-a.s.-terminating generator — branching recursion whose mean offspring count does not fall
-  below 1 — can fail to terminate when sampled.
+## Remaining limitation: divergence
 
-  `generator_search … with_policy` is the practical answer: depth-indexed weight schedules make
-  the branching subcritical, which is what took `genWellTyped` from diverging on 54.3% of draws to
-  0/3000 (see `PalamedesTest/ScheduleMeasurements.lean`). It is a *measured* fix, not a proved one —
-  nothing yet certifies a.s. termination, so a generator that does not ask for schedules, or one
-  whose schedule is badly tuned, can still hang here.
-
-Generators that are both non-filtering and a.s.-terminating (e.g. `genBST`, `genSortedBetween`,
-`genWellScoped`) sample fine. A size-bounded / backtracking sampler is left as future work.
+Retry recovers from *failure* (`none`), not *divergence*. `total` here means *assume-free*, not
+almost-sure termination; a total but non-a.s.-terminating generator can still hang when sampled.
+`generator_search … with_policy` is the practical answer — depth-indexed schedules took
+`genWellTyped` from diverging on 54.3% of draws to 0/3000 (see `PalamedesTest/ScheduleMeasurements`).
+It is a *measured* fix, not a proved one; nothing yet certifies a.s. termination.
 -/
 
 namespace Palamedes
 
 open Gen
 
-/-- Computable failure for the executable interpretation: a thrown generation error. (Note that the
-sampler does not catch it — see the module docstring's "Known limitation".) -/
-instance : Fail Plausible.Gen := ⟨throw Plausible.Gen.genericFailure⟩
+/-- Interpret `g` at Plausible's `Gen` monad through the explicit `Option` layer: a failed `assume`
+  becomes a `none` value (matching the `massSome` semantics), which we surface as a `GenError` at
+  this boundary only so that `Gen.runUntil` can retry it. -/
+def toPlausible (g : Gen α) : Plausible.Gen α := do
+  match ← (totalize g : Plausible.Gen (Option α)) with
+  | some a => return a
+  | none   => throw Plausible.Gen.genericFailure
 
-/-- Interpret `g` at Plausible's `Gen` monad. -/
-def toPlausible (g : Gen α) : Plausible.Gen α := g.run
+/-- Draw a single value from `g`, **retrying on failure** up to `maxAttempts` times (a global
+  restart via Plausible's `Gen.runUntil`). A filtering generator whose `assume` fails is redrawn
+  rather than failing; only if all `maxAttempts` draws fail does this throw "out of attempts". -/
+def sample (g : Gen α) (size : Nat := 100) (maxAttempts : Nat := 1000) : IO α :=
+  Plausible.Gen.runUntil (some maxAttempts) (toPlausible g) size
 
-/-- Draw a single value from `g` at the given size. -/
-def sample (g : Gen α) (size : Nat := 100) : IO α :=
-  Plausible.Gen.run (toPlausible g) size
+/-- Like `sample`, but returns `none` when all `maxAttempts` draws fail rather than throwing. The
+  `some`/`none` rate over many draws is an empirical acceptance rate (`massSome`). -/
+def sample? (g : Gen α) (size : Nat := 100) (maxAttempts : Nat := 1000) : IO (Option α) := do
+  try
+    return some (← sample g size maxAttempts)
+  catch _ =>
+    return none
 
-/-- Draw `n` values from `g`. -/
-def sampleN (n : Nat) (g : Gen α) (size : Nat := 100) : IO (List α) :=
-  (List.replicate n ()).mapM (fun _ => sample g size)
+/-- Draw `n` values from `g`, each with retry. -/
+def sampleN (n : Nat) (g : Gen α) (size : Nat := 100) (maxAttempts : Nat := 1000) : IO (List α) :=
+  (List.replicate n ()).mapM (fun _ => sample g size maxAttempts)
 
 end Palamedes

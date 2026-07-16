@@ -39,22 +39,23 @@ namespace Palamedes
 open Lean.Order
 
 /-- The failure capability: a generator monad with a designated "produces nothing" element. This is
-deliberately *separate* from Basalt's base `Gen` class so that generators which never fail can be
-typed without it (see `TGen`). For `SPMF` the failure is the bottom distribution `⊥` (mass 0); for an
-executable interpretation it is a generation failure / local backtracking point. -/
+  deliberately *separate* from Basalt's base `Gen` class so that generators which never fail can be
+  typed without it (see `TGen`). For `SPMF` the failure is the bottom distribution `⊥` (mass 0); the
+  executable interpretations reflect it into an explicit `none` through the `OptionT` layer
+  (`Palamedes/Failure.lean`), which the sampler then retries. -/
 class Fail (G : Type → Type) where
   fail : ∀ {α}, G α
 
 /-- A Palamedes generator wraps a Basalt generator that is polymorphic over the choice of generator
-monad — any `_root_.Gen G` that also supports failure (`Fail G`). `g.run` is the underlying Basalt
-generator. -/
+  monad — any `_root_.Gen G` that also supports failure (`Fail G`). `g.run` is the underlying Basalt
+  generator. -/
 structure Gen (α : Type) : Type 1 where
   run : ∀ {G : Type → Type} [_root_.Gen G] [Fail G], G α
 
 /-- A *failure-free* Palamedes generator: polymorphic over every `_root_.Gen G`, with **no** `Fail`
-requirement. A `TGen` cannot mention `assume`/`empty`, so it is "assume-free" by construction. It
-coerces into `Gen` (forgetting that it never needed `Fail`); `Palamedes.Gen.total` is defined as
-"factors through a `TGen`." -/
+  requirement. A `TGen` cannot mention `assume`/`empty`, so it is "assume-free" by construction. It
+  coerces into `Gen` (forgetting that it never needed `Fail`); `Palamedes.Gen.total` is defined as
+  "factors through a `TGen`." -/
 structure TGen (α : Type) : Type 1 where
   run : ∀ {G : Type → Type} [_root_.Gen G], G α
 
@@ -150,17 +151,19 @@ def delabFrequency : Delab := do
 end Delab
 
 /-- The empty generator: produces nothing. It is the `Fail` capability's `fail`; in `SPMF` that is
-`⊥` (mass 0), and in an executable interpretation it is a generation failure, which is what makes
-`assume`'s `else` branch act as a local backtracking point. It is computable whenever the chosen
-interpretation's `Fail` instance is. -/
+  `⊥` (mass 0), and in an executable interpretation it is an explicit `none` (via `totalize`,
+  `Palamedes/Failure.lean`), which the sampler treats as a failed draw to retry. It is computable
+  whenever the chosen interpretation's `Fail` instance is. -/
 def empty : Gen α := ⟨fun {_G} _ _ => Fail.fail⟩
 
 /-- A guarded generator: `f` when `b` holds, `empty` otherwise — so the failing branch contributes
-nothing to the support. This is how a `Bool`-valued side condition is woven into a generator.
+  nothing to the support. This is how a `Bool`-valued side condition is woven into a generator.
 
-Operationally it is a *filter*, not a backtracking point: the sampler has no backtracking, so a
-failing `assume` throws (`Palamedes/Sample.lean`). An `assume` the optimizer could not discharge is
-therefore a real filter, which is what `allow_partial` exists to permit. -/
+  Operationally it is a *filter*, not a backtracking point: on a failing `assume` the sampler discards
+  the whole draw and redraws — a global restart (`Palamedes/Sample.lean`) — rather than backtracking to
+  the innermost choice. An `assume` the optimizer could not discharge is therefore a real filter, which
+  is what `allow_partial` exists to permit; its acceptance rate (`massSome`) governs the sampling
+  cost. -/
 def assume (b : Bool) (f : b → Gen α) : Gen α :=
   if h : b then f h else empty
 

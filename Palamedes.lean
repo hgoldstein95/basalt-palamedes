@@ -6,3 +6,4 @@ import Palamedes.Synthesizer
 import Palamedes.Sample
 import Palamedes.Stats
 import Palamedes.Derive
+import Palamedes.Failure
