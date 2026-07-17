@@ -3,9 +3,9 @@ import Lean
 /-!
 # The `unfold_strategy` registry
 
-The per-datatype data that `normalize_and_apply_unfold` used to hard-code — which `s_unfold` to
-apply, and which fold/coercion/merge/conversion lemmas to normalize with — lives in a persistent
-environment extension keyed by the datatype name. `derive_palamedes` registers the standard entry
+The per-datatype data that `normalize_and_apply_unfold` needs — which `s_unfold` to apply, and which
+fold/coercion/merge/conversion lemmas to normalize with — lives in a persistent environment
+extension keyed by the datatype name. `derive_palamedes` registers the standard entry
 for every type it derives, so a new datatype needs **no synthesizer edits** to participate in unfold
 synthesis. (Totality is the sibling registry: `X.total_unfold` is tagged `@[total]` and read by the
 `totality` tactic — see `Palamedes.RuleSets`.)

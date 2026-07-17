@@ -14,7 +14,7 @@ open Gen
 
 `optimizeGen` optimizes a generator, ideally with the goal of bubbling any `assume` statements up to
 the nearest choice point and removing unnecessary backtracking. The optimizer is
-correct-by-construction and builds a proof of corectness as it goes.
+correct-by-construction and builds a proof of correctness as it goes.
 -/
 
 /-- A rewrite result: the rewritten expression `expr` and the twin `support_*` lemma that justifies
@@ -683,7 +683,7 @@ private partial def optimizeChildren (pass : OptPass) (table : Array CongrRule) 
   let some (_, congrName, diff) := table.find? (·.1 == head)
     | do
         -- Compiler-generated eliminators (matchers, recursors) carry Gen-valued arms but are
-        -- descended into structurally by neither the old nor the new optimizer; don't flag them.
+        -- not descended into structurally; don't flag them.
         let isRec := match (← getEnv).find? head with
           | some (.recInfo _) => true
           | _ => false

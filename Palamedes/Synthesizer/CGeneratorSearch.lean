@@ -143,7 +143,7 @@ macro "true_guard_unify" : tactic =>
       | exact congrArg (· && _) (congrArg (· && _) (Bool.true_and _).symm)
       | exact congrArg (· && _) (congrArg (· && _) (congrArg (· && _) (Bool.true_and _).symm)))
 
-/- Unifier tactic for handling the covert_to_accuM sub-goals.  -/
+/- Unifier tactic for handling the convert_to_accuM sub-goals. -/
 macro "accu_unify" : tactic =>
   `(tactic|
     (intros; first
@@ -323,8 +323,7 @@ private def caseSplitWith (goal : MVarId) (scrut : Expr) (lemmaName : Name) :
 
 /-- For `CorrectGen (fun a => _ ∨ _)` goal it offers one rule application per candidate scrutinee — each
     local hypothesis that occurs in the predicate and whose type is a supported datatype — and lets
-    Aesop's own search pick the one whose case subgoals close. This replaced a brute-force
-    enumeration over the local context. -/
+    Aesop's own search pick the one whose case subgoals close. -/
 @[aesop unsafe 5% (rule_sets := [synthesis]) tactic]
 def caseSplitRuleTac : RuleTac := fun input => do
   input.goal.withContext do
@@ -390,8 +389,8 @@ add_aesop_rules 99% (rule_sets := [synthesis]) [
   (by goal_is_eq; apply convert (by norm_for_elements) (s_elements_partial _)),
 ]
 
--- The per-datatype/per-scrutinee `s_case*` enumeration that used to live here is now the single
--- `caseSplitRuleTac` rule (see section `CaseSplit`), registered via `@[aesop]`.
+-- Case-split is handled by the single `caseSplitRuleTac` rule (see section `CaseSplit`),
+-- registered via `@[aesop]`.
 
 end AesopRules
 

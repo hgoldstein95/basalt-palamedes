@@ -564,7 +564,7 @@ def genSupportUnfold (ctx : Ctx) : CommandElabM Unit := do
     let tv := gid "tv"
     let ht := gid "ht"
     let hw := gid "hw"
-    -- forward direction: rintro ⟨tv, ht, hw⟩; cases tv; per-constructor case tactics
+    -- forward direction
     let caseTacs ← ctx.ctors.mapM fun c' => do
       if c'.short != c.short then
         let tac ← `(tactic|

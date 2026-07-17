@@ -1,11 +1,11 @@
 import Palamedes.Data.Tree
 
 /-!
-# Spike: a *generic* `unfoldGo` through `partial_fixpoint` (notes §4.2/§7)
+# Spike: a *generic* `unfoldGo` through `partial_fixpoint`
 
-The one go/no-go question for the Stage-3 generic theory in `unfold-boilerplate-notes.md` was:
-can `partial_fixpoint` accept an anamorphism written **once**, over an abstract base functor,
-given Basalt's `Gen` class? Answer: **yes**.
+The one go/no-go question for a generic unfold theory was: can `partial_fixpoint` accept an
+anamorphism written **once**, over an abstract base functor, given Basalt's `Gen` class?
+Answer: **yes**.
 
 The recipe:
 * abstract the base functor by a class providing a monadic traversal `mapM` of the recursive
@@ -39,8 +39,8 @@ Since the script does not mention the constructors, `derive_palamedes` can emit 
 any datatype; no per-shape proof generation is needed for this obligation.
 
 This module is a witness, not (yet) library code: today's `derive_palamedes` emits concrete
-per-type `unfoldGo`s. The generic route becomes load-bearing in Stage 3, when `support_unfold`
-and the fusion laws are proved once over this interface instead of once per type.
+per-type `unfoldGo`s. The generic route becomes load-bearing once `support_unfold` and the fusion
+laws are proved once over this interface instead of once per type.
 -/
 
 namespace GenericUnfold

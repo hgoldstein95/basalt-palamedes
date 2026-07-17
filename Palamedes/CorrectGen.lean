@@ -59,8 +59,8 @@ def duncurry
   fun f p => f p.1 p.2
 
 /- Tactic-generated proof terms can wrap a `CorrectGen` in `id`, which blocks the `_val`
-rewrites (e.g. `(id (convert h g)).val`). `id` is reducible, so the old delta-based
-extraction removed it implicitly; the simp set must do so explicitly. -/
+rewrites (e.g. `(id (convert h g)).val`). `id` is reducible, but the `extract` simp set must
+remove it explicitly. -/
 attribute [extract] id_eq
 
 end CorrectGen
