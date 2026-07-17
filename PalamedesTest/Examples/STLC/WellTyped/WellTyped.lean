@@ -1,4 +1,5 @@
 import Palamedes.Synthesizer
+import Palamedes.DeriveTuning
 
 open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
 
@@ -28,11 +29,13 @@ def isWellTyped (Γ : List Ty) (t : Term) : Prop :=
   ∃ (τ : Ty), getType t Γ = τ
 
 attribute [local simp] Ty.as_or Ty.deforest_eq in
-/-- The well-typed-term generator, and the one in the corpus that *needs* `with_policy`: `app`
-invents its argument type and recurses on `σ → τ` for a freshly generated `σ`, so the seed grows
-rather than shrinks. Under uniform weights the recursion is supercritical and diverges; depth-indexed
-weights push the mean offspring below 1 as it deepens, forcing closure. -/
+/-- The well-typed-term generator: `app` invents its argument type and recurses on `σ → τ` for a
+freshly generated `σ`, so the seed *grows*. Synthesized uniform it is supercritical and diverges when
+sampled directly; the usable generator is `genWellTyped.tuned (SchedulePolicy.stlc.materialize
+genWellTyped.sites)`, whose depth-decaying weights force closure. -/
 def genWellTyped (Γ : List Ty) : Gen Term := by
-  generator_search (fun t => isWellTyped Γ t) with_policy SchedulePolicy.stlc
+  generator_search (fun t => isWellTyped Γ t)
+
+derive_tuning genWellTyped
 
 end WellTyped

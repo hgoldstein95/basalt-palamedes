@@ -36,7 +36,7 @@ silent hang.
 
 Retry recovers from *failure* (`none`), not *divergence*. `total` here means *assume-free*, not
 almost-sure termination; a total but non-a.s.-terminating generator can still hang when sampled.
-`generator_search … with_policy` is the practical answer — depth-indexed schedules took
+`derive_tuning` + a depth-decaying `Tuning` is the practical answer — depth-indexed schedules took
 `genWellTyped` from diverging on 54.3% of draws to 0/3000 (see `PalamedesTest/ScheduleMeasurements`).
 It is a *measured* fix, not a proved one; nothing yet certifies a.s. termination.
 -/

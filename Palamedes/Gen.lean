@@ -117,8 +117,8 @@ def natLit? (e : Expr) : Option Nat :=
     | _ => none
 
 /-- Is `w` positive for *every* value of the variables in it, by inspection? A positive numeral, a
-sum with a positive summand, or a product of positives. Weights are not always closed: the affine
-schedules `a + b * d` that `installWeights` emits mention the recursion's depth, so a delaborator
+sum with a positive summand, or a product of positives. Weights are not always closed: a hand-written
+depth-indexed `frequency` (e.g. `arbTy`'s `2 + 3 * d`) mentions the recursion's depth, so a delaborator
 that could only add up numerals would give up on precisely the generators that need weights. -/
 private partial def weightPos (w : Expr) : Bool :=
   match natLit? w with

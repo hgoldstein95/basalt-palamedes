@@ -25,12 +25,12 @@ layer that `Palamedes/Data/` currently writes by hand:
 * `X.total_unfold`, tagged into the `totality` aesop rule set;
 * `X.coerce_to_fold` with per-constructor autoparam hypotheses.
 
-The fusion layer (notes §5 Stage 3) is also generated: `merge_accuM` (banana split in the
+The fusion layer is also generated: `merge_accuM` (banana split in the
 `Option` monad), the `fold_accu_Option_{basic,true,function,function_true}` conversion family
 (generalized per constructor: one `g_c`/`st_c{j}` and one shape hypothesis per recursive
 constructor, subsuming the hand-written per-type variants), and the `CorrectGen` combinator
 `s_unfold` with its `@[extract]` `s_unfold_val`. Not generated: `fold_accu_cond` (a search
-heuristic's normal form, per notes §2.1) and `toString`.
+heuristic's normal form) and `toString`.
 
 Restrictions (rejected with an error): mutual, nested, and indexed inductives; non-`Type`
 parameters; dependent constructor fields. Universe-polymorphic inductives (e.g. core `List`)
@@ -1382,9 +1382,9 @@ def genSUnfold (ctx : Ctx) : CommandElabM Unit := do
         `(pure ($(c.fCtor) $mix*))
     `(matchAltExpr| | $pat:term => $rhs:term)
   -- The synthesized step ignores the depth — nothing the search produces is depth-dependent — but
-  -- the binder must be here, and must be binder 0, for the optimizer's `installWeights` pass to
+  -- the binder must be here, and must be binder 0, for the optimizer's `installTuning` pass to
   -- find a depth to schedule this step's weights against. It is named `d` rather than `_d` even
-  -- though it starts out unused: `installWeights` puts it in the weights of the very generators
+  -- though it starts out unused: `installTuning` puts it in the weights of the very generators
   -- one reads, and a binder that renames itself depending on a later pass is worse than one that
   -- is occasionally unused.
   let stepLam ← `(fun $dv $p => ($g (($p).1) (($p).2)).val >>= fun $tv =>

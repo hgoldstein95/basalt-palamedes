@@ -129,7 +129,7 @@ theorem support_pick_flatten_both
 /-- Distribute a choice into a `dite`'s right arm: `pick x (dite c t f)` becomes
 `dite c (pick x t) (pick x f)`. Composed with the flatten lemmas, this turns a choice nested under a
 case split (`oneOf [x, dite c (oneOf [..]) ..]`) into a flat choice *inside* each branch — the shape
-`installWeights` can reweight per constructor. Only the non-conditional arm `x` is duplicated; the
+`installTuning` can address per constructor. Only the non-conditional arm `x` is duplicated; the
 conditional arms `t`, `f` each stay in their one branch. -/
 theorem support_pick_dite_right {α : Type} {P : Prop} [Decidable P]
     (x : Gen α) (t : P → Gen α) (f : ¬ P → Gen α) :
@@ -162,10 +162,6 @@ theorem support_oneOf_congr {α : Type} {gs gs' : List (Gen α)}
     obtain ⟨g', hmem', he⟩ := List.mem_map.mp hs
     exact ⟨g', hmem', he ▸ ha⟩
 
-/-- An affine schedule `a + b·d` is positive at every depth whenever its base `a` is. -/
-theorem weight_pos (a b d : Nat) (ha : 0 < a) : 0 < a + b * d :=
-  Nat.lt_of_lt_of_le ha (Nat.le_add_right _ _)
-
 /-- `frequency`'s side-goal, which needs only the *first* weight to be positive (unlike
 `support_oneOf_reweight` below, which needs all of them). -/
 theorem sum_fst_pos_cons (α : Type) (w : Nat) (g : Gen α) (gs : List (Nat × Gen α)) (hw : 0 < w) :
@@ -182,7 +178,7 @@ theorem allPos_cons (α : Type) (w : Nat) (g : Gen α) (gs : List (Nat × Gen α
   · cases he; exact hw
   · exact hgs p he
 
-/-- The correctness lemma for the optimizer's `installWeights` pass: installing all-positive weights
+/-- The correctness lemma for the optimizer's `installTuning` pass: installing all-positive weights
 on a uniform `oneOf` preserves its support exactly, so `support = P` survives reweighting. -/
 theorem support_oneOf_reweight (α : Type) (gs : List (Gen α)) (gs' : List (Nat × Gen α))
     (hsnd : gs'.map Prod.snd = gs) (hpos : ∀ p ∈ gs', 0 < p.1) (h) (h') :

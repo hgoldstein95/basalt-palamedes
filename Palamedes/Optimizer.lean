@@ -238,27 +238,36 @@ private def flattenPick? (e : Expr) : MetaM (Option (Expr × Expr)) := do
     return some (e', proof)
   | _ => return none
 
-/-! ## `installWeights` — depth-indexed weighting
+/-! ## Depth-indexed weighting: `SchedulePolicy` and `installTuning`
 
-The flatten pass leaves every k-way choice as a uniform `oneOf`. `installWeights` replaces those
-constant weights with affine schedules `wⱼ(d) = aⱼ + bⱼ · d`, read at the recursion's depth, so the
-mean offspring starts above 1 near the root and falls below 1 with depth.
+A schedule is affine in the recursion depth, `wⱼ(d) = aⱼ + bⱼ · d`, so mean offspring can start above
+1 near the root and fall below 1 with depth. Decay is base-weight *growth*, never recursive-weight
+shrinkage: a weight of `0` would drop its branch from the support, so every weight stays `≥ 1` and a
+deep recursion becomes rarer, never impossible. -/
 
-It runs *after* the other passes because those move terms (bind distributes through `pick`; assumes
-float up), and a weight mentioning the depth binder can only be placed once the shape is final.
-
-Decay is base-weight *growth*, never recursive-weight shrinkage: weights are `Nat`s, and a weight
-reaching `0` would drop its branch from the support. Growing the other weights drives `p_rec → 0`
-with every weight still `≥ 1`, so a deep recursion becomes rarer, never impossible. -/
-
-/-- An affine weight schedule `d ↦ base + growth · d`. Invariant: `base ≥ 1`. -/
+/-- An affine weight schedule `d ↦ base + growth · d`. Invariant: `base ≥ 1`. The `(base, growth)`
+pair is exactly one entry of a Basalt `Tuning`; a `SchedulePolicy` produces these per branch and
+`SchedulePolicy.materialize` lays them out into a `Tuning`. -/
 structure Schedule where
   base : Nat
   growth : Nat
   deriving Repr, Inhabited
 
-/-- Is this schedule the uniform weight `1` that the flatten pass already emits? -/
-def Schedule.isUniform (s : Schedule) : Bool := s.base == 1 && s.growth == 0
+/-- A `frequency` site collected by `installTuning`; the internal form of Basalt's `Site`. `offset` is
+the site's first index into the flat `Tuning.schedules` array. -/
+structure TuningSiteInfo where
+  name : Name
+  offset : Nat
+  arity : Nat
+  holes : Array Nat
+  deriving Inhabited
+
+/-- Threaded state for the `installTuning` pass: the next free offset into `Tuning.schedules` and the
+sites collected so far, in assignment order. -/
+structure TuningState where
+  nextOffset : Nat := 0
+  sites : Array TuningSiteInfo := #[]
+  deriving Inhabited
 
 /-- How to weight a branch, as a function of how many recursive children it has.
 
@@ -287,8 +296,7 @@ def SchedulePolicy.decayBy (root rate : Nat) : SchedulePolicy where
 /-- Slow decay: the recursion stays live several levels down, giving deeper and larger values. -/
 def SchedulePolicy.gentle : SchedulePolicy := .decayBy 3 4
 
-/-- The general-purpose default. A middle decay rate: supercritical at the root, closed within a few
-levels. What `with_policy` uses when no policy is named. -/
+/-- A general-purpose middle decay rate: supercritical at the root, closed within a few levels. -/
 def SchedulePolicy.moderate : SchedulePolicy := .decayBy 3 12
 
 /-- Fast decay: the recursion closes almost immediately, giving shallow values that terminate hard. -/
@@ -300,13 +308,26 @@ to* the others, never toward zero.
 
 The coefficients are hand-tuned on `genWellTyped`, and its distribution is pinned in
 `ScheduleMeasurements.lean`; this is *not* a good general default (it encodes an arity preference
-specific to STLC's term type). Reach for it with `with_policy SchedulePolicy.stlc`. Eventually a
-drift solve should compute coefficients like these per site. -/
+specific to STLC's term type). Materialize it against a generator's sites with
+`SchedulePolicy.stlc.materialize gen.sites` and pass the result to `gen.tuned` (see `derive_tuning`).
+Eventually a drift solve should compute coefficients like these per site. -/
 def SchedulePolicy.stlc : SchedulePolicy where
   weight
     | 0 => { base := 1, growth := 30 }
     | 1 => { base := 1, growth := 14 }
     | _ => { base := 4, growth := 0 }
+
+/-- Lay a `SchedulePolicy` over a site table into a `Tuning`: each branch's `(base, growth)` is
+`policy.weight` of its recursive-child count (`Site.holes`), placed at flat index `offset + j`. Turns
+a coarse arity-keyed policy into the per-site `Tuning` a `.tuned` generator reads. -/
+def SchedulePolicy.materialize (policy : SchedulePolicy) (sites : Array Site) : Tuning := Id.run do
+  let total := sites.foldl (init := 0) fun acc s => max acc (s.offset + s.arity)
+  let mut arr : Array (Nat × Nat) := Array.replicate total (1, 0)
+  for s in sites do
+    for j in [0:s.arity] do
+      let sched := policy.weight (s.holes.getD j 0)
+      arr := arr.set! (s.offset + j) (sched.base, sched.growth)
+  return ⟨arr⟩
 
 /-- Recursive-field counts for each constructor of a base functor `XF`: a field is a hole when its
 type is the carrier (the last parameter of `XF`). -/
@@ -357,70 +378,82 @@ partial def branchHoles (holes : Std.HashMap Name Nat) (e : Expr) : MetaM Nat :=
       | _ => return acc
   | _ => return 0
 
-/-- Build the weight expression `a + b * d`. -/
-private def mkWeight (s : Schedule) (depth : Expr) : MetaM Expr := do
-  mkAppM ``HAdd.hAdd #[mkNatLit s.base, ← mkAppM ``HMul.hMul #[mkNatLit s.growth, depth]]
+/-! ### `installTuning` — `θ`-threaded reweighting
 
-/-- `∀ p ∈ gs', 0 < p.1` for a literal weighted branch list whose weights are all `a + b*d` with
-`a ≥ 1` — built by folding `allPos_cons`, one link per branch. -/
-private def mkAllPos (α : Expr) (pairs : List (Expr × Expr)) (scheds : List Schedule)
+Rewrites each uniform `oneOf` to a `frequency` whose weights read a runtime `θ : Tuning`
+(`Tuning.weight θ (offset+j) d`), recording each site's block layout as a `TuningSiteInfo`. Positivity
+is `Tuning.weight_pos`, which holds for every `θ`, so the pass is total in `θ`. -/
+
+private def mkTunedWeight (θ : Expr) (idx : Nat) (depth : Expr) : MetaM Expr :=
+  mkAppM ``Tuning.weight #[θ, mkNatLit idx, depth]
+
+private def mkTunedWeightPos (θ : Expr) (idx : Nat) (depth : Expr) : MetaM Expr :=
+  mkAppM ``Tuning.weight_pos #[θ, mkNatLit idx, depth]
+
+/-- `∀ p ∈ gs', 0 < p.1` for a `θ`-weighted branch list, folded link-by-link from `Tuning.weight_pos`
+at each branch's flat index. -/
+private def mkAllPosTuning (α θ : Expr) (pairs : List (Expr × Expr)) (idxs : List Nat)
     (depth : Expr) : MetaM Expr := do
-  match pairs, scheds with
+  match pairs, idxs with
   | [], _ => mkAppM ``allPos_nil #[α]
-  | (w, g) :: ps, s :: ss =>
+  | (w, g) :: ps, i :: is =>
     let tl ← mkListLit (← mkAppM ``Prod #[mkConst ``Nat, ← mkAppM ``Gen #[α]])
       (← ps.mapM fun (w, g) => mkAppM ``Prod.mk #[w, g])
-    let ha ← mkDecideProof (← mkAppM ``LT.lt #[mkNatLit 0, mkNatLit s.base])
-    let hw ← mkAppM ``weight_pos #[mkNatLit s.base, mkNatLit s.growth, depth, ha]
-    mkAppM ``allPos_cons #[α, w, g, tl, hw, ← mkAllPos α ps ss depth]
-  | _, _ => throwError "installWeights: branch/schedule length mismatch"
+    let hw ← mkTunedWeightPos θ i depth
+    mkAppM ``allPos_cons #[α, w, g, tl, hw, ← mkAllPosTuning α θ ps is depth]
+  | _, _ => throwError "installTuning: branch/index length mismatch"
 
-/-- The `installWeights` head rewrite: a uniform `oneOf` under a depth binder becomes a `frequency`
-whose weights are each branch's schedule read at that depth, paired with its support-preservation
-proof. Outside a recursion there is no depth to schedule against, and nothing happens. -/
-private def installWeights? (policy : SchedulePolicy) (depth? : Option (Expr × Name)) (e : Expr) :
-    MetaM (Option (Expr × Expr)) := do
-  let some (depth, typeName) := depth? | return none
+/-- The head rewrite: a uniform `oneOf` becomes a `frequency` weighted by `Tuning.weight θ (offset+j)
+d`, with its support-preservation proof, appending a `TuningSiteInfo`. Fires on every literal `oneOf`
+(one outside a recursion reads its weights at depth `0`). Children rewrite before their parent, so
+offsets run innermost-first — consistent because the one pass both assigns and records them. -/
+private def installTuning? (θ : Expr) (st : IO.Ref TuningState) (declName : Name)
+    (depth? : Option (Expr × Name)) (e : Expr) : MetaM (Option (Expr × Expr)) := do
   match_expr e with
   | Gen.oneOf α gs h => do
     let some elems := listLitElems? gs | return none
     if elems.isEmpty then return none
-    let holes ← baseCtorHoles (typeName.appendAfter "F")
-    let hs ← elems.mapM (branchHoles holes)
-    let scheds := hs.map policy.weight
-    -- A schedule the same for every branch is the uniform choice the `oneOf` already makes, so
-    -- installing it would only add noise. (This is what happens to a choice that is not between
-    -- constructors: every branch has the same hole count.)
-    if scheds.all Schedule.isUniform then return none
-    if hs.all (· == hs.head!) then return none
-    let ws ← scheds.mapM (mkWeight · depth)
+    -- depth expr (or `0` outside a recursion) and per-branch recursive-child counts
+    let (depth, holes) ← match depth? with
+      | some (d, typeName) => do
+          let hm ← baseCtorHoles (typeName.appendAfter "F")
+          let hs ← elems.mapM (branchHoles hm)
+          pure (d, hs.toArray)
+      | none => pure (mkNatLit 0, Array.replicate elems.length 0)
+    let cur ← st.get
+    let offset := cur.nextOffset
+    let arity := elems.length
+    let siteName := declName ++ Name.mkSimple s!"site{cur.sites.size}"
+    let idxs := (List.range arity).map (offset + ·)
+    let ws ← idxs.mapM (mkTunedWeight θ · depth)
     let pairs := ws.zip elems
     let pairExprs ← pairs.mapM fun (w, g) => mkAppM ``Prod.mk #[w, g]
-    let gs' ← mkListLit (← mkAppM ``Prod #[mkConst ``Nat, ← mkAppM ``Gen #[α]]) pairExprs
+    let prodTy ← mkAppM ``Prod #[mkConst ``Nat, ← mkAppM ``Gen #[α]]
+    let gs' ← mkListLit prodTy pairExprs
     -- the `frequency` side-goal `0 < Σ wⱼ(d)`, from the first weight's positivity alone
-    let s0 := scheds.head!
-    let ha ← mkDecideProof (← mkAppM ``LT.lt #[mkNatLit 0, mkNatLit s0.base])
-    let hw ← mkAppM ``weight_pos #[mkNatLit s0.base, mkNatLit s0.growth, depth, ha]
-    let tl ← mkListLit (← mkAppM ``Prod #[mkConst ``Nat, ← mkAppM ``Gen #[α]]) pairExprs.tail!
-    let h' ← mkAppM ``sum_fst_pos_cons #[α, ws.head!, elems.head!, tl, hw]
+    let hw0 ← mkTunedWeightPos θ offset depth
+    let tl ← mkListLit prodTy pairExprs.tail!
+    let h' ← mkAppM ``sum_fst_pos_cons #[α, ws.head!, elems.head!, tl, hw0]
     let e' ← mkAppM ``Gen.frequency #[gs', h']
-    let hpos ← mkAllPos α pairs scheds depth
+    let hpos ← mkAllPosTuning α θ pairs idxs depth
     let hsnd ← mkEqRefl gs
     let proof ← mkAppM ``support_oneOf_reweight #[α, gs, gs', hsnd, hpos, h, h']
+    st.set { nextOffset := offset + arity, sites := cur.sites.push ⟨siteName, offset, arity, holes⟩ }
     return some (e', proof)
   | _ => return none
 
 /-- The head-rewrite sets a traversal can apply. `.main` is the assume-floating / monad-law set;
 `.flatten` collapses `pick` trees into `oneOf` and must run as a separate later pass, because
 `.main`'s bind-distribution rules create and extend `pick` chains (and need the picks intact to
-float assumes out of them); `.installWeights` reweights what `.flatten` leaves, and must run last,
-on the final term.
+float assumes out of them). `.installTuning` is not run here — `derive_tuning` applies it after
+elaboration, on the finished term.
 
 `.flatten`'s `distribute` flag additionally pushes a choice into a `dite`/`ite` arm
-(`distributeChoiceDite?`) so a choice nested under a case split becomes a flat `oneOf` per branch. It
-is on only under `with_policy` (i.e. when an `installWeights` pass follows to reweight the result);
-plain flattening leaves it off, so every generator not asking for schedules is byte-identical. -/
-inductive OptPass | main | flatten (distribute : Bool) | installWeights (policy : SchedulePolicy)
+(`distributeChoiceDite?`) so a choice nested under a case split becomes a flat `oneOf` per branch —
+one `derive_tuning` site per constructor rather than one shared across the case split. `optimizeGen`
+passes `distribute := true`, so every synthesized generator ships with that per-constructor shape. -/
+inductive OptPass | main | flatten (distribute : Bool)
+  | installTuning (θ : Expr) (st : IO.Ref TuningState) (declName : Name)
 
 /-! ## Proof-carrying traversal -/
 
@@ -459,13 +492,13 @@ private def matchDite? (e : Expr) : Option (Expr × Expr × Expr × Expr) :=
   | dite _ P inst t f => some (P, inst, t, f)
   | _ => none
 
-/-- Flatten-pass distribution of a choice into a `dite` arm, run only under `with_policy` (when a
-schedule policy will follow). The synthesizer emits a state class's choice as `pick x (dite c t f)`
-when one constructor (`x`) is unconditional and others are gated on a context condition `c`. Left as
-is, `flattenPick?` collapses it to `oneOf [x, dite c (oneOf ..) ..]` — a choice *nested* under the
-`dite`, which `installWeights` cannot reweight per constructor (the inner `oneOf` keeps uniform
-weights). Distributing gives `dite c (pick x t) (pick x f)`; re-flattening each arm then yields a
-flat `oneOf` per branch, which `installWeights` reweights.
+/-- Flatten-pass distribution of a choice into a `dite` arm (`optimizeGen` enables it via
+`distribute := true`). The synthesizer emits a state class's choice as `pick x (dite c t f)` when one
+constructor (`x`) is unconditional and others are gated on a context condition `c`. Left as is,
+`flattenPick?` collapses it to `oneOf [x, dite c (oneOf ..) ..]` — a choice *nested* under the `dite`,
+so the inner `oneOf` becomes a single `installTuning` site shared across branches rather than one site
+per constructor. Distributing gives `dite c (pick x t) (pick x f)`; re-flattening each arm then yields
+a flat `oneOf` per branch, addressable per constructor.
 
 **Duplication is bounded on purpose.** Distribution copies the *non-conditional* arm (`x`/`y`) into
 both branches, so it fires only when that arm is a leaf — a branch whose base-functor constructor has
@@ -596,7 +629,7 @@ descended into, but `oneOf`'s nonemptiness proof `h : gs ≠ []` is *dependent* 
 a new list paired with the old proof is ill-typed. Hence the by-hand rebuild.
 
 Without this, `optimizeChildren` skipped every `oneOf`, so nothing nested inside a choice's branch
-was ever visited — which is why `installWeights` could not reach a choice under a choice. -/
+was ever visited — which is why `installTuning` could not reach a choice under a choice. -/
 private partial def optimizeOneOfChildren? (pass : OptPass) (table : Array CongrRule) (depth : Depth)
     (e : Expr) : MetaM (Option OptResult) := do
   let_expr Gen.oneOf α gs h := e | return none
@@ -657,7 +690,7 @@ private partial def optimizeChildren (pass : OptPass) (table : Array CongrRule) 
         let auxiliary := (← Meta.getMatcherInfo? head).isSome || isRec
         -- The two list-carrying combinators, exempt because neither is actually skipped:
         -- `optimizeOneOfChildren?` handles `oneOf` (declining only when no branch changed), and a
-        -- `frequency` reaching here was produced by `installWeights` from an already-descended
+        -- `frequency` reaching here was produced by `installTuning` from an already-descended
         -- `oneOf`. The gap: a hand-written `frequency` in a *reducible* position would be silently
         -- skipped. Today the only one is inside `arbTy`, which is `@[irreducible]` and so never
         -- opened. If you write another, give `frequency` a real descent rather than widening this.
@@ -715,7 +748,7 @@ private partial def tryHeadRewrite (pass : OptPass) (depth : Depth) (e : Expr) :
     if distribute then
       if let some r ← distributeChoiceDite? depth e then return some r
     flattenPick? e
-  | .installWeights policy => installWeights? policy depth e
+  | .installTuning θ st declName => installTuning? θ st declName depth e
   | .main =>
     let res? ←
       match_expr e with
@@ -732,24 +765,38 @@ end
 /-- Optimize a raw `Gen` term, returning the optimized term together with a proof that its
 `support` equals that of the input. Runs the `.main` (assume-floating / monad-law) pass to a fixed
 point first, then the `.flatten` pass, which collapses the `pick` chains the main pass leaves (and
-may have extended, via bind-distribution) into single uniform `oneOf` nodes. When `policy?` is
-given, a third `.installWeights` pass then replaces those uniform weights with depth-indexed
-schedules.
+may have extended, via bind-distribution) into single uniform `oneOf` nodes.
 
-Where `installWeights` finds no depth it does nothing, which costs a well-tuned distribution but
-never correctness — every pass composes a support-preservation proof regardless. -/
-def optimizeGen (e : Expr) (policy? : Option SchedulePolicy := none) : MetaM (Expr × Expr) := do
+Weighting is no longer an optimizer concern: a synthesized generator ships uniform, and
+`derive_tuning` makes its weights runtime-addressable after the fact (`installTuning`/`buildTuned`). -/
+def optimizeGen (e : Expr) : MetaM (Expr × Expr) := do
   let table := getGenCongrRules (← getEnv)
   let r1 ← optimize .main table none e
-  -- Distribute choices into `dite` arms only when schedules will follow, so a plain flatten stays
-  -- byte-identical (`distributeChoiceDite?` is the only thing gated on `policy?.isSome`).
-  let r2 ← optimize (.flatten policy?.isSome) table none r1.expr
-  let r3? ← policy?.mapM fun policy => optimize (.installWeights policy) table none r2.expr
-  let expr := (r3?.getD r2).expr
+  -- Distribute a choice through a `dite` arm (`distributeChoiceDite?`) so each state class's choice is
+  -- a flat, per-constructor `oneOf`. This is the shape `derive_tuning` needs to give every constructor
+  -- (e.g. STLC's `var`) its own addressable weight; it is support-preserving, and with weighting now
+  -- post-hoc there is no reason to withhold it.
+  let r2 ← optimize (.flatten true) table none r1.expr
+  let expr := r2.expr
   let proof ←
-    match ← chainProofs #[r1.proof?, r2.proof?, r3?.bind (·.proof?)] with
+    match ← chainProofs #[r1.proof?, r2.proof?] with
     | some p => mkExpectedTypeHint p (← mkEq (← mkSupport e) (← mkSupport expr))
     | none => mkSupportRefl e
   return (expr, proof)
+
+/-- From a generator's value `v` (`fun args => X.unfold … seed`), build the `θ`-threaded term
+`fun (θ : Tuning) args => …` with its site table and total branch-slot count. The recursion is the
+`unfold` combinator, not an `Order.fix` in the term, so it is untouched — no monotonicity proof to
+rebuild. `installTuning`'s support-preservation proof is dropped; `.tuned` is just the reweighted
+term. -/
+def buildTuned (declName : Name) (v : Expr) : MetaM (Expr × Array TuningSiteInfo × Nat) := do
+  let table := getGenCongrRules (← getEnv)
+  lambdaTelescope v fun args body => do
+    withLocalDeclD `θ (mkConst ``Tuning) fun θ => do
+      let st ← IO.mkRef ({} : TuningState)
+      let r ← optimize (.installTuning θ st declName) table none body
+      let state ← st.get
+      let tuned ← mkLambdaFVars (#[θ] ++ args) r.expr
+      return (tuned, state.sites, state.nextOffset)
 
 end Palamedes

@@ -3,12 +3,14 @@ import Palamedes.Stats
 import PalamedesTest.Examples.STLC.WellTyped.WellTyped
 
 /-!
-# Regression test for depth-indexed weight schedules (`with_policy`)
+# Regression test for depth-indexed weight schedules (`derive_tuning` + `SchedulePolicy.stlc`)
 
-The guard on `installWeights` and on `SchedulePolicy.stlc`'s hand-tuned coefficients — nothing else
-pins them, so this file is what notices if they are retuned. The bar: sample without diverging, median
-term size ≥ 4, and ≥ 70% of terms containing an application. **Termination alone is not success** —
-a generator that decays too fast terminates by emitting nothing but leaves.
+The guard on `installTuning` and on `SchedulePolicy.stlc`'s hand-tuned coefficients — nothing else
+pins them, so this file is what notices if they are retuned. The generator under test is `genWTstlc`:
+the uniform, synthesized `genWellTyped` made addressable by `derive_tuning`, sampled under the `stlc`
+schedule materialized into a runtime `Tuning` (no weights are baked into the term). The bar: sample
+without diverging, median term size ≥ 4, and ≥ 70% of terms containing an application. **Termination
+alone is not success** — a generator that decays too fast terminates by emitting nothing but leaves.
 
 `#genstats` covers outcomes and size. `measureShape` below adds the four things it cannot express,
 all domain-specific: whether an `app` occurs *anywhere* (the histogram sees head constructors only),
@@ -21,6 +23,11 @@ take minutes.
 -/
 
 open Palamedes Palamedes.Gen
+
+/-- `genWellTyped` under the `stlc` schedule — the terminating generator (the uniform one diverges). -/
+def genWTstlc (Γ : List Ty) : Gen Term :=
+  WellTyped.genWellTyped.tuned
+    (SchedulePolicy.stlc.materialize WellTyped.genWellTyped.sites) Γ
 
 /-! ## Outcomes and size — `#genstats`, pinned
 
@@ -54,22 +61,23 @@ info: (toStatGen arbTy) — 3000 draws (seed 0, fuel 10000)
 #guard_msgs in
 #genstats (draws := 3000) (fuel := 10000) (toStatGen arbTy)
 
-/-! Before schedules, `genWellTyped` diverged on 54.3% of draws and its median output was a single
-node. The `outcomes` and `size` lines below are the bar it now has to clear.
+/-! Sampled uniform, `genWellTyped` diverges on ~54% of draws with a median output of a single node.
+Under the materialized `stlc` schedule (`genWTstlc`) the `outcomes` and `size` lines below are the bar
+it now clears: 0 divergences, median 5, ≥ 80% with an application.
 
-The distribution's sharper tell is `var`. The `unit`-goal state's choice is `unit` against a `dite`
-on whether a variable of the goal type is in context, with `var`/`app` chosen inside it. That choice
-is now distributed *through* the `dite` (`distributeChoiceDite?` in the optimizer), so `unit`, `var`,
-and `app` sit in a single flat `oneOf` and each carries its own schedule — `var` and `unit` a leaf
-weight (`1 + 30d`), `app` the constant recursive weight `4`. So `var` is a live option wherever a
-variable is available: the `most common` table splits the old single `app (abs unit unit) unit` into
-a `unit`-bodied and a `var 0`-bodied form, and `distinct` rises (496 → 666). While `var` was buried
-in the `dite` it split the branch 50/50 with `app` at a flat rate; freeing it restores the intended
-per-depth curve (`d2` 6.7% → 7.6%, back to proposal 09's prototype numbers). The head-constructor
-distribution is a depth-0 effect and is untouched. -/
+The four state-class sites `derive_tuning` finds carry the `stlc` weights — a closing branch (0 holes)
+`(1, 30)`, a single-child branch `(1, 14)`, a two-child `app` `(4, 0)` — so the recursion starts
+supercritical and decays with depth. The distribution's sharper tell is `var`. The `unit`-goal state's
+choice is `unit` against a `dite` on whether a variable of the goal type is in context, with `var`/`app`
+chosen inside it. The synthesizer's flatten pass distributes that choice *through* the `dite`
+(`distributeChoiceDite?`), so `unit`, `var`, and `app` sit in a single flat `oneOf` and each becomes
+its own `derive_tuning` site — `var` and `unit` a leaf weight (`1 + 30d`), `app` the constant recursive
+weight `4`. So `var` is a live option wherever a variable is available (the `most common` table shows
+both a `unit`-bodied and a `var 0`-bodied `app`), and `distinct` is 666. The head-constructor
+distribution is a depth-0 effect and is unchanged. -/
 
 /--
-info: (toStatGen (WellTyped.genWellTyped [])) — 3000 draws (seed 0, fuel 10000)
+info: (toStatGen (genWTstlc [])) — 3000 draws (seed 0, fuel 10000)
 
   outcomes    ok 3000 (100.0%)
   size        mean 5.6   p50 5   p95 12   max 26
@@ -94,7 +102,7 @@ info: (toStatGen (WellTyped.genWellTyped [])) — 3000 draws (seed 0, fuel 10000
     Term.app (Term.abs (Ty.arrow (Ty.unit) (Ty.unit)) (Term.unit)) (Term.abs (Ty.unit) (Term.…
 -/
 #guard_msgs in
-#genstats (draws := 3000) (fuel := 10000) (toStatGen (WellTyped.genWellTyped []))
+#genstats (draws := 3000) (fuel := 10000) (toStatGen (genWTstlc []))
 
 /-! ## The four STLC-specific observables `#genstats` cannot express -/
 
@@ -178,6 +186,6 @@ info: ── shape of 3000 completed draws
    app rate by depth     d0:80.2% d1:17.7% d2:7.6% d3:5.3% d4:3.7% d5:2.8% d6:1.1% d7:0.9%
 -/
 #guard_msgs in
-#eval measureShape (WellTyped.genWellTyped [])
+#eval measureShape (genWTstlc [])
 
 end ScheduleMeasurements
