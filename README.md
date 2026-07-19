@@ -24,26 +24,32 @@ pinned in `lake-manifest.json`; run `lake update basalt` to pick up new Basalt w
 ## Building
 
 ```sh
-lake build                                       # build the library and the full example corpus
-lake build Palamedes                             # build just the library
-lake build PalamedesTest.Examples.Simple.Eq2     # build/elaborate a single example (module path)
+lake build                                     # build the library, the examples and the tests
+lake build Palamedes                           # build just the library
+lake build PalamedesTest                       # build just the tests
+lake build PalamedesTest.Corpus.Simple.Eq2     # build/elaborate a single example (module path)
 ```
 
-There is no separate test framework. Every file under `PalamedesTest/Examples/` synthesizes a
+There is no separate test framework. Every file under `PalamedesTest/Corpus/` synthesizes a
 generator at elaboration time and fails to compile if synthesis fails, so a plain `lake build` (what
 CI runs) also runs the tests. Note that a **totality-check failure is a warning, not an error** —
 grep the build output for warnings, or you will miss it.
 
-Beyond the corpus, `PalamedesTest/` holds four checks worth knowing about:
+Beyond the corpus, each file in `PalamedesTest/` guards one library module and is named after it —
+`PalamedesTest/Foo.lean` guards `Palamedes/Foo.lean`, so the two directory listings diff into a
+coverage map. The ones worth knowing about:
 
-- **`ExtractionAudit.lean`** walks every generator in the corpus and fails the build if synthesis
+- **`Extract.lean`** walks every generator in the corpus and fails the build if synthesis
   residue (`Subtype.val`, `Eq.mpr`, `CorrectGen`, or a bare `Gen.pick`) survived into the compiled
   term.
-- **`DeriveTest.lean`** pins the signatures `derive_palamedes` generates, and `#print axioms` on the
+- **`Derive.lean`** pins the signatures `derive_palamedes` generates, and `#print axioms` on the
   proofs it emits.
-- **`Measurements.lean`** and **`ScheduleMeasurements.lean`** pin `#genstats` distribution reports
+- **`Stats.lean`** and **`Optimizer/Schedule.lean`** pin `#genstats` distribution reports
   under `#guard_msgs` — respectively, that the optimizer's flatten pass really does produce a
   *uniform* choice, and that depth schedules really do make a recursive generator terminate.
+
+`PalamedesExamples/` is teaching material with no assertions; `PalamedesExperiments/` holds
+exploratory spikes and is excluded from the default build.
 
 ## Usage
 
@@ -110,7 +116,7 @@ derive_palamedes MyTree
 `derive_palamedes` generates the entire per-datatype layer — base functor, `fold`, `accuM`,
 the `unfold` recursion scheme, its support and totality lemmas, the fold/`accuM` fusion lemmas — and
 registers the result with the synthesizer. **No edit to any `Palamedes/` module is needed.**
-`PalamedesTest/Examples/LeafTree/` is the end-to-end proof of that: it declares a datatype the
+`PalamedesTest/Corpus/LeafTree/` is the end-to-end proof of that: it declares a datatype the
 library has never heard of, inside a test file, and synthesizes for it. Debug with
 `set_option trace.Palamedes.derive true`.
 
@@ -156,7 +162,7 @@ Rejected by design, loudly: mutual, nested, and indexed inductives. (A rose tree
   **`UnfoldStrategy.lean`** — the registries. Each is an attribute or environment extension that
   lets a datatype or a lemma opt into a stage of the pipeline by being *tagged*, rather than by being
   named in a list inside the synthesizer. This is what makes "adding a datatype is one line" true.
-- **`PalamedesTest/Examples/`** — the corpus. `Simple/` and `Range/` are the easiest starting points.
+- **`PalamedesTest/Corpus/`** — the corpus. `Simple/` and `Range/` are the easiest starting points.
   Each datatype directory generally carries two spellings of the same predicate: a structurally
   recursive one (`BST.lean`) and one written as an explicit catamorphism (`Fold.lean`). These are not
   duplicates — they exercise different paths through the search.

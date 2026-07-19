@@ -1,6 +1,6 @@
 import Palamedes.Synthesizer
 import Palamedes.Stats
-import PalamedesTest.Examples.STLC.WellTyped.WellTyped
+import PalamedesTest.Corpus.STLC.WellTyped.WellTyped
 
 /-!
 # Regression test for depth-indexed weight schedules (`derive_tuning` + `SchedulePolicy.stlc`)

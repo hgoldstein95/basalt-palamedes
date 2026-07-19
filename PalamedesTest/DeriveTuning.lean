@@ -24,7 +24,12 @@ def genAllTwos : Palamedes.Gen (List Nat) := by
 derive_tuning genAllTwos
 
 -- The four declarations exist at the right types; `tuned_defaults` is definitional.
+/-- info: genAllTwos.tuned : Tuning → Palamedes.Gen (List ℕ) -/
+#guard_msgs in
 #check (genAllTwos.tuned : Tuning → Palamedes.Gen (List Nat))
+
+/-- info: genAllTwos.tuned_defaults : genAllTwos.tuned genAllTwos.defaults = genAllTwos -/
+#guard_msgs in
 #check (genAllTwos.tuned_defaults : genAllTwos.tuned genAllTwos.defaults = genAllTwos)
 
 /-- info: #[{ name := `genAllTwos.site0, offset := 0, arity := 2, holes := #[0, 1] }] -/

@@ -1,4 +1,4 @@
-import PalamedesTest.Examples
+import PalamedesTest.Corpus
 
 /-!
 # Extraction audit
@@ -44,7 +44,7 @@ run_cmd liftTermElabM do
   let mut total := 0
   for i in [0:env.header.moduleData.size] do
     let modName := env.header.moduleNames[i]!
-    unless (`PalamedesTest.Examples).isPrefixOf modName do continue
+    unless (`PalamedesTest.Corpus).isPrefixOf modName do continue
     for n in env.header.moduleData[i]!.constNames do
       let some ci := env.find? n | continue
       let some val := ci.value? | continue

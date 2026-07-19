@@ -1,6 +1,6 @@
 name = "palamedes"
 version = "0.1.0"
-defaultTargets = ["Palamedes", "PalamedesTest"]
+defaultTargets = ["Palamedes", "PalamedesExamples", "PalamedesTest"]
 
 # The library: the `generator_search` tactic, synthesis rules, supported datatypes, and sampler.
 # `Palamedes.*` globs every library module so a plain `lake build` compiles all of them, not just
@@ -9,18 +9,25 @@ defaultTargets = ["Palamedes", "PalamedesTest"]
 name = "Palamedes"
 globs = ["Palamedes", "Palamedes.+"]
 
-# The test corpus: every module synthesizes a generator at elaboration time and fails to compile if
-# synthesis fails, plus `PalamedesTest.ExtractionAudit`, which guards against silent extraction
-# residue. Built by `lake build` (it is a default target), which is what CI runs.
+# Teaching material: no assertions, nothing here guards anything.
+[[lean_lib]]
+name = "PalamedesExamples"
+globs = ["PalamedesExamples.+"]
+
+# The tests. `PalamedesTest.Corpus.+` is the synthesis corpus: every module synthesizes a generator
+# at elaboration time and fails to compile if synthesis fails. The files above it guard one library
+# module each — `PalamedesTest.Extract` guards against silent extraction residue, and so on. Built
+# by `lake build` (it is a default target), which is what CI runs.
 [[lean_lib]]
 name = "PalamedesTest"
 globs = ["PalamedesTest.+"]
 
 # Exploratory spikes — design questions being answered in code, not examples pending synthesis.
-# Excluded from the default build (and so from CI); build on demand with `lake build InProgress`.
+# Excluded from the default build (and so from CI); build on demand with
+# `lake build PalamedesExperiments`.
 [[lean_lib]]
-name = "InProgress"
-globs = ["InProgress.+"]
+name = "PalamedesExperiments"
+globs = ["PalamedesExperiments.+"]
 
 [[require]]
 name = "basalt"

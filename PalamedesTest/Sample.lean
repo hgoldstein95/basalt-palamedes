@@ -1,6 +1,6 @@
 import Palamedes.Sample
-import PalamedesTest.Examples.Tree.AVL.AVL
-import PalamedesTest.Examples.Tree.RBT.RBT
+import PalamedesTest.Corpus.Tree.AVL.AVL
+import PalamedesTest.Corpus.Tree.RBT.RBT
 
 /-!
 # Sampler tests: filtering generators sample instead of throwing

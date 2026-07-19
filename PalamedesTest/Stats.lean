@@ -1,6 +1,6 @@
 import Palamedes.Stats
-import PalamedesTest.Examples.Simple.OneOfFour
-import PalamedesTest.Examples.Tree.BST.Fold
+import PalamedesTest.Corpus.Simple.OneOfFour
+import PalamedesTest.Corpus.Tree.BST.Fold
 
 open Palamedes Palamedes.Gen
 
