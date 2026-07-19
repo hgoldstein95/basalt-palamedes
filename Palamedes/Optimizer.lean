@@ -7,7 +7,7 @@ open Lean Elab Command Term Meta
 
 namespace Palamedes
 
-open Gen
+open _root_.Palamedes.Gen
 
 /-!
 # Correct-by-Construction Optimizer

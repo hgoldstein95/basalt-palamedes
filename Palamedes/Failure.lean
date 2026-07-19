@@ -14,7 +14,7 @@ If a generator synthesizes with backtracking, we provide tools to lift it into a
 
 namespace Palamedes
 
-open Gen
+open _root_.Palamedes.Gen
 open scoped ENNReal
 
 instance instFailOptionT {G : Type → Type} [Monad G] : Fail (OptionT G) := ⟨OptionT.fail⟩

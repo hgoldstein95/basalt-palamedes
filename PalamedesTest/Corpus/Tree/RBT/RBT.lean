@@ -31,7 +31,7 @@ set_option maxRecDepth 2000
 
 @[simp]
 def isRBT : Palamedes.Tree (Color × Nat) → Nat → Nat → Nat → Bool := λ t height lo hi =>
-  isRR t = true ∧ isBST t (lo, hi) = true ∧ isBH t height = true
+  isRR t && isBST t (lo, hi) && isBH t height
 
 def genRBT (height lo hi : Nat) : Gen (Palamedes.Tree (Color × Nat)) := by
   generator_search (fun t => isRBT t height lo hi) allow_partial

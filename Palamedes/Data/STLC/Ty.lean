@@ -14,7 +14,7 @@ derive_palamedes Ty
 
 namespace Palamedes
 
-open Gen
+open _root_.Palamedes.Gen
 
 namespace Gen
 

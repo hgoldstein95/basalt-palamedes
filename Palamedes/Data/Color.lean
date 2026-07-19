@@ -29,7 +29,7 @@ end TypeDef
 
 namespace Palamedes
 
-open Gen
+open _root_.Palamedes.Gen
 
 namespace Gen
 

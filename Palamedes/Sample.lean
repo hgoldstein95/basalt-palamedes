@@ -43,7 +43,7 @@ It is a *measured* fix, not a proved one; nothing yet certifies a.s. termination
 
 namespace Palamedes
 
-open Gen
+open _root_.Palamedes.Gen
 
 /-- Interpret `g` at Plausible's `Gen` monad through the explicit `Option` layer: a failed `assume`
   becomes a `none` value (matching the `massSome` semantics), which we surface as a `GenError` at

@@ -37,14 +37,14 @@ rev = "main"
 [[require]]
 name = "mathlib"
 git = "https://github.com/leanprover-community/mathlib4"
-rev = "v4.32.0-rc1"
+rev = "v4.33.0-rc1"
 
 [[require]]
 name = "aesop"
 git = "https://github.com/leanprover-community/aesop"
-rev = "v4.32.0-rc1"
+rev = "v4.33.0-rc1"
 
 [[require]]
 name = "plausible"
 git = "https://github.com/leanprover-community/plausible"
-rev = "v4.32.0-rc1"
+rev = "v4.33.0-rc1"

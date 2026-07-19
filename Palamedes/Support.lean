@@ -3,7 +3,7 @@ import Palamedes.OptimizeCongr
 
 namespace Palamedes
 
-open Gen
+open _root_.Palamedes.Gen
 
 theorem support_assume_pick :
     support (if h : b then pick (x h) y else y) = support (pick (assume b x) y) := by

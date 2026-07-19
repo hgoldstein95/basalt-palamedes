@@ -6,7 +6,7 @@ import Mathlib.Data.List.Basic
 
 namespace Palamedes
 
-open Gen
+open _root_.Palamedes.Gen
 
 namespace Gen
 

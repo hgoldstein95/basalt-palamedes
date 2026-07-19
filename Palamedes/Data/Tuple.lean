@@ -5,7 +5,7 @@ import Palamedes.RuleSets
 
 namespace Palamedes
 
-open Gen
+open _root_.Palamedes.Gen
 
 namespace Gen
 
