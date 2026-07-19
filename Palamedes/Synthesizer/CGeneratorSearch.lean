@@ -372,21 +372,27 @@ generator that then blows `maxRecDepth` downstream. (Two of them could not be at
 `s_between` takes a discharging tactic, `s_elements_partial` needs a `convert` wrapper.)
 
 -/
+-- The `(by …)` rule scripts below are stored as *parsed syntax* and re-elaborated by Aesop at
+-- search time, in the **caller's** scope — unlike a macro quotation, nothing preresolves their
+-- identifiers here. An unqualified name would resolve only at call sites that happen to
+-- `open Palamedes.Gen.CorrectGen`; elsewhere the rule silently fails to fire. Hence `_root_`.
 add_aesop_rules safe (rule_sets := [synthesis]) [
-  (by (repeat apply duncurry); intro),
+  (by (repeat apply Palamedes.Gen.CorrectGen.duncurry); intro),
 ]
 
 add_aesop_rules 99% (rule_sets := [synthesis]) [
   (by assumption),
   (by normalize_and_apply),
   (by normalize_and_apply_unfold),
-  (by apply s_arbAtom _),
-  (by apply s_gt),
-  (by apply s_mod2_partial),
-  (by apply s_lt_partial),
-  (by apply s_between_partial),
-  (by apply (s_between (by first | aesop | omega))),
-  (by goal_is_eq; apply convert (by norm_for_elements) (s_elements_partial _)),
+  (by apply Palamedes.Gen.CorrectGen.s_arbAtom _),
+  (by apply Palamedes.Gen.CorrectGen.s_gt),
+  (by apply Palamedes.Gen.CorrectGen.s_mod2_partial),
+  (by apply Palamedes.Gen.CorrectGen.s_lt_partial),
+  (by apply Palamedes.Gen.CorrectGen.s_between_partial),
+  (by apply (Palamedes.Gen.CorrectGen.s_between (by first | aesop | omega))),
+  (by goal_is_eq;
+      apply Palamedes.Gen.CorrectGen.convert (by norm_for_elements)
+        (Palamedes.Gen.CorrectGen.s_elements_partial _)),
 ]
 
 -- Case-split is handled by the single `caseSplitRuleTac` rule (see section `CaseSplit`),

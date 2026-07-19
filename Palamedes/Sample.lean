@@ -48,8 +48,8 @@ open _root_.Palamedes.Gen
 /-- Surface a `none` draw as a `GenError` so `Gen.runUntil` can retry it.
 
 This is the entry point for a generator that is **already** `Option`-reflected by its own type — the
-shape `generator_search` now emits for a filtering generator, where the `Option` in the declared
-return type is what `allow_partial` used to say. `toPlausible` is this composed with `totalize`, so
+shape `generator_search` emits for a filtering generator. `toPlausible` is this composed with
+`totalize`, so
 the two paths share one retry story rather than duplicating it. -/
 def ofOption (g : Plausible.Gen (Option α)) : Plausible.Gen α := do
   match ← g with

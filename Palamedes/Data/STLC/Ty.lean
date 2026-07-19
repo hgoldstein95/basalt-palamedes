@@ -51,6 +51,22 @@ theorem support_arbTy :
     exact ⟨1, pure (TyF.arrow PUnit.unit PUnit.unit), by simp, by omega, by simp⟩
 
 @[simp]
+theorem someSupport_arbTy :
+    someSupport arbTy = fun _ => True := by
+  simp only [arbTy, Ty.someSupport_unfold]
+  generalize (0 : Nat) = d
+  funext v
+  induction v generalizing d with
+  | unit =>
+    simp only [Ty.unfold_support, eq_iff_iff, iff_true, someSupport_frequency]
+    exact ⟨2 + 3 * d, pure TyF.unit, by simp, by omega, by simp⟩
+  | arrow τ₁ τ₂ ih₁ ih₂ =>
+    simp only [Ty.unfold_support, eq_iff_iff, iff_true]
+    refine ⟨PUnit.unit, PUnit.unit, ?_, of_eq_true (ih₁ (d + 1)), of_eq_true (ih₂ (d + 1))⟩
+    simp only [someSupport_frequency]
+    exact ⟨1, pure (TyF.arrow PUnit.unit PUnit.unit), by simp, by omega, by simp⟩
+
+@[simp]
 theorem support_Ty_caseTy
     {gu : (τ = Ty.unit) → Gen α}
     {ga : (τ₁ τ₂ : Ty) → (τ = Ty.arrow τ₁ τ₂) → Gen α} :

@@ -15,8 +15,7 @@ three consequences that the Basalt-shaped emission stage builds on:
    without any parametricity assumption — both sides are the *same* instantiation, at `SPMF`.
 
 (3) is the reason the total path can carry a `sound_complete` law while the filtering path cannot:
-`totalize` runs the generator at `OptionT SPMF`, a *different* instantiation, which is the gap
-recorded in `basalt-notes/tuning/PLAN.md` §5.
+`totalize` runs the generator at `OptionT SPMF`, a *different* instantiation.
 -/
 
 open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
@@ -40,10 +39,9 @@ example : SPMF.support (genAllTwosBasalt (G := SPMF)) = genAllTwos.support := by
   conv_rhs => rw [← genAllTwosWitness.property]
   rfl
 
--- The payoff, and the computability check that matters: Basalt's own tooling consumes the
--- synthesized generator with no adapter, and to print this it had to actually *run* it. The old
--- `∃`-based `total` could not reach here at all -- `choose` put `Classical.choice` in the witness,
--- so there was no code to run.
+-- The computability check that matters: Basalt's own tooling consumes the synthesized generator
+-- with no adapter, and to print this it had to actually *run* it — so the witness carries code,
+-- not `Classical.choice`.
 /--
 info: genAllTwosBasalt — 50 draws (seed 0, fuel 10000)
 

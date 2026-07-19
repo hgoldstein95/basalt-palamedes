@@ -585,7 +585,7 @@ structure SupportKit where
   `OptionT` side the equation is between `Option`s, so it needs peeling first. -/
   wrapInj : Term → CommandElabM Term
 
-/-- The `Gen.support` kit: the original emitter, unchanged. -/
+/-- The `Gen.support` kit. -/
 def SupportKit.spmf : SupportKit where
   thmName := "support_unfold"
   supportOf := fun g => `(Palamedes.Gen.support $g)

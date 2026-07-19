@@ -97,7 +97,7 @@ def runSynthesisPipeline (α pred : Expr) (checkTotal verbose : Bool) :
   -- 2. Extract the raw `Gen`, keeping the rewrite that justifies it.
   -- Build the `Subtype` projections with the predicate given *explicitly*. `mkAppM ``Subtype.val`
   -- would have to see `CorrectGen P` as `Subtype ?p` to solve for `?p`, and `CorrectGen` is
-  -- `@[implicit_reducible]` rather than `@[reducible]` (deliberately — see `CLAUDE.md`), so `?p`
+  -- `@[implicit_reducible]` rather than `@[reducible]`, so `?p`
   -- can survive unassigned into the emitted proof. That is invisible until the kernel rejects the
   -- declaration for having metavariables, so name the argument rather than let it be inferred.
   let genTy := mkApp (Expr.const ``Palamedes.Gen []) α
@@ -133,7 +133,7 @@ def runSynthesisPipeline (α pred : Expr) (checkTotal verbose : Bool) :
     let stmt ← mkEq (← mkAppM ``Palamedes.Gen.support #[gen'']) pred
     -- Validate with `isDefEq` rather than `Meta.check`, matching `derive_tuning`'s `tuned_support`
     -- template. A full `check` re-typechecks simp's own proof term, and since Lean 4.33 compares
-    -- types at `implicit` transparency (see `CLAUDE.md`), it rejects proofs whose predicate mentions
+    -- types at `implicit` transparency, it rejects proofs whose predicate mentions
     -- a matcher where the statement mentions the underlying `casesOn` — defeq, but not at that
     -- transparency. `isDefEq` on the statement is the check that actually matters.
     unless ← isDefEq (← inferType chained) stmt do
@@ -155,9 +155,8 @@ def runSynthesisPipeline (α pred : Expr) (checkTotal verbose : Bool) :
 
   return { gen := gen'', supportProof, totalWitness? }
 
-/-- What the *declared return type* says the generator should be. This is what replaced
-`allow_partial`: whether a generator filters is now a fact about its type, visible at every use site,
-rather than a tactic argument visible only at the definition. -/
+/-- What the *declared return type* says the generator should be. Whether a generator filters is a
+fact about its type, visible at every use site. -/
 inductive Target where
   /-- `Palamedes.Gen α` — the synthesis-internal carrier. Total only; a filtering generator has to be
   declared in the Basalt shape, because `totalize`'s result is Basalt-shaped and `Fail` must not
@@ -193,7 +192,7 @@ over `Option β` would otherwise be ambiguous with the filtering case. But it ca
 `P`'s type first: `generator_search (· = 2)` has no type of its own and needs the goal to supply the
 expected one. So the goal proposes `τ`, and only if `P` does not fit `τ → Prop` — and `τ` is
 `Option β` — is the filtering reading tried. A predicate that really is over `Option β` fits the
-first attempt and wins, which is the disambiguation the note asks for. -/
+first attempt and wins. -/
 def classifyGoal (goalTy : Expr) (t : Lean.Term) : TermElabM (Target × Expr) := do
   match goalTy with
   | .app (.const ``Palamedes.Gen []) τ =>
@@ -216,12 +215,9 @@ def classifyGoal (goalTy : Expr) (t : Lean.Term) : TermElabM (Target × Expr) :=
           `Palamedes.Gen α`"
     match τ with
     | .app (.const ``Option [_]) β =>
-      -- Try the **filtering** reading first. `G (Option β)` exists in order to say "this generator
-      -- can fail", so that is the reading to prefer, and elaborating against an expected type is too
-      -- permissive to decide the other way round: `fun n => lo ≤ n ∧ n ≤ hi` typechecks at
-      -- `Option Nat → Prop` too, because Mathlib gives `Option` an `LE` instance and silently coerces
-      -- `lo` to `some lo`. A predicate genuinely over `Option β` is still reachable — annotate its
-      -- binder (`fun (o : Option β) => …`) and the `β → Prop` attempt fails, falling through here.
+      -- Filtering reading first (see the docstring). Elaboration is too permissive to decide the
+      -- other way round: `fun n => lo ≤ n ∧ n ≤ hi` typechecks at `Option Nat → Prop` too, because
+      -- Mathlib gives `Option` an `LE` instance and silently coerces `lo` to `some lo`.
       if let some p ← elabPredAt? t β then
         return (.basaltOption carrier β, p)
       let some p ← elabPredAt? t τ
@@ -290,13 +286,13 @@ def packageFor (target : Target) (res : SynthesisResult) (report : MessageData �
     let some w := res.totalWitness?
       | throwError "generator_search: this generator filters — a `Gen.assume` survived \
           optimization — so it cannot be emitted at{indentExpr (mkApp G α)}, which is `Fail`-free \
-          by construction.\n\nDeclare it as `G (Option _)` instead; the `Option` is what \
-          `allow_partial` used to say."
+          by construction.\n\nDeclare it as `G (Option _)` instead, so the type reflects that it \
+          can fail."
     let tgen ← mkAppOptM ``Subtype.val #[none, none, w]
     extractWitness (← mkAppOptM ``Palamedes.TGen.run #[some α, some tgen, some G, none])
   | .basaltOption G α =>
     if res.totalWitness?.isSome then
-      report m!"this generator never fails, so the `Option` is not needed — `G {← ppExpr α}` will do."
+      report m!"this generator never fails, so the `Option` is not needed — `{← ppExpr (mkApp G α)}` will do."
     mkAppOptM ``Palamedes.Gen.totalize #[some α, some res.gen, some G, none]
 
 def generatorSearchElab
@@ -335,10 +331,9 @@ def generatorSearchElab
 
   withTraceNode `palamedes.trace (fun _ => pure m!"⟪{α}⟫⟪{prettyPred}⟫") do
 
-  -- Totality is always checked now. It is not a user-facing switch any more: the declared type says
-  -- whether the generator may filter, and totality is how that claim is *verified* rather than
-  -- something to opt out of. (It remains distinct from almost-sure termination, which is orthogonal
-  -- and which nothing here establishes.)
+  -- Totality is always checked: the declared type says whether the generator may filter, and
+  -- totality is how that claim is verified. (Distinct from almost-sure termination, which is
+  -- orthogonal and which nothing here establishes.)
   let res ← runSynthesisPipeline α mpred true verbose
   let emitted ← packageFor target res (fun msg => logWarning msg)
 
@@ -361,8 +356,7 @@ def genRBT [Gen G] : G (Option (Tree Nat)) := by generator_search isRBT -- filte
 def genEq2' : Palamedes.Gen Nat := by generator_search (· = 2)          -- synthesis-internal carrier
 ```
 
-The `Option` **replaces `allow_partial`**. Whether a generator can fail is now a fact about its type,
-visible at every use site, rather than a tactic argument visible only at the definition:
+Whether a generator can fail is a fact about its type, visible at every use site:
 
 | totality | declared | result |
 |---|---|---|

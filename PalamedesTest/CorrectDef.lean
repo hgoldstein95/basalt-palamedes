@@ -6,9 +6,8 @@ import Palamedes.Stats
 /-!
 # `correct def` regression
 
-The synthesizer's proofs now survive into the environment. Every law below is **kernel-checked** by
-`addDecl`, which is the property that matters: the pipeline used to discard all three proofs, so it
-had nothing to be wrong about. Emitting them is what makes them falsifiable.
+The synthesizer's proofs survive into the environment. Every law below is **kernel-checked** by
+`addDecl`, which is the property that matters.
 
 `#print axioms` is the load-bearing assertion in this file — it is what distinguishes a real proof
 from one that merely elaborated.
@@ -21,7 +20,7 @@ def isAllTwos : List Nat → Bool
   | [] => true
   | x :: xs => x = 2 && isAllTwos xs
 
-/-- info: correct def genAllTwos: emitted (generator), sound_complete, total -/
+/-- info: correct def genAllTwos: emitted (generator), sound_complete, total, correct -/
 #guard_msgs in
 correct def genAllTwos : Palamedes.Gen (List Nat) := by generator_search (fun xs => isAllTwos xs)
 
@@ -45,6 +44,14 @@ example (P : List Nat → Prop) (hP : (fun xs => isAllTwos xs = true) = P) :
     genAllTwos.support = P := by
   rw [genAllTwos.sound_complete, hP]
 
+-- `f.correct` is the bundled view, for feeding `f` back into synthesis where the rules consume a
+-- `CorrectGen`. It is a *view*, not a copy: `.val` is definitionally the declaration itself.
+/-- info: genAllTwos.correct : CorrectGen fun xs => isAllTwos xs = true -/
+#guard_msgs in
+#check @genAllTwos.correct
+
+example : genAllTwos.correct.val = genAllTwos := rfl
+
 -- Totality is data, so the Basalt-shaped generator is a projection out of the law.
 def genAllTwosBasalt [_root_.Gen G] : G (List Nat) := genAllTwos.total.val.run
 
@@ -54,14 +61,14 @@ def genAllTwosBasalt [_root_.Gen G] : G (List Nat) := genAllTwos.total.val.run
 example : IsSoundAndComplete (genAllTwos.run (G := SPMF)) (fun xs => isAllTwos xs = true) :=
   isSoundAndComplete_of_support genAllTwos.sound_complete
 
-/-! ## Binders: the two halves meet
+/-! ## Binders
 
 `correct def` accepts binders, which is what lets a declaration be **both** Basalt-shaped **and**
-carry a law. Without them the command could only target `Palamedes.Gen α` — the carrier the exercise
-set out to demote — so its `.basalt` branch was unreachable and `Palamedes/Laws.lean` was dead code.
+carry a law: the `[Gen G]` binder is what makes the shape Basalt's, and value binders are quantified
+over in the emitted law.
 -/
 
-/-- info: correct def genBasalt: emitted (generator), sound_complete -/
+/-- info: correct def genBasalt: emitted (generator), sound_complete, gen -/
 #guard_msgs in
 correct def genBasalt [_root_.Gen G] : G (List Nat) := by generator_search (fun xs => isAllTwos xs)
 
@@ -82,7 +89,7 @@ correct def genBasalt [_root_.Gen G] : G (List Nat) := by generator_search (fun 
 #print axioms genBasalt.sound_complete
 
 -- Value binders are *kept*, and the law quantifies over them.
-/-- info: correct def genParam: emitted (generator), sound_complete, total -/
+/-- info: correct def genParam: emitted (generator), sound_complete, total, correct -/
 #guard_msgs in
 correct def genParam (_n : Nat) : Palamedes.Gen (List Nat) := by
   generator_search (fun xs => isAllTwos xs)
@@ -92,7 +99,7 @@ correct def genParam (_n : Nat) : Palamedes.Gen (List Nat) := by
 #check @genParam.sound_complete
 
 -- The filtering shape takes binders too, and it now carries a law of its own.
-/-- info: correct def genRange: emitted (generator), sound_complete -/
+/-- info: correct def genRange: emitted (generator), sound_complete, gen -/
 #guard_msgs in
 correct def genRange (lo hi : Nat) [_root_.Gen G] : G (Option Nat) := by
   generator_search (fun n => lo ≤ n ∧ n ≤ hi)
@@ -114,11 +121,20 @@ info: genRange.sound_complete : ∀ (lo hi : ℕ), IsSomeSoundAndComplete (genRa
 #guard_msgs in
 #print axioms genRange.sound_complete
 
+-- The negative half of the emission report. `total` and `correct` are carrier-shape laws and a
+-- filtering generator has no totality witness to state one from, so they must be *absent* — the
+-- reported list above stays honest only if nothing is emitted behind it.
+run_cmd do
+  for suffix in [`total, `correct] do
+    if (← Lean.getEnv).contains (`genRange ++ suffix) then
+      throwError "genRange is filtering, so it has no totality witness and `genRange.{suffix}` \
+        must not be emitted"
+
 -- A non-recursive generator over a `Prop`-valued predicate. This one regression-guards the
 -- optimizer's assume-discharge: `support_assume_true` is stated at `b := true` precisely so its
 -- proof carries no unassigned metavariable, and a `correct def` on it is what detects a relapse —
 -- the kernel rejects a declaration containing metavariables, so the failure is loud.
-/-- info: correct def genBetween: emitted (generator), sound_complete, total -/
+/-- info: correct def genBetween: emitted (generator), sound_complete, total, correct -/
 #guard_msgs in
 correct def genBetween : Palamedes.Gen Nat := by generator_search (fun n => 3 ≤ n ∧ n ≤ 7)
 

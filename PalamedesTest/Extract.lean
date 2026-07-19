@@ -14,12 +14,10 @@ of raw `Gen` code.
 This module walks every generator-typed definition in the example corpus and *fails to compile* if
 any synthesis residue survives in a compiled term.
 
-**It must recognise both generator shapes.** It originally matched only a `Palamedes.Gen α` head, so
-when emission moved to the Basalt shape (`{G} → [Gen G] → G α`, whose head under the telescope is a
-*local* `G` rather than a constant) every such generator was silently skipped — and the `total == 0`
-backstop stayed quiet because the corpus still contained Palamedes-shaped ones. The audit narrowed
-to a shrinking subset at exactly the moment the representation changed. A check that cannot fail is
-never checked; that is the same failure this module exists to prevent, one level up.
+**It must recognise every generator shape** — `Palamedes.Gen α`, `CorrectGen P`, and the Basalt
+`{G} → [Gen G] → G α`, whose head under the telescope is a *local* `G` rather than a constant. A
+shape the walk fails to match is silently unaudited, and the `total == 0` backstop does not catch it
+so long as some other shape still matches.
 -/
 
 open Lean Meta Elab Command
@@ -59,21 +57,42 @@ run_cmd liftTermElabM do
   for i in [0:env.header.moduleData.size] do
     let modName := env.header.moduleNames[i]!
     -- `GeneratorAPI` alongside the corpus: it holds the canonical Basalt-shaped generators, which
-    -- is the default emission shape and therefore the one most in need of auditing.
+    -- is the default emission shape and therefore the one most in need of auditing. `CorrectDef`
+    -- and `DeriveTuning` because their commands emit through raw `addDecl` — no def elaborator, so
+    -- none of the `._proof_i` abstraction the exemption above assumes, and a distinct emission path
+    -- whose residue the corpus cannot witness.
     unless (`PalamedesTest.Corpus).isPrefixOf modName
-        || modName == `PalamedesTest.GeneratorAPI do continue
+        || modName == `PalamedesTest.GeneratorAPI
+        || modName == `PalamedesTest.CorrectDef
+        || modName == `PalamedesTest.DeriveTuning do continue
     for n in env.header.moduleData[i]!.constNames do
       let some ci := env.find? n | continue
       let some val := ci.value? | continue
       let isGen ← forallTelescope ci.type fun args body => do
         -- The synthesis-internal carrier...
         if body.getAppFn.constName? == some ``Palamedes.Gen then return true
+        -- ...or bundled: a `CorrectGen`-typed def's *data* component is a generator, and skipping
+        -- the bundle entirely is how this audit would go quiet at the next representation change.
+        -- Only when no *argument* is `CorrectGen`-typed: a def consuming `CorrectGen`s is a
+        -- combinator (`s_unfold` &c.), whose business is exactly the `.val` projections and
+        -- `CorrectGen` mentions this audit calls residue in a synthesized generator.
+        if body.getAppFn.constName? == some ``Palamedes.CorrectGen then
+          return !(← args.anyM fun a => do
+            return (← inferType a).getUsedConstants.contains ``Palamedes.CorrectGen)
         -- ...or Basalt-shaped, `G α` for a `G` bound by this very telescope.
         let hd := body.getAppFn
         return hd.isFVar && args.any (· == hd)
       unless isGen do continue
       total := total + 1
-      let bad := val.getUsedConstants.filter isResidue
+      -- Scan the **data** path only. Proof subterms are compiler-erased and legitimately carry
+      -- witness plumbing (a `frequency` side condition built by the `totality` cascade mentions
+      -- `totalWeighted_cons` and casts); flagging those would make every raw-`addDecl` emission a
+      -- false positive. The def elaborator hides them behind exempt `._proof_i` names; raw
+      -- `addDecl` keeps them inline, so the erasure has to be structural rather than name-based.
+      let cleaned ← Meta.transform val (pre := fun e => do
+        if !e.isApp && !e.isLambda && !e.isForall && !e.isLet then return .continue
+        if ← Meta.isProof e then return .done (mkConst ``True.intro) else return .continue)
+      let bad := cleaned.getUsedConstants.filter isResidue
       unless bad.isEmpty do
         logError m!"extraction left synthesis residue in {n}: {bad.toList}"
   if total == 0 then

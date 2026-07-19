@@ -1,6 +1,7 @@
 import Palamedes.Gen
 import Palamedes.CorrectGen
 import Palamedes.Total
+import Palamedes.SomeSupport
 import Batteries.Data.List.Lemmas
 import Mathlib.Data.List.Basic
 
@@ -23,6 +24,20 @@ theorem support_elements
     v ∈ 〚elements xs h〛↔ v ∈ xs := by
   induction xs with
   | nil => simp_all; contradiction
+  | cons x xs ih =>
+    match hxs : xs with
+    | [] =>
+      simp_all [elements]
+    | _ :: _ =>
+      simp [elements] at ih ⊢
+      simp_all
+
+@[simp]
+theorem someSupport_elements
+    {xs : List α} {v : α} {h : xs.length > 0} :
+    someSupport (elements xs h) v ↔ v ∈ xs := by
+  induction xs with
+  | nil => simp at h
   | cons x xs ih =>
     match hxs : xs with
     | [] =>

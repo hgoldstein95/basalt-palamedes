@@ -33,7 +33,7 @@ theorem isSoundAndComplete_of_support {g : Gen α} (h : g.support = P) :
 This is the step that needs no parametricity: `t.toGen = g` gives `g.run (G := SPMF) = t.run
 (G := SPMF)` by congruence, because both sides are the *same* instantiation of the same polymorphic
 term. The filtering path has no counterpart — `totalize` runs the generator at `OptionT SPMF`, a
-different instantiation, which is the gap recorded in `basalt-notes/tuning/PLAN.md` §5. -/
+different instantiation, so the transfer does not go through. -/
 theorem isSoundAndComplete_of_total {t : TGen α} {g : Gen α}
     (hw : t.toGen = g) (h : g.support = P) :
     IsSoundAndComplete (t.run (G := SPMF)) P := by
@@ -60,9 +60,9 @@ def IsSomeSoundAndComplete (g : SPMF (Option α)) (P : α → Prop) : Prop :=
 
 Unlike `isSoundAndComplete_of_total` this does *not* transfer a fact across two instantiations of
 one polymorphic term — `someSupport` is defined at `OptionT SPMF` to begin with, which is the same
-interpretation `totalize` runs the emitted definition at. That is why the filtering law is available
-at all despite PLAN §5: the parametricity gap is only in the *global* `someSupport g = g.support`,
-and the pipeline discharges the instance it needs by simp over the combinator twins instead. -/
+interpretation `totalize` runs the emitted definition at. The parametricity gap is only in the
+*global* `someSupport g = g.support`, and the pipeline discharges the instance it needs by simp over
+the combinator twins instead. -/
 theorem isSomeSoundAndComplete_of_someSupport {g : Gen α} (h : someSupport g = P) :
     IsSomeSoundAndComplete (Gen.totalize g (G := SPMF)) P :=
   fun a => iff_of_eq (congrFun h a)

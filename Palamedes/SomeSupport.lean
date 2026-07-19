@@ -21,7 +21,7 @@ equation is a one-liner from the two `bind`/`pure` lemmas below), and the agreem
 through `unfold`. What is **not** available is the global statement `∀ g, someSupport g = g.support`:
 `g.run` is an arbitrary element of `∀ {G} [Gen G] [Fail G], G α`, so relating its `SPMF` instance to
 its `OptionT SPMF` instance is a free theorem about that Π-type, which Lean's logic does not prove.
-See `basalt-notes/tuning/PLAN.md` §5 and `PalamedesExperiments/SomeSupport.lean`.
+See `PalamedesExperiments/SomeSupport.lean`.
 
 This is why the twins are *derived per datatype* rather than obtained by transporting
 `X.support_unfold`: `support_unfold`'s step predicate is `(f d x).support` for a `Gen`-valued `f`,

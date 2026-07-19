@@ -36,6 +36,11 @@ genWellTyped.sites)`, whose depth-decaying weights force closure. -/
 def genWellTyped (Γ : List Ty) : Gen Term := by
   generator_search (fun t => isWellTyped Γ t)
 
+/--
+info: derive_tuning WellTyped.genWellTyped: emitted tuned, defaults, sites, tuned_defaults, tuned_support
+  (no `tuned_sound_complete`: WellTyped.genWellTyped has no `sound_complete` to carry across — declare it with `correct def` to get one)
+-/
+#guard_msgs in
 derive_tuning genWellTyped
 
 end WellTyped

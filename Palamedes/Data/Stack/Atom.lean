@@ -33,6 +33,11 @@ theorem support_arbLabel : support arbLabel = fun _ => True := by
   funext v
   cases v <;> simp_all [arbLabel]
 
+@[simp]
+theorem someSupport_arbLabel : someSupport arbLabel = fun _ => True := by
+  funext v
+  cases v <;> simp_all [arbLabel]
+
 namespace CorrectGen
 
 @[extract, aesop safe apply (rule_sets := [synthesis])]

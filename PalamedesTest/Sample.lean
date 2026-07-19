@@ -12,7 +12,7 @@ failing path. Each `#eval` below draws for real during the build and throws — 
 an unexpected outcome.
 
 The retrying assertions are statistically safe, not razor-thin: the lowest acceptance rate exercised
-here is `genAVL 4` at ~8% per draw (measured; see the proposal-05 sweep), so 1000 attempts fail with
+here is `genAVL 4` at ~8% per draw (measured), so 1000 attempts fail with
 probability below 10⁻³⁰. Deep filtering regimes (`genRBT 3+`, `genAVL 5+`) have vanishing acceptance
 and are deliberately *not* asserted; the out-of-attempts path is pinned with `Gen.empty`, which fails
 deterministically.
@@ -34,7 +34,7 @@ support. -/
   unless (AVL.isAVL 4 0 100 t) do
     throw <| IO.userError s!"genAVL 4 produced a non-AVL tree"
 
-/- `genRBT 2` filters at ~23% acceptance: used to throw on the first failing path, now samples. -/
+/- `genRBT 2` filters at ~23% acceptance; the retry loop is what makes it sample. -/
 #eval show IO Unit from do
   let t ← Palamedes.samplePartial (RBT.genRBT 2 0 10)
   unless (RBT.isRBT t 2 0 10) do
@@ -52,3 +52,31 @@ support. -/
   match ← (Palamedes.sample (Gen.empty : Gen Nat) (maxAttempts := 10)).toBaseIO with
   | .error _ => pure ()
   | .ok n => throw <| IO.userError s!"sample Gen.empty produced {n}"
+
+/-! ## The `samplePartial` family
+
+The `Plausible.Gen (Option α)` layer, entered directly by a generator whose declared type already
+says it can fail. Same three behaviours as the `sample` family above, one layer in.
+-/
+
+/- Exhaustion at the partial layer: every draw is `none`, so `samplePartial?` returns `none`. -/
+#eval show IO Unit from do
+  match ← Palamedes.samplePartial? (pure none : Plausible.Gen (Option Nat)) (maxAttempts := 10) with
+  | none => pure ()
+  | some n => throw <| IO.userError s!"samplePartial? (pure none) produced {n}"
+
+/- ...and `samplePartial` throws on the same generator rather than returning a junk value. -/
+#eval show IO Unit from do
+  let g : Plausible.Gen (Option Nat) := pure none
+  match ← (Palamedes.samplePartial g (maxAttempts := 10)).toBaseIO with
+  | .error _ => pure ()
+  | .ok n => throw <| IO.userError s!"samplePartial (pure none) produced {n}"
+
+/- `samplePartialN` draws exactly `n`, retrying each independently. `genRangeB`-style filtering is
+covered in `DeriveTuning`; here the point is the count and that every element cleared the filter. -/
+#eval show IO Unit from do
+  let ts ← Palamedes.samplePartialN 3 (RBT.genRBT 2 0 10)
+  unless ts.length = 3 do
+    throw <| IO.userError s!"samplePartialN 3 produced {ts.length} elements"
+  unless ts.all (fun t => RBT.isRBT t 2 0 10) do
+    throw <| IO.userError "samplePartialN 3 produced a non-RBT tree"
