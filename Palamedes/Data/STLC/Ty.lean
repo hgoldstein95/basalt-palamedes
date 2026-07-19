@@ -107,16 +107,16 @@ end CorrectGen
 
 namespace Total
 
-@[simp, total]
-theorem total_arbTy : total arbTy := by
+@[total]
+def total_arbTy : total arbTy := by
   simp only [Gen.arbTy]
   apply _root_.Ty.total_unfold
   intro _d _b
   exact total_frequency
     (totalWeighted_cons (total_pure _) (totalWeighted_cons (total_pure _) totalWeighted_nil))
 
-@[simp, total]
-theorem total_Ty_caseTy
+@[total]
+def total_Ty_caseTy
     {gu : (τ = Ty.unit) → Gen α}
     {ga : (τ₁ τ₂ : Ty) → (τ = Ty.arrow τ₁ τ₂) → Gen α}
     (hu : ∀ h, total (gu h))
@@ -125,7 +125,7 @@ theorem total_Ty_caseTy
   := by
   cases τ
   case unit => exact hu rfl
-  case arrow τ₁ τ₂ => simp_all only [Gen.caseTy]
+  case arrow τ₁ τ₂ => exact ha _ _ rfl
 
 end Total
 

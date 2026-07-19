@@ -66,13 +66,13 @@ end CorrectGen
 
 namespace Total
 
-@[simp, total]
-theorem total_arbColor : total (arbColor : Gen Color) := by
-  simp [arbColor]
+@[total]
+def total_arbColor : total (arbColor : Gen Color) :=
+  total_pick (total_pure _) (total_pure _)
 
-@[simp, total]
-theorem total_color_rec (hf : total gr) (ht : total gb) : total (Color.rec gr gb c) := by
-  cases c <;> simp_all
+@[total]
+def total_color_rec (hf : total gr) (ht : total gb) : total (Color.rec gr gb c) := by
+  cases c <;> assumption
 
 end Total
 

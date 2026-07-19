@@ -703,8 +703,6 @@ def genTotalUnfold (ctx : Ctx) : CommandElabM Unit := do
   let b := gid "b"
   let g := gid "g"
   let h := gid "h"
-  let tg := gid "tg"
-  let hg := gid "hg"
   let x := gid "x"
   let y := gid "y"
   let d := gid "d"
@@ -718,15 +716,14 @@ def genTotalUnfold (ctx : Ctx) : CommandElabM Unit := do
   binders := binders.push (← impB #[d₀] (← `(Nat)))
   addCmd (← `(command|
     @[total]
-    theorem $(ctx.declId "total_unfold"):ident $binders:bracketedBinder*
+    def $(ctx.declId "total_unfold"):ident $binders:bracketedBinder*
         ($h : ∀ $d:ident $x:ident, Palamedes.Gen.total ($g $d $x)) :
         Palamedes.Gen.total ($(ctx.ref "unfold") $g $b $d₀) := by
-      choose $tg:ident $hg:ident using $h
-      have $heq:ident : $g = fun $d $y => ($tg $d $y).toGen := by
-        funext $d:ident $y:ident
-        exact ($hg $d $y).symm
-      subst $heq:ident
-      exact ⟨$(mkIdent ctx.tgenUnfoldName) $tg $b $d₀, by ext; rfl⟩))
+      have $heq:ident : (fun $d $y => (($h $d $y).val).toGen) = $g :=
+        funext fun $d:ident => funext fun $y:ident => ($h $d $y).property
+      refine ⟨$(mkIdent ctx.tgenUnfoldName) (fun $d $y => ($h $d $y).val) $b $d₀, ?_⟩
+      conv_rhs => rw [← $heq:ident]
+      ext; rfl))
 
 def genCoerceToFold (ctx : Ctx) : CommandElabM Unit := do
   let β := gid "β"

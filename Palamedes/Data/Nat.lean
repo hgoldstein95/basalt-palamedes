@@ -191,17 +191,17 @@ namespace Total
 /-- `arbNat` is assume-free: its body uses only `pick`/`pure`/`bind`, so the same fixpoint at the
 failure-free interface (`TGen.arbNat`) is a witness. (Almost-sure termination is a strictly stronger,
 orthogonal fact; see the Basalt library.) -/
-@[simp, total]
-theorem total_arbNat : total arbNat := ⟨TGen.arbNat, by ext; rfl⟩
+@[total]
+def total_arbNat : total arbNat := ⟨TGen.arbNat, by ext; rfl⟩
 
-@[simp, total]
-theorem total_choose : total (choose lo hi h) := ⟨TGen.choose lo hi h, by ext; rfl⟩
+@[total]
+def total_choose : total (choose lo hi h) := ⟨TGen.choose lo hi h, by ext; rfl⟩
 
-@[simp, total]
-theorem total_gt : total (gt lo) := by simp [gt]
+@[total]
+def total_gt : total (gt lo) := total_map total_arbNat
 
-@[simp, total]
-theorem total_lt : total (lt lo h) := by simp [lt]
+@[total]
+def total_lt : total (lt lo h) := total_choose
 
 end Total
 

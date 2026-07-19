@@ -41,13 +41,13 @@ end CorrectGen
 
 namespace Total
 
-@[simp, total]
-theorem total_arbBool : total (arbBool : Gen Bool) := by
-  simp [arbBool]
+@[total]
+def total_arbBool : total (arbBool : Gen Bool) :=
+  total_pick (total_pure _) (total_pure _)
 
-@[simp, total]
-theorem total_Bool_rec (hf : total gf) (ht : total gt) : total (Bool.rec gf gt b) := by
-  cases b <;> simp_all
+@[total]
+def total_Bool_rec (hf : total gf) (ht : total gt) : total (Bool.rec gf gt b) := by
+  cases b <;> assumption
 
 end Total
 

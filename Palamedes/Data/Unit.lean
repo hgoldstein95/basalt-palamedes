@@ -22,9 +22,9 @@ end CorrectGen
 
 namespace Total
 
-@[simp, total]
-theorem total_arbUnit : total arbUnit := by
-  simp [arbUnit]
+@[total]
+def total_arbUnit : total arbUnit :=
+  total_pure ()
 
 end Total
 

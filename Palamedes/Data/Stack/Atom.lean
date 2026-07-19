@@ -68,9 +68,10 @@ end CorrectGen
 
 namespace Total
 
-@[simp, total]
-theorem total_arbLabel : total arbLabel := by
-  simp [arbLabel]
+@[total]
+def total_arbLabel : total arbLabel := by
+  unfold arbLabel
+  exact total_pick (total_pure Label.low) (total_pure Label.high)
 
 end Total
 

@@ -44,13 +44,10 @@ end CorrectGen
 
 namespace Total
 
-@[simp, total]
-theorem total_elements :
-    (Gen.total (elements xs h)) := by
-  induction xs <;> simp at h
-  case cons x xs' ih _ =>
-    simp [elements]
-    cases xs' <;> simp_all
+@[total]
+def total_elements : ∀ {xs : List α} {h : xs.length > 0}, Gen.total (elements xs h)
+  | [_], _ => total_pure _
+  | _ :: y :: ys, _ => total_pick (total_pure _) (total_elements (xs := y :: ys) (h := by simp))
 
 end Total
 
