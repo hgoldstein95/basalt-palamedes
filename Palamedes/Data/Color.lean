@@ -3,6 +3,7 @@ import Palamedes.CorrectGen
 import Palamedes.Total
 import Palamedes.RuleSets
 import Palamedes.CaseSplit
+import Palamedes.SomeSupport
 
 section TypeDef
 
@@ -39,6 +40,11 @@ def arbColor : Gen Color := pick (pure .red) (pure .black)
 theorem support_arbColor :
     support arbColor = fun _ => True := by
     funext x; cases x <;> simp_all [arbColor]
+
+/-- The `someSupport` twin, for the filtering path's law. -/
+@[simp]
+theorem someSupport_arbColor : someSupport arbColor = fun _ => True := by
+  funext x; cases x <;> simp_all [arbColor]
 
 namespace CorrectGen
 

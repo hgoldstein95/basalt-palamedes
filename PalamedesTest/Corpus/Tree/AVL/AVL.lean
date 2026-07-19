@@ -28,7 +28,7 @@ def isBalanced (t : Palamedes.Tree Nat) (height : Nat) : Bool :=
 def isAVL (height lo hi : Nat) (t : Palamedes.Tree Nat) : Bool :=
   isBalanced t height && isBST t (lo, hi)
 
-def genAVL (height lo hi : Nat) : Gen (Palamedes.Tree Nat) := by
-  generator_search (fun t => isAVL height lo hi t = true) allow_partial
+def genAVL (height lo hi : Nat) [_root_.Gen G] : G (Option (Palamedes.Tree Nat)) := by
+  generator_search (fun t => isAVL height lo hi t = true)
 
 end AVL

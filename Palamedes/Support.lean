@@ -97,13 +97,19 @@ theorem support_pick_assume_same
       = support (assume b fun h => pick (f h) (g h)) := by
   aesop
 
-/-- When the guard `b` holds, `assume b f` is its then-branch `f h`, with the dead `empty` else-branch
+/-- When the guard holds, `assume b f` is its then-branch, with the dead `empty` else-branch
 removed. The twin lemma for the optimizer's assume-discharge rewrite (`optimizeAssume?`); eliminating
-the `empty` is what keeps a satisfiable-guarded generator `Fail`-free for the totality check. -/
+the `empty` is what keeps a satisfiable-guarded generator `Fail`-free for the totality check.
+
+Stated at `b := true` rather than with a hypothesis `h : b = true`, and that is load-bearing for the
+optimizer. `mkLeafProof` recovers a twin lemma's proof by unifying its *conclusion* against the goal,
+so a hypothesis appearing only inside the right-hand side (as `h` did, in `support (f h)`) is not
+determined by that unification and survives as an unassigned metavariable in the emitted proof. The
+optimizer only fires this rewrite when the guard is definitionally `true`, so specializing costs
+nothing and leaves the lemma hypothesis-free. -/
 theorem support_assume_true
-    {b : Bool} {f : b → Gen α} (h : b = true) :
-    support (assume b f) = support (f h) := by
-  simp only [assume, dif_pos h]
+    {f : (true = true) → Gen α} :
+    support (assume true f) = support (f rfl) := rfl
 
 theorem support_pick_flatten (x y : Gen α) :
     support (pick x y) = support (oneOf [x, y] (by simp)) := by

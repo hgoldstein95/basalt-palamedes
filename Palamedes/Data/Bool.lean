@@ -3,6 +3,7 @@ import Palamedes.CorrectGen
 import Palamedes.Total
 import Palamedes.RuleSets
 import Palamedes.CaseSplit
+import Palamedes.SomeSupport
 
 namespace Palamedes
 
@@ -16,6 +17,12 @@ def arbBool : Gen Bool := pick (pure true) (pure false)
 theorem support_arbBool :
     support arbBool = fun _ => True := by
     funext x; cases x <;> simp_all [arbBool]
+
+/-- The `someSupport` twin, for the filtering path's law. Same script: `arbBool` is a `pick` of two
+`pure`s, and the combinator twins cover both. -/
+@[simp]
+theorem someSupport_arbBool : someSupport arbBool = fun _ => True := by
+  funext x; cases x <;> simp_all [arbBool]
 
 namespace CorrectGen
 

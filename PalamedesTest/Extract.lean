@@ -1,4 +1,5 @@
 import PalamedesTest.Corpus
+import PalamedesTest.GeneratorAPI
 
 /-!
 # Extraction audit
@@ -10,8 +11,15 @@ support-preservation proof still holds trivially, and a `totality` failure is on
 result is a definition that elaborates fine but contains `(… : CorrectGen P).val` wrappers instead
 of raw `Gen` code.
 
-This module walks every `Gen`-typed definition in the example corpus and *fails to compile* if any
-synthesis residue survives in a compiled term.
+This module walks every generator-typed definition in the example corpus and *fails to compile* if
+any synthesis residue survives in a compiled term.
+
+**It must recognise both generator shapes.** It originally matched only a `Palamedes.Gen α` head, so
+when emission moved to the Basalt shape (`{G} → [Gen G] → G α`, whose head under the telescope is a
+*local* `G` rather than a constant) every such generator was silently skipped — and the `total == 0`
+backstop stayed quiet because the corpus still contained Palamedes-shaped ones. The audit narrowed
+to a shrinking subset at exactly the moment the representation changed. A check that cannot fail is
+never checked; that is the same failure this module exists to prevent, one level up.
 -/
 
 open Lean Meta Elab Command
@@ -37,19 +45,32 @@ def isResidue (c : Name) : Bool :=
   else
     c == ``Subtype.val || c == ``Eq.mpr || c == ``Eq.rec || c == ``Palamedes.CorrectGen ||
     c == ``Palamedes.Gen.pick ||
-    (`Palamedes.Gen.CorrectGen).isPrefixOf c
+    (`Palamedes.Gen.CorrectGen).isPrefixOf c ||
+    -- Totality residue. A Basalt-shaped generator is emitted from the `TGen` witness, so if the
+    -- witness's `.val`/`.run` did not reduce away, what lands in the environment is the *proof* and
+    -- not the generator — readable as a witness tree rather than as generator code. `Eq.rec` above
+    -- already catches the `▸` such a tree carries; these name the cause rather than the symptom.
+    (`Palamedes.Gen.Total).isPrefixOf c || (`Palamedes.TGen).isPrefixOf c ||
+    c == ``Palamedes.Gen.total || c.toString.endsWith "total_unfold"
 
 run_cmd liftTermElabM do
   let env ← getEnv
   let mut total := 0
   for i in [0:env.header.moduleData.size] do
     let modName := env.header.moduleNames[i]!
-    unless (`PalamedesTest.Corpus).isPrefixOf modName do continue
+    -- `GeneratorAPI` alongside the corpus: it holds the canonical Basalt-shaped generators, which
+    -- is the default emission shape and therefore the one most in need of auditing.
+    unless (`PalamedesTest.Corpus).isPrefixOf modName
+        || modName == `PalamedesTest.GeneratorAPI do continue
     for n in env.header.moduleData[i]!.constNames do
       let some ci := env.find? n | continue
       let some val := ci.value? | continue
-      let isGen ← forallTelescope ci.type fun _ body =>
-        return body.getAppFn.constName? == some ``Palamedes.Gen
+      let isGen ← forallTelescope ci.type fun args body => do
+        -- The synthesis-internal carrier...
+        if body.getAppFn.constName? == some ``Palamedes.Gen then return true
+        -- ...or Basalt-shaped, `G α` for a `G` bound by this very telescope.
+        let hd := body.getAppFn
+        return hd.isFVar && args.any (· == hd)
       unless isGen do continue
       total := total + 1
       let bad := val.getUsedConstants.filter isResidue

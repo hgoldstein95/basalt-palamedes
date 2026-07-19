@@ -5,8 +5,9 @@ import PalamedesTest.Corpus.Tree.RBT.RBT
 /-!
 # Sampler tests: filtering generators sample instead of throwing
 
-The headline of the failure-aware semantics: an `allow_partial` generator (one with a genuinely
-failing `assume`) is *sampled* through the retry loop rather than throwing a `GenError` on the first
+The headline of the failure-aware semantics: a filtering generator — one declared at `G (Option α)`
+because it has a genuinely failing `assume` — is *sampled* through the retry loop (`samplePartial`)
+rather than throwing a `GenError` on the first
 failing path. Each `#eval` below draws for real during the build and throws — failing the build — on
 an unexpected outcome.
 
@@ -21,7 +22,7 @@ open Palamedes Palamedes.Gen
 
 /- `genAVL 3` never fails (measured 100% acceptance): a draw must succeed. -/
 #eval show IO Unit from do
-  let t ← Palamedes.sample (AVL.genAVL 3 0 10)
+  let t ← Palamedes.samplePartial (AVL.genAVL 3 0 10)
   unless (AVL.isAVL 3 0 10 t) do
     throw <| IO.userError s!"genAVL 3 produced a non-AVL tree"
 
@@ -29,13 +30,13 @@ open Palamedes Palamedes.Gen
 still satisfies the predicate — retry only conditions the distribution, it cannot leave the
 support. -/
 #eval show IO Unit from do
-  let t ← Palamedes.sample (AVL.genAVL 4 0 100)
+  let t ← Palamedes.samplePartial (AVL.genAVL 4 0 100)
   unless (AVL.isAVL 4 0 100 t) do
     throw <| IO.userError s!"genAVL 4 produced a non-AVL tree"
 
 /- `genRBT 2` filters at ~23% acceptance: used to throw on the first failing path, now samples. -/
 #eval show IO Unit from do
-  let t ← Palamedes.sample (RBT.genRBT 2 0 10)
+  let t ← Palamedes.samplePartial (RBT.genRBT 2 0 10)
   unless (RBT.isRBT t 2 0 10) do
     throw <| IO.userError s!"genRBT 2 produced a non-RBT tree"
 

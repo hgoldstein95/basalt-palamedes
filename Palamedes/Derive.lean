@@ -1,6 +1,7 @@
 import Lean
 import Palamedes.Gen
 import Palamedes.Support
+import Palamedes.SomeSupport
 import Palamedes.CorrectGen
 import Palamedes.Total
 import Palamedes.OptimizeCongr
@@ -498,6 +499,15 @@ def genUnfoldFamily (ctx : Ctx) : CommandElabM Unit := do
         ($f : Nat → $β → Palamedes.Gen $baseβ) ($b : $β) ($d₀ : Nat)
         ($G : Type → Type) [_root_.Gen $G] [Palamedes.Fail $G] :
         ($unfoldRef $f $b $d₀).run (G := $G) = $goRef (fun $d $x => ($f $d $x).run) $d₀ $b := rfl))
+  -- The `TGen` twin of `run_unfold`. Tagged `@[twitness]` rather than `@[simp]`: this is what lets
+  -- the emitted generator's recursion unfold from the totality witness back to `unfoldGo`, so a
+  -- synthesized generator reads as a generator rather than as a proof term. No `Fail` constraint —
+  -- that is the whole point of `TGen`.
+  addCmd (← `(command|
+    @[twitness] theorem $(ctx.declId "trun_unfold"):ident $uBinders:bracketedBinder*
+        ($f : Nat → $β → Palamedes.TGen $baseβ) ($b : $β) ($d₀ : Nat)
+        ($G : Type → Type) [_root_.Gen $G] :
+        ($tgenRef $f $b $d₀).run (G := $G) = $goRef (fun $d $x => ($f $d $x).run) $d₀ $b := rfl))
 
 /-- `X.unfold_support P d b t`: the support characterization of an unfold, indexed by the depth the
 step is read at. `P` is a depth-indexed step support (`fun d x => support (f d x)`), and a child at
@@ -540,13 +550,75 @@ def genUnfoldSupport (ctx : Ctx) : CommandElabM Unit := do
         ($P : Nat → $β → $baseβ → Prop) ($d : Nat) ($b : $β) ($t : $self) : Prop :=
       match $t:ident with $alts:matchAlt*))
 
-/-- `X.support_unfold` — the support characterization, by a generated per-constructor induction.
+/-- Which support notion `genSupportUnfold` is emitting the characterization for.
+
+There are two: `Gen.support`, reading the generator at `SPMF` (where `Fail` is `⊥`), and
+`someSupport`, reading it at `OptionT SPMF` (where `Fail` is `pure none`). The second is what a
+*filtering* generator's emitted definition actually runs, so it is the one a law about `totalize g`
+needs.
+
+The two proofs are the **same script**. `X.unfoldGo` is polymorphic in `G`, so the
+`unfold`/`induction` skeleton does not care which interpretation it is read at, and only the leaf
+lemmas differ — which is why this is a lemma kit rather than a second emitter. The `some` on the
+`OptionT` side is the whole of the difference: it appears in the membership statement, and it means
+constructor injectivity has to see through an `Option.some.inj` first. -/
+structure SupportKit where
+  /-- Suffix of the emitted theorem: `X.support_unfold` or `X.someSupport_unfold`. -/
+  thmName : String
+  /-- Applied to a generator to give its support predicate. -/
+  supportOf : Term → CommandElabM Term
+  /-- The `bind` lemma: `SPMF.support_bind` or `mem_support_optionT_bind`. -/
+  bindLem : Term
+  /-- The `pure` lemma: `SPMF.support_pure` or `support_optionT_pure`. -/
+  pureLem : Term
+  /-- Membership-unfolding lemmas that accompany the two above in a `simp only`. -/
+  memLems : Array Term
+  /-- Extra lemmas in the per-case `simp only […, X.unfold_support]`. -/
+  headSimp : Array Term
+  /-- Wraps `w` in the membership goal: `w` at `SPMF`, `some w` at `OptionT SPMF`. -/
+  memWrap : Term → CommandElabM Term
+  /-- Wraps the `unfoldGo` application before `SPMF.support` is applied to it. -/
+  runWrap : Term → CommandElabM Term
+  /-- The `G` the `unfoldGo` application is read at, when it must be given explicitly. -/
+  goInst : Option Term
+  /-- Adapts an equation proof before feeding it to a constructor's injectivity lemma. On the
+  `OptionT` side the equation is between `Option`s, so it needs peeling first. -/
+  wrapInj : Term → CommandElabM Term
+
+/-- The `Gen.support` kit: the original emitter, unchanged. -/
+def SupportKit.spmf : SupportKit where
+  thmName := "support_unfold"
+  supportOf := fun g => `(Palamedes.Gen.support $g)
+  bindLem := mkIdent ``SPMF.support_bind
+  pureLem := mkIdent ``SPMF.support_pure
+  memLems := #[mkIdent ``Set.mem_setOf_eq, mkIdent ``Set.mem_singleton_iff]
+  headSimp := #[mkIdent ``Set.mem_setOf_eq]
+  memWrap := pure
+  runWrap := pure
+  goInst := none
+  wrapInj := pure
+
+/-- The `someSupport` kit: the same script at `OptionT SPMF`. -/
+def SupportKit.optionT : SupportKit where
+  thmName := "someSupport_unfold"
+  supportOf := fun g => `(Palamedes.someSupport $g)
+  bindLem := mkIdent ``Palamedes.mem_support_optionT_bind
+  pureLem := mkIdent ``Palamedes.support_optionT_pure
+  memLems := #[mkIdent ``Set.mem_singleton_iff]
+  headSimp := #[]
+  memWrap := fun w => `(some $w)
+  runWrap := fun e => `(OptionT.run $e)
+  goInst := some (Unhygienic.run `(OptionT SPMF))
+  wrapInj := fun h => `(Option.some.inj $h)
+
+/-- `X.support_unfold` / `X.someSupport_unfold` — the support characterization, by a generated
+per-constructor induction.
 
 Because `unfold_support`'s step predicate is itself depth-indexed, the characterization holds at
 every depth *unconditionally*: no depth-independence hypothesis is needed, and the per-constructor
 scripts below are the same ones they were before depth threading. All the statement needs is a `d₀`
 binder and `generalizing d₀` on the induction. -/
-def genSupportUnfold (ctx : Ctx) : CommandElabM Unit := do
+def genSupportUnfold (ctx : Ctx) (kit : SupportKit) : CommandElabM Unit := do
   let β := gid "β"
   let b := gid "b"
   let f := gid "f"
@@ -557,6 +629,14 @@ def genSupportUnfold (ctx : Ctx) : CommandElabM Unit := do
   let goRef := ctx.ref "unfoldGo"
   let usRef := ctx.ref "unfold_support"
   let baseβ ← ctx.baseTy (β : Term)
+  -- The leaf lemma sets, the only place the two interpretations differ. `simpSet` is deliberately
+  -- uniform across constructors — a nullary constructor's case has no `bind` to rewrite, but an
+  -- unused `simp only` lemma is harmless and keeping one set makes the two kits comparable.
+  let toSimpLemmas (ts : Array Term) : CommandElabM (Array (TSyntax ``Lean.Parser.Tactic.simpLemma)) :=
+    ts.mapM fun t => `(Lean.Parser.Tactic.simpLemma| $t:term)
+  let simpSet ← toSimpLemmas (#[kit.bindLem, kit.pureLem] ++ kit.memLems)
+  let pureSet ← toSimpLemmas (#[kit.pureLem] ++ kit.memLems)
+  let headSet ← toSimpLemmas (kit.headSimp ++ #[(usRef : Term)])
   -- per-constructor induction cases
   let cases ← ctx.ctors.mapM fun c => do
     let recFs := c.recFields
@@ -568,8 +648,7 @@ def genSupportUnfold (ctx : Ctx) : CommandElabM Unit := do
     let caseTacs ← ctx.ctors.mapM fun c' => do
       if c'.short != c.short then
         let tac ← `(tactic|
-          simp only [SPMF.support_bind, SPMF.support_pure, Set.mem_setOf_eq,
-            Set.mem_singleton_iff] at $hw:ident <;> simp_all)
+          simp only [$simpSet,*] at $hw:ident <;> simp_all)
         `(tactic| case $(mkIdent c'.short):ident => $tac:tactic)
       else
         let yIds := (Array.range c.fields.size).map fun j => gid s!"y{j+1}"
@@ -582,14 +661,13 @@ def genSupportUnfold (ctx : Ctx) : CommandElabM Unit := do
             tacs := tacs.push (← `(tactic| exact $ht))
           else
             tacs := tacs.push (← `(tactic|
-              simp only [SPMF.support_pure, Set.mem_singleton_iff] at $hw:ident))
+              simp only [$pureSet,*] at $hw:ident))
             let injPat ← rcasesTuple (c.fields.map fun _ => gid "rfl")
-            tacs := tacs.push (← `(tactic| obtain $injPat:rcasesPat := $injRef $hw))
+            tacs := tacs.push (← `(tactic|
+              obtain $injPat:rcasesPat := $injRef $(← kit.wrapInj hw)))
             tacs := tacs.push (← `(tactic| exact $ht))
         else
-          tacs := tacs.push (← `(tactic|
-            simp only [SPMF.support_bind, SPMF.support_pure, Set.mem_setOf_eq,
-              Set.mem_singleton_iff] at $hw:ident))
+          tacs := tacs.push (← `(tactic| simp only [$simpSet,*] at $hw:ident))
           let vIds := (Array.range recFs.size).map fun j => gid s!"v{j+1}"
           let hvIds := (Array.range recFs.size).map fun j => gid s!"hv{j+1}"
           let heq := gid "heq"
@@ -600,7 +678,8 @@ def genSupportUnfold (ctx : Ctx) : CommandElabM Unit := do
           pats := pats.push heq
           tacs := tacs.push (← `(tactic| obtain $(← rcasesTuple pats):rcasesPat := $hw))
           let injPat ← rcasesTuple (c.fields.map fun _ => gid "rfl")
-          tacs := tacs.push (← `(tactic| obtain $injPat:rcasesPat := $injRef (Eq.symm $heq)))
+          tacs := tacs.push (← `(tactic|
+            obtain $injPat:rcasesPat := $injRef $(← kit.wrapInj (← `(Eq.symm $heq)))))
           let mut parts : Array Term := yRec.map fun y => (y : Term)
           parts := parts.push (ht : Term)
           for j in [0:recFs.size] do
@@ -619,7 +698,7 @@ def genSupportUnfold (ctx : Ctx) : CommandElabM Unit := do
         let wit ← `($(c.fCtor) $(c.fieldIds)*)
         seqTac #[
           ← `(tactic| intro $h:ident),
-          ← `(tactic| exact ⟨$wit, $h, by simp⟩)]
+          ← `(tactic| exact ⟨$wit, $h, by simp only [$pureSet,*]⟩)]
       else
         let bIds := (Array.range recFs.size).map fun j => gid s!"b{j+1}"
         let hb := gid "hb"
@@ -646,13 +725,12 @@ def genSupportUnfold (ctx : Ctx) : CommandElabM Unit := do
         seqTac #[
           ← `(tactic| rintro $(← rcasesTuple pats):rcasesPat),
           ← `(tactic| refine ⟨$wit, $hb, ?_⟩),
-          ← `(tactic| simp only [SPMF.support_bind, SPMF.support_pure, Set.mem_setOf_eq,
-                Set.mem_singleton_iff]),
+          ← `(tactic| simp only [$simpSet,*]),
           ← `(tactic| exact ⟨$final,*⟩)]
     let caseTac ← seqTac #[
       ← `(tactic| unfold $goRef:ident),
-      ← `(tactic| rw [SPMF.support_bind]),
-      ← `(tactic| simp only [Set.mem_setOf_eq, $usRef:term]),
+      ← `(tactic| rw [$(kit.bindLem):term]),
+      ← `(tactic| simp only [$headSet,*]),
       ← `(tactic| constructor),
       ← `(tactic| case mp => $fwd:tactic),
       ← `(tactic| case mpr => $bwd:tactic)]
@@ -664,14 +742,21 @@ def genSupportUnfold (ctx : Ctx) : CommandElabM Unit := do
   binders := binders.push (← impB #[f] (← `(Nat → $β → Palamedes.Gen $baseβ)))
   binders := binders.push (← impB #[b] (β : Term))
   binders := binders.push (← impB #[d₀] (← `(Nat)))
+  -- `unfoldGo` is polymorphic in `G`, so the only thing the `OptionT` reading changes here is which
+  -- `G` it is instantiated at — the skeleton below is shared verbatim.
+  let goApp ← match kit.goInst with
+    | none => `($goRef (fun $d $x => ($f $d $x).run) $d₀ $b)
+    | some inst => `($goRef (G := $inst) (fun $d $x => ($f $d $x).run) $d₀ $b)
+  let lhs ← kit.supportOf (← `($(ctx.ref "unfold") $f $b $d₀))
+  let step ← `(fun $d $x => $(← kit.supportOf (← `($f $d $x))))
+  let memW ← kit.memWrap (w : Term)
+  let runG ← kit.runWrap goApp
   addCmd (← `(command|
-    @[simp] theorem $(ctx.declId "support_unfold"):ident $binders:bracketedBinder* :
-        Palamedes.Gen.support ($(ctx.ref "unfold") $f $b $d₀)
-          = $usRef (fun $d $x => Palamedes.Gen.support ($f $d $x)) $d₀ $b := by
+    @[simp] theorem $(ctx.declId kit.thmName):ident $binders:bracketedBinder* :
+        $lhs = $usRef $step $d₀ $b := by
       funext $w:ident
       apply propext
-      show $w ∈ SPMF.support ($goRef (fun $d $x => ($f $d $x).run) $d₀ $b) ↔
-        $usRef (fun $d $x => Palamedes.Gen.support ($f $d $x)) $d₀ $b $w
+      show $memW ∈ SPMF.support $runG ↔ $usRef $step $d₀ $b $w
       induction $w:ident generalizing $b:ident $d₀:ident
       $proofTail:tactic))
 
@@ -718,12 +803,60 @@ def genTotalUnfold (ctx : Ctx) : CommandElabM Unit := do
     @[total]
     def $(ctx.declId "total_unfold"):ident $binders:bracketedBinder*
         ($h : ∀ $d:ident $x:ident, Palamedes.Gen.total ($g $d $x)) :
-        Palamedes.Gen.total ($(ctx.ref "unfold") $g $b $d₀) := by
-      have $heq:ident : (fun $d $y => (($h $d $y).val).toGen) = $g :=
-        funext fun $d:ident => funext fun $y:ident => ($h $d $y).property
-      refine ⟨$(mkIdent ctx.tgenUnfoldName) (fun $d $y => ($h $d $y).val) $b $d₀, ?_⟩
-      conv_rhs => rw [← $heq:ident]
-      ext; rfl))
+        Palamedes.Gen.total ($(ctx.ref "unfold") $g $b $d₀) :=
+      ⟨$(mkIdent ctx.tgenUnfoldName) (fun $d $y => ($h $d $y).val) $b $d₀, by
+        have $heq:ident : (fun $d $y => (($h $d $y).val).toGen) = $g :=
+          funext fun $d:ident => funext fun $y:ident => ($h $d $y).property
+        conv_rhs => rw [← $heq:ident]
+        ext; rfl⟩))
+
+/-- The base functor's case-analysis totality lemma.
+
+The synthesized step function ends in a `match` over the base functor, and `totality` has to get
+past it. Doing that with `split` (or with a bare `cases`) puts a `splitter`/recursor in the witness's
+**data** path, which blocks `.val` from projecting — so the emitted generator lands in the
+environment as a proof term rather than as generator code. This lemma instead builds the witness
+*as* a `match` producing `TGen`s, inside `TGen.mk`, so the `.run` projection cancels and what is
+emitted reads exactly like a hand-written generator.
+
+It is registered `@[total]`, so it is found through the registry like every other per-datatype fact
+and `Synthesizer/Totality.lean` needs no edit. -/
+def genTotalCases (ctx : Ctx) : CommandElabM Unit := do
+  let β := gid "β"
+  let γ := gid "γ"
+  let t := gid "t"
+  let baseβ ← ctx.baseTy (β : Term)
+  let gs := ctx.ctors.map fun c => gid s!"g_{c.short}"
+  let hs := ctx.ctors.map fun c => gid s!"h_{c.short}"
+  let mut binders : Array BB := (← ctx.paramBinders)
+  binders := binders.push (← impB #[β, γ] (← `(Type)))
+  -- One branch generator per constructor, taking that constructor's fields.
+  for c in ctx.ctors, gid' in gs do
+    let fieldTys := c.fields.map fun f => if f.isRec then (β : Term) else f.tyStx
+    binders := binders.push (← impB #[gid'] (← mkArrows fieldTys (← `(Palamedes.Gen $γ))))
+  -- ...and a totality witness for each, universally quantified over those fields.
+  for c in ctx.ctors, gid' in gs, hid in hs do
+    let fieldTys := c.fields.map fun f => if f.isRec then (β : Term) else f.tyStx
+    let concl ← `(Palamedes.Gen.total ($gid' $(c.fieldIds)*))
+    let ty ← c.fields.zip fieldTys |>.foldrM
+      (fun (fd, fty) acc => `(∀ ($(fd.id) : $fty), $acc)) concl
+    binders := binders.push (← expB hid ty)
+  binders := binders.push (← expB t baseβ)
+  let goalAlts ← ctx.ctors.mapIdxM fun i c => do
+    let pat ← `($(c.fCtor) $(c.fieldIds)*)
+    `(matchAltExpr| | $pat:term => $(gs[i]!) $(c.fieldIds)*)
+  let witAlts ← ctx.ctors.mapIdxM fun i c => do
+    let pat ← `($(c.fCtor) $(c.fieldIds)*)
+    `(matchAltExpr| | $pat:term => ($(hs[i]!) $(c.fieldIds)*).val.run)
+  let proofAlts ← ctx.ctors.mapIdxM fun i c => do
+    let pat ← `($(c.fCtor) $(c.fieldIds)*)
+    `(matchAltExpr| | $pat:term => ($(hs[i]!) $(c.fieldIds)*).property)
+  addCmd (← `(command|
+    @[total]
+    def $(ctx.declId "total_cases"):ident $binders:bracketedBinder* :
+        Palamedes.Gen.total (match $t:ident with $goalAlts:matchAlt*) :=
+      ⟨⟨fun {_G} _ => match $t:ident with $witAlts:matchAlt*⟩,
+       match $t:ident with $proofAlts:matchAlt*⟩))
 
 def genCoerceToFold (ctx : Ctx) : CommandElabM Unit := do
   let β := gid "β"
@@ -1504,9 +1637,11 @@ def elabDerivePalamedes : CommandElab := fun stx => do
   genAccuM ctx
   genUnfoldFamily ctx
   genUnfoldSupport ctx
-  genSupportUnfold ctx
+  genSupportUnfold ctx SupportKit.spmf
+  genSupportUnfold ctx SupportKit.optionT
   genSupportUnfoldCongr ctx
   genTotalUnfold ctx
+  genTotalCases ctx
   genCoerceToFold ctx
   genMergeAccuM ctx
   genFoldAccuBasic ctx

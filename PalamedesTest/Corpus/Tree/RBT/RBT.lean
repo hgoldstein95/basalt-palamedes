@@ -33,7 +33,10 @@ set_option maxRecDepth 2000
 def isRBT : Palamedes.Tree (Color × Nat) → Nat → Nat → Nat → Bool := λ t height lo hi =>
   isRR t && isBST t (lo, hi) && isBH t height
 
-def genRBT (height lo hi : Nat) : Gen (Palamedes.Tree (Color × Nat)) := by
-  generator_search (fun t => isRBT t height lo hi) allow_partial
+-- Filtering: the `Option` in the return type is what `allow_partial` used to say, and unlike a
+-- tactic argument it is visible at every use site.
+def genRBT (height lo hi : Nat) [_root_.Gen G] :
+    G (Option (Palamedes.Tree (Color × Nat))) := by
+  generator_search (fun t => isRBT t height lo hi)
 
 end RBT

@@ -37,7 +37,8 @@ set_option maxRecDepth 2000
 def isRBTFold (height lo hi : Nat) (t : Palamedes.Tree (Color × Nat)) : Bool :=
   isBHFold t height = true ∧ isRRFold t = true ∧ isBSTFold t (lo, hi) = true
 
-def genRBTFold (height lo hi : Nat) : Gen (Palamedes.Tree (Color × Nat)) := by
-  generator_search (fun t => isRBTFold lo hi height t = true) allow_partial
+def genRBTFold (height lo hi : Nat) [_root_.Gen G] :
+    G (Option (Palamedes.Tree (Color × Nat))) := by
+  generator_search (fun t => isRBTFold lo hi height t = true)
 
 end RBTFold

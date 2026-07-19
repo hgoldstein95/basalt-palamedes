@@ -162,7 +162,8 @@ def empty : Gen α := ⟨fun {_G} _ _ => Fail.fail⟩
   Operationally it is a *filter*, not a backtracking point: on a failing `assume` the sampler discards
   the whole draw and redraws — a global restart (`Palamedes/Sample.lean`) — rather than backtracking to
   the innermost choice. An `assume` the optimizer could not discharge is therefore a real filter, which
-  is what `allow_partial` exists to permit; its acceptance rate (`massSome`) governs the sampling
+  is what declaring the generator at `G (Option α)` exists to permit; its acceptance rate
+  (`massSome`) governs the sampling
   cost. -/
 def assume (b : Bool) (f : b → Gen α) : Gen α :=
   if h : b then f h else empty

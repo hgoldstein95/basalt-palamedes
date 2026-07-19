@@ -3,6 +3,7 @@ import Palamedes.CorrectGen
 import Palamedes.Total
 import Palamedes.RuleSets
 import Palamedes.CaseSplit
+import Palamedes.SomeSupport
 
 namespace Palamedes
 
@@ -64,6 +65,21 @@ theorem support_arbNat :
   | zero => rw [arbNatGo]; simp
   | succ n ih => rw [arbNatGo]; simp_all
 
+
+@[simp] theorem someSupport_arbNat : someSupport arbNat = fun _ => True := by
+  funext v
+  apply propext
+  simp only [iff_true]
+  show some v ∈ SPMF.support (OptionT.run (arbNatGo (G := OptionT SPMF)))
+  induction v with
+  | zero =>
+    rw [arbNatGo, mem_support_optionT_pick]
+    exact Or.inl (by rw [support_optionT_pure]; simp)
+  | succ n ih =>
+    rw [arbNatGo, mem_support_optionT_pick]
+    refine Or.inr ?_
+    rw [mem_support_optionT_bind]
+    exact ⟨n, ih, by rw [support_optionT_pure]; simp⟩
 @[simp]
 theorem support_gt :
     support (gt lo) = fun a => lo < a := by
@@ -80,6 +96,12 @@ theorem support_gt :
       exists x + 1
       omega
 
+
+@[simp] theorem someSupport_gt {lo : Nat} : someSupport (gt lo) = fun a => lo < a := by
+  simp only [gt, someSupport_map, someSupport_arbNat]
+  funext a; apply propext; constructor
+  · rintro ⟨x, -, rfl⟩; omega
+  · intro h; exact ⟨a - lo - 1, trivial, by omega⟩
 @[simp]
 theorem support_mod2 :
     support (mod2 r h) = fun a => a % 2 = r := by
@@ -92,6 +114,13 @@ theorem support_mod2 :
     exists (a/2)
     rw [←h1, Nat.div_add_mod]
 
+
+@[simp] theorem someSupport_mod2 {r : Nat} {h : r < 2} :
+    someSupport (mod2 r h) = fun a => a % 2 = r := by
+  simp only [mod2, someSupport_map, someSupport_arbNat]
+  funext a; apply propext; constructor
+  · rintro ⟨x, -, rfl⟩; omega
+  · intro h1; exact ⟨a / 2, trivial, by rw [← h1, Nat.div_add_mod]⟩
 @[simp]
 theorem support_choose :
     support (choose lo hi h) = fun a => lo ≤ a ∧ a ≤ hi := by
@@ -105,6 +134,21 @@ theorem support_choose :
   · intro hv
     exact ⟨⟨v, hv⟩, trivial, rfl⟩
 
+
+@[simp] theorem someSupport_choose {lo hi : Nat} {h : lo ≤ hi} :
+    someSupport (choose lo hi h) = fun a => lo ≤ a ∧ a ≤ hi := by
+  funext v
+  apply propext
+  show some v ∈ SPMF.support (OptionT.run
+      (RandomChoice.choose lo hi h >>= fun r => Pure.pure r.down.val : OptionT SPMF Nat)) ↔ _
+  rw [mem_support_optionT_bind]
+  simp only [instRandomChoiceOptionT, mem_support_optionT_lift, support_optionT_pure,
+    SPMF.mem_support_choose_iff, Set.mem_singleton_iff]
+  constructor
+  · rintro ⟨⟨a, ha⟩, -, hv⟩
+    cases Option.some.inj hv; exact ha
+  · intro hv
+    exact ⟨⟨v, hv⟩, trivial, rfl⟩
 @[simp]
 theorem support_lt :
     support (lt hi h) = fun a => a < hi := by
@@ -117,6 +161,13 @@ theorem support_lt :
   . intro
     omega
 
+
+@[simp] theorem someSupport_lt {hi : Nat} {h : hi > 0} :
+    someSupport (lt hi h) = fun a => a < hi := by
+  simp only [lt, someSupport_choose]
+  funext a; apply propext; constructor
+  · rintro ⟨-, h2⟩; omega
+  · intro h2; omega
 namespace CorrectGen
 
 @[extract, aesop safe apply (rule_sets := [synthesis])]

@@ -21,7 +21,7 @@ def isAVLFold (height lo hi : Nat) (t : Palamedes.Tree Nat) : Bool :=
 
 set_option maxHeartbeats 1000000
 
-def genAVLFold (height lo hi : Nat) : Gen (Palamedes.Tree Nat) := by
-  generator_search (fun t => isAVLFold height lo hi t = true) allow_partial
+def genAVLFold (height lo hi : Nat) [_root_.Gen G] : G (Option (Palamedes.Tree Nat)) := by
+  generator_search (fun t => isAVLFold height lo hi t = true)
 
 end AVLFold
