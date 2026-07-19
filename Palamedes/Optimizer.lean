@@ -663,11 +663,69 @@ private partial def optimizeOneOfChildren? (pass : OptPass) (table : Array Congr
   let proof ← mkAppOptM ``support_oneOf_congr #[α, gs, gs', hg, h, h']
   return some { expr := e', proof? := some proof }
 
+/-- Descend into a `frequency`'s branches, rebuilding the choice from the optimized ones.
+
+The `frequency` counterpart of `optimizeOneOfChildren?`, and exempt from the `@[gen_congr]` table for
+the same reason: `h : 0 < (gs.map Prod.fst).sum` is *dependent* on the branch list. Weights are
+carried through untouched, so `h` retypes at the rebuilt list by defeq — both `List.map Prod.fst`
+applications reduce on the literal list to the same sum.
+
+Without this, a hand-written `frequency` in a reducible position was silently skipped, and nothing
+nested inside one was ever visited. -/
+private partial def optimizeFrequencyChildren? (pass : OptPass) (table : Array CongrRule)
+    (depth : Depth) (e : Expr) : MetaM (Option OptResult) := do
+  let_expr Gen.frequency α gs h := e | return none
+  -- As in `optimizeOneOfChildren?`: a non-literal list would mean silently skipping the branches.
+  let some elems := listLitElems? gs
+    | throwError "optimizer: `frequency` with a non-literal branch list; cannot descend into\
+        {indentExpr gs}"
+  if elems.isEmpty then return none
+  let pairs ← elems.mapM fun p =>
+    match p.getAppFnArgs with
+    | (``Prod.mk, #[_, _, w, g]) => pure (w, g)
+    | _ => throwError "optimizer: `frequency` branch is not a literal (weight, generator) pair; \
+        cannot descend into{indentExpr p}"
+  let rs ← pairs.mapM fun (_, g) => optimizeReduced pass table depth g
+  unless rs.any (·.proof?.isSome) do return none
+  let genα ← mkAppM ``Gen #[α]
+  let prodTy ← mkAppM ``Prod #[mkConst ``Nat, genα]
+  let pairs' ← (pairs.zip rs).mapM fun ((w, _), r) => mkAppM ``Prod.mk #[w, r.expr]
+  let gs' ← mkListLit prodTy pairs'
+  -- Weights are unchanged, so `h`'s type at `gs'` is defeq to its type at `gs`. Check it rather
+  -- than trusting the reduction silently.
+  let hty := (← inferType h).replace fun x => if x == gs then some gs' else none
+  unless ← isDefEq (← inferType h) hty do
+    throwError "optimizer: rebuilt `frequency` weights do not retype its positivity proof; \
+      expected{indentExpr hty}"
+  let h' ← mkExpectedTypeHint h hty
+  -- `gs.map (fun p => (p.1, support p.2)) = gs'.map …`, folded from the per-branch proofs, exactly
+  -- as `optimizeOneOfChildren?` folds its `map support` equality.
+  let propTy ← mkArrow α (mkSort .zero)
+  let eltTy ← mkAppM ``Prod #[mkConst ``Nat, propTy]
+  let consFn := mkAppN (mkConst ``List.cons [Level.zero]) #[eltTy]
+  let mut hgMap ← mkEqRefl (← mkListLit eltTy [])
+  for ((w, g), r) in (pairs.zip rs).reverse do
+    let pg ← match r.proof? with
+      | some p => pure p
+      | none   => mkEqRefl (← mkSupport g)
+    let pairW ← withLocalDeclD `s propTy fun s => do
+      mkLambdaFVars #[s] (← mkAppM ``Prod.mk #[w, s])
+    hgMap ← mkCongr (← mkCongrArg consFn (← mkCongrArg pairW pg)) hgMap
+  let mapFn ← withLocalDeclD `p prodTy fun p => do
+    let fst ← mkAppM ``Prod.fst #[p]
+    let snd ← mkSupport (← mkAppM ``Prod.snd #[p])
+    mkLambdaFVars #[p] (← mkAppM ``Prod.mk #[fst, snd])
+  let hg ← mkExpectedTypeHint hgMap
+    (← mkEq (← mkAppM ``List.map #[mapFn, gs]) (← mkAppM ``List.map #[mapFn, gs']))
+  let e' ← mkAppOptM ``Gen.frequency #[α, gs', h']
+  let proof ← mkAppOptM ``support_frequency_congr #[α, gs, gs', hg, h, h']
+  return some { expr := e', proof? := some proof }
+
 /-- Optimize the children of `e` and reassemble, proving the result has the same `support` via the
 `@[gen_congr]` lemma registered for `e`'s head constant. No head rewrite is attempted here. This
 single generic case subsumes every `Gen` constructor and recursion-scheme combinator — except
 `oneOf`/`frequency`, whose dependent side-condition proofs it cannot rebuild (see
-`optimizeOneOfChildren?`).
+`optimizeOneOfChildren?` / `optimizeFrequencyChildren?`).
 
 If `e`'s head has no registered congruence lemma, skipping is correct *only* when there is nothing
 to descend into; if `e` carries a `Gen`-valued argument we would silently drop an optimization (and
@@ -676,6 +734,7 @@ support-congruence lemma `@[gen_congr]`. -/
 private partial def optimizeChildren (pass : OptPass) (table : Array CongrRule) (depth : Depth)
     (e : Expr) : MetaM OptResult := do
   if let some r ← optimizeOneOfChildren? pass table depth e then return r
+  if let some r ← optimizeFrequencyChildren? pass table depth e then return r
   let some head := e.getAppFn.constName? | return { expr := e, proof? := none }
   -- Under a registered `X.unfold`, the argument we descend into is its step, whose binder 0 is the
   -- recursion's depth.
@@ -688,12 +747,12 @@ private partial def optimizeChildren (pass : OptPass) (table : Array CongrRule) 
           | some (.recInfo _) => true
           | _ => false
         let auxiliary := (← Meta.getMatcherInfo? head).isSome || isRec
-        -- The two list-carrying combinators, exempt because neither is actually skipped:
-        -- `optimizeOneOfChildren?` handles `oneOf` (declining only when no branch changed), and a
-        -- `frequency` reaching here was produced by `installTuning` from an already-descended
-        -- `oneOf`. The gap: a hand-written `frequency` in a *reducible* position would be silently
-        -- skipped. Today the only one is inside `arbTy`, which is `@[irreducible]` and so never
-        -- opened. If you write another, give `frequency` a real descent rather than widening this.
+        -- The two list-carrying combinators, exempt because neither is actually skipped: each has
+        -- a by-hand descent above (`optimizeOneOfChildren?` / `optimizeFrequencyChildren?`) that
+        -- reaches this point only by *declining* — i.e. when no branch changed. Both throw rather
+        -- than decline on a shape they cannot descend into, so "reached here" really does mean
+        -- "nothing to rewrite". Do not widen this exemption to a third combinator without giving
+        -- it a descent first.
         let listCarrier := head == ``Gen.oneOf || head == ``Gen.frequency
         -- For any *other* combinator, a Gen-valued argument with no congruence lemma means we would
         -- silently drop an optimization (and could mask synthesis residue): fail loudly instead.
@@ -784,12 +843,30 @@ def optimizeGen (e : Expr) : MetaM (Expr × Expr) := do
     | none => mkSupportRefl e
   return (expr, proof)
 
+/-- What `buildTuned` produces: the `θ`-threaded term, its site table, the total branch-slot count,
+and the support-preservation proof `installTuning` computes along the way. -/
+structure TunedResult where
+  /-- `fun (θ : Tuning) args => …`, every `frequency` weight read from `θ`. -/
+  tuned : Expr
+  /-- The `frequency` sites, in offset-assignment order. -/
+  sites : Array TuningSiteInfo
+  /-- Total branch slots, i.e. the length of the flat `Tuning.schedules` array. -/
+  total : Nat
+  /-- `∀ θ args, support (tuned θ args) = support (v args)`, folded from the per-site
+  `support_oneOf_reweight` proofs. -/
+  supportProof : Expr
+
 /-- From a generator's value `v` (`fun args => X.unfold … seed`), build the `θ`-threaded term
-`fun (θ : Tuning) args => …` with its site table and total branch-slot count. The recursion is the
-`unfold` combinator, not an `Order.fix` in the term, so it is untouched — no monotonicity proof to
-rebuild. `installTuning`'s support-preservation proof is dropped; `.tuned` is just the reweighted
-term. -/
-def buildTuned (declName : Name) (v : Expr) : MetaM (Expr × Array TuningSiteInfo × Nat) := do
+`fun (θ : Tuning) args => …` with its site table, total branch-slot count, and support-preservation
+proof. The recursion is the `unfold` combinator, not an `Order.fix` in the term, so it is untouched —
+no monotonicity proof to rebuild.
+
+`installTuning` proves `support (oneOf …) = support (frequency …)` at every site
+(`support_oneOf_reweight`, parametric in `θ` via `Tuning.weight_pos`); the traversal chains those
+into one equation for the whole generator, which `derive_tuning` emits as `gen.tuned_support`. The
+direction is flipped here — the pass proves `support v = support tuned`, and the useful statement is
+that the *tuned* generator still has the original support. -/
+def buildTuned (declName : Name) (v : Expr) : MetaM TunedResult := do
   let table := getGenCongrRules (← getEnv)
   lambdaTelescope v fun args body => do
     withLocalDeclD `θ (mkConst ``Tuning) fun θ => do
@@ -797,6 +874,11 @@ def buildTuned (declName : Name) (v : Expr) : MetaM (Expr × Array TuningSiteInf
       let r ← optimize (.installTuning θ st declName) table none body
       let state ← st.get
       let tuned ← mkLambdaFVars (#[θ] ++ args) r.expr
-      return (tuned, state.sites, state.nextOffset)
+      -- `none` means no site fired, so the term is unchanged and the equation is `rfl`.
+      let eq ← match r.proof? with
+        | some p => mkEqSymm p
+        | none   => mkEqRefl (← mkSupport body)
+      let supportProof ← mkLambdaFVars (#[θ] ++ args) eq
+      return { tuned, sites := state.sites, total := state.nextOffset, supportProof }
 
 end Palamedes

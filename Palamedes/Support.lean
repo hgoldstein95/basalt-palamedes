@@ -162,6 +162,33 @@ theorem support_oneOf_congr {α : Type} {gs gs' : List (Gen α)}
     obtain ⟨g', hmem', he⟩ := List.mem_map.mp hs
     exact ⟨g', hmem', he ▸ ha⟩
 
+/-- One direction of `support_frequency_congr`; the statement is symmetric in `gs`/`gs'`, so the
+congruence applies this twice rather than duplicating the transport. -/
+private theorem support_frequency_mem {α : Type} {gs gs' : List (Nat × Gen α)}
+    (hg : gs.map (fun p => (p.1, support p.2)) = gs'.map (fun p => (p.1, support p.2))) {a : α}
+    (hin : ∃ w g, (w, g) ∈ gs ∧ 0 < w ∧ support g a) :
+    ∃ w g, (w, g) ∈ gs' ∧ 0 < w ∧ support g a := by
+  obtain ⟨w, g, hmem, hw, ha⟩ := hin
+  have hs : (w, support g) ∈ gs'.map (fun p => (p.1, support p.2)) := by
+    rw [← hg]; exact List.mem_map.mpr ⟨(w, g), hmem, rfl⟩
+  obtain ⟨⟨w', g'⟩, hmem', he⟩ := List.mem_map.mp hs
+  simp only [Prod.mk.injEq] at he
+  obtain ⟨rfl, hsupp⟩ := he
+  exact ⟨_, g', hmem', hw, by rw [hsupp]; exact ha⟩
+
+/-- The `frequency` counterpart of `support_oneOf_congr`: rebuilding a `frequency` from optimized
+branches preserves its support, provided every branch keeps its weight. This is what makes
+`optimizeFrequencyChildren?` a real descent, so a hand-written `frequency` is visited rather than
+silently skipped. -/
+theorem support_frequency_congr {α : Type} {gs gs' : List (Nat × Gen α)}
+    (hg : gs.map (fun p => (p.1, support p.2)) = gs'.map (fun p => (p.1, support p.2)))
+    (h) (h') :
+    support (frequency gs h) = support (frequency gs' h') := by
+  rw [Gen.Support.support_frequency, Gen.Support.support_frequency]
+  funext a
+  exact propext ⟨fun hin => support_frequency_mem hg hin,
+                 fun hin => support_frequency_mem hg.symm hin⟩
+
 /-- `frequency`'s side-goal, which needs only the *first* weight to be positive (unlike
 `support_oneOf_reweight` below, which needs all of them). -/
 theorem sum_fst_pos_cons (α : Type) (w : Nat) (g : Gen α) (gs : List (Nat × Gen α)) (hw : 0 < w) :

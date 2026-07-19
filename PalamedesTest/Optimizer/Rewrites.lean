@@ -105,3 +105,19 @@ private axiom f : Nat → Gen Nat
   oneOf [oneOf [(pure 5 : Gen Nat) >>= fun x => pure (x + 1), pure 2], pure 3]
   goes_to
   oneOf [oneOf [(fun x => pure (x + 1)) 5, pure 2], pure 3]
+
+-- The same for a hand-written `frequency` (`optimizeFrequencyChildren?`). Until this existed,
+-- `frequency` was exempted from the descent guard by name: a `frequency` in a *reducible* position
+-- had its branches silently skipped, and the exemption's comment carried the gap as a known risk.
+-- Weights must survive the rebuild untouched — only the generators are optimized.
+#assert_optimizes!
+  frequency [(2, (pure 5 : Gen Nat) >>= fun x => pure (x + 1)), (1, pure 2)]
+  goes_to
+  frequency [(2, (fun x => pure (x + 1)) 5), (1, pure 2)]
+
+-- ...and nested, which is the case `installTuning` needs: a choice under a hand-written `frequency`
+-- is now reached and rewritten rather than passed over.
+#assert_optimizes!
+  frequency [(3, oneOf [(pure 5 : Gen Nat) >>= fun x => pure (x + 1), pure 2]), (1, pure 3)]
+  goes_to
+  frequency [(3, oneOf [(fun x => pure (x + 1)) 5, pure 2]), (1, pure 3)]

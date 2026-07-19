@@ -32,6 +32,18 @@ derive_tuning genAllTwos
 #guard_msgs in
 #check (genAllTwos.tuned_defaults : genAllTwos.tuned genAllTwos.defaults = genAllTwos)
 
+-- The tuned generator carries the `support = P` invariant at *every* `θ`, not just at the defaults:
+-- this is `installTuning`'s per-site `support_oneOf_reweight` proof, surfaced instead of discarded.
+/-- info: genAllTwos.tuned_support (θ : Tuning) : (genAllTwos.tuned θ).support = genAllTwos.support -/
+#guard_msgs in
+#check genAllTwos.tuned_support
+
+-- The intended use: whatever support fact you hold about the plain generator transfers to *every*
+-- tuning of it, so `support = P` is stable under reweighting rather than re-established per `θ`.
+example (P : List Nat → Prop) (hP : genAllTwos.support = P) (θ : Tuning) :
+    (genAllTwos.tuned θ).support = P := by
+  rw [genAllTwos.tuned_support, hP]
+
 /-- info: #[{ name := `genAllTwos.site0, offset := 0, arity := 2, holes := #[0, 1] }] -/
 #guard_msgs in
 #eval genAllTwos.sites

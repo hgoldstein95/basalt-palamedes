@@ -31,10 +31,11 @@ def elabDeriveTuning : CommandElab := fun stx => do
   let some v := ci.value?
     | throwError "derive_tuning: {declName} has no value to reweight"
   let lvls := ci.levelParams
-  let (tunedVal, sites, total) ← liftTermElabM do
+  let res ← liftTermElabM do
     let res ← Palamedes.buildTuned declName (← instantiateMVars v)
-    Meta.check res.1
+    Meta.check res.tuned
     pure res
+  let ⟨tunedVal, sites, total, supportProof⟩ := res
   -- Absolute names via `addDecl`/`addAndCompile`, so an enclosing `namespace` cannot re-prefix them.
   liftTermElabM do
     let tunedName := declName ++ `tuned
@@ -65,5 +66,21 @@ def elabDeriveTuning : CommandElab := fun stx => do
       let proof ← mkLambdaFVars args (← mkEqRefl lhs)
       addDecl <| .thmDecl {
         name := declName ++ `tuned_defaults, levelParams := lvls, type := stmt, value := proof }
+    -- `∀ θ args, support (gen.tuned θ args) = support (gen args)` — the theorem `installTuning`
+    -- proves at every site but used to discard, so `.tuned` carries the `support = P` invariant
+    -- rather than merely happening to preserve it. Stated against the emitted constants (not the
+    -- raw bodies) and checked against the proof's own type, since the two telescopes are built
+    -- independently — from `ci.type` here, from the value in `buildTuned`.
+    withLocalDeclD `θ (mkConst ``Tuning) fun θ => do
+      forallTelescope ci.type fun args _ => do
+        let lhs ← mkAppM ``Gen.support #[mkAppN (.app tunedC θ) args]
+        let rhs ← mkAppM ``Gen.support #[mkAppN declC args]
+        let stmt ← mkForallFVars (#[θ] ++ args) (← mkEq lhs rhs)
+        unless ← isDefEq (← inferType supportProof) stmt do
+          throwError "derive_tuning: the support-preservation proof does not match\
+            {indentExpr stmt}\nproof has type{indentExpr (← inferType supportProof)}"
+        addDecl <| .thmDecl {
+          name := declName ++ `tuned_support, levelParams := lvls, type := stmt,
+          value := ← mkExpectedTypeHint supportProof stmt }
 
 end Palamedes
