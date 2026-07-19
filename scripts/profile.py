@@ -45,6 +45,9 @@ STANDARD = [
     "PalamedesTest/Corpus/STLC/WellScoped/WellScoped.lean",
     "PalamedesTest/Corpus/STLC/WellTyped/WellTyped.lean",
     "PalamedesTest/Corpus/Tree/BadRBT/BadRBT.lean",
+    "PalamedesTest/Corpus/Simple/OneOfFour.lean",
+    "PalamedesTest/Corpus/Tuple/Pairs.lean",
+    "PalamedesTest/Corpus/LeafTree/LeafTree.lean",
 ]
 
 FOLD = [
@@ -71,15 +74,35 @@ FOLD = [
     "PalamedesTest/Corpus/STLC/WellTyped/Fold.lean",
 ]
 
+# Which set to profile. `STANDARD` is the structurally-recursive spelling of each predicate;
+# `FOLD` is the catamorphism spelling of the same properties, which exercises a different path
+# through the search. Swap this line to profile the other set.
 FILES = STANDARD
 
 # Fail loudly if a path has rotted (e.g. the corpus was moved) rather than silently profiling
-# nothing. InProgress/ files are exempt — they are expected to error, not vanish.
+# nothing.
 import os
 missing = [f for f in FILES if not os.path.exists(f)]
 if missing:
     raise SystemExit("ERROR: these benchmark files do not exist (was the corpus moved?):\n  "
                      + "\n  ".join(missing))
+
+
+# `: G (Option α)` or `: Palamedes.Gen (Option α)` in a declaration's return type.
+PARTIAL_RETURN_TYPE = re.compile(
+    r":\s*(?:_root_\.)?(?:Palamedes\.)?(?:G|Gen)\s*\(\s*Option\b")
+
+
+def is_total(path):
+    """Does this benchmark's generator filter?
+
+    Partiality is a fact about the *declared return type*: a generator that can reject a draw must
+    be declared at `G (Option α)`. (This used to be detected by grepping for an `allow_partial`
+    flag, which was removed when the declared type took over that job — leaving every benchmark
+    classified `total` and the partial table silently empty.)
+    """
+    with open(path, "r") as f:
+        return PARTIAL_RETURN_TYPE.search(f.read()) is None
 
 # Regular expression to match the desired output
 pattern = re.compile(r'\[palamedes\.trace\] \[(\d+(?:\.\d+)?)\].*?⟪(.+)⟫⟪(.+)⟫')
@@ -105,13 +128,10 @@ for file in iter:
             if label in data:
                 data[label]["times"].append(float(numRepr))
             else:
-                total = True
-                with open(file, "r") as f:
-                    if any(
-                            map(lambda line: line.find("allow_partial") != -1,
-                                f.readlines())):
-                        total = False
-                data[label] = {"times": [float(numRepr)], "total": total}
+                data[label] = {
+                    "times": [float(numRepr)],
+                    "total": is_total(file),
+                }
     except subprocess.CalledProcessError as e:
         print(f"\nError running script: {e} \n")
 

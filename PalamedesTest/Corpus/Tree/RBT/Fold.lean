@@ -39,6 +39,6 @@ def isRBTFold (height lo hi : Nat) (t : Palamedes.Tree (Color × Nat)) : Bool :=
 
 def genRBTFold (height lo hi : Nat) [_root_.Gen G] :
     G (Option (Palamedes.Tree (Color × Nat))) := by
-  generator_search (fun t => isRBTFold lo hi height t = true)
+  generator_search (fun t => isRBTFold height lo hi t = true)
 
 end RBTFold

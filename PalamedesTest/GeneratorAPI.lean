@@ -13,9 +13,15 @@ fact about its type, visible at every use site.
 | totality | declared | result |
 |---|---|---|
 | succeeds | `G α` | emitted from the `TGen` witness |
-| fails | `G (Option α)` | emitted via `totalize` |
-| fails | `G α` | error — declare `G (Option α)` |
+| filters | `G (Option α)` | emitted via `totalize` |
+| filters | `G α` | error — declare `G (Option α)` |
 | succeeds | `G (Option α)` | warning — it never fails, `G α` will do |
+| *gap* | either | error / warning naming the **basis gap**, never advising `Option` |
+
+The last row is a third totality outcome, distinct from "filters": reconstruction can come up empty
+because the generator genuinely filters, or because the basis could not cover it. Only the first is
+a fact about the generator. See `diagnoseTotality` (`Synthesizer/FrontEnd.lean`) and the section at
+the bottom of this file.
 -/
 
 open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
@@ -156,3 +162,41 @@ synthesizable**: `Option` is not a `derive_palamedes`'d datatype, so the search 
 and `CorrectGen (P : Option β → Prop)` cannot be solved regardless of dispatch. The escape hatch is
 worth keeping, but the ambiguity it guards against is latent rather than live.
 -/
+
+/-! ## A missing witness is not the same claim as "it filters"
+
+`totality` is `repeat' first | …`, and `repeat'` does not fail — so a datatype with no `@[total]`
+lemma does not throw, it simply leaves goals, exactly like a generator that genuinely filters.
+Control flow alone cannot separate them, and reading the empty result as "it filters" sends the user
+to add an `Option` their generator does not need. `totalize` accepts it, the "never fails" check is
+silent (it keys on a witness that is absent either way), and the law emitted for the declaration
+weakens from `IsSoundAndComplete` to `IsSomeSoundAndComplete`. The bad diagnosis is actionable, the
+action succeeds, and the evidence is buried.
+
+So `diagnoseTotality` reads the *term* as well: `Gen.assume` is the only thing a generator can fail
+at, and the optimizer floats every satisfiable one out, so no `assume` anywhere means "it filters"
+is not a claim the evidence supports. The corpus covers the `.filters` rows — five filtering
+generators synthesize without a spurious warning — but nothing in it reaches a basis gap, so the
+three cases are pinned directly. -/
+
+private def mkRes (gen : Lean.Expr) (err? : Option Lean.MessageData) : SynthesisResult :=
+  { gen, supportProof := Lean.mkConst ``Nat.zero, totalWitness? := none, totalityFailure? := err? }
+
+private def diagnosisLabel : TotalityDiagnosis → String
+  | .filters => "filters"
+  | .gap none => "gap (left goals, no assume)"
+  | .gap (some _) => "gap (errored)"
+
+/-- info: "filters" -/
+#guard_msgs in
+#eval diagnosisLabel (diagnoseTotality (mkRes (Lean.mkConst ``Palamedes.Gen.assume) none))
+
+/-- info: "gap (left goals, no assume)" -/
+#guard_msgs in
+#eval diagnosisLabel (diagnoseTotality (mkRes (Lean.mkConst ``Nat.zero) none))
+
+-- A thrown error is a gap whatever the term contains: it is not an answer about the generator.
+/-- info: "gap (errored)" -/
+#guard_msgs in
+#eval diagnosisLabel
+  (diagnoseTotality (mkRes (Lean.mkConst ``Palamedes.Gen.assume) (some m!"boom")))

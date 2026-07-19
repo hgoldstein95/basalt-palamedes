@@ -59,6 +59,20 @@ def solveGoalWithTactic (goalType : Expr) (tactic : TSyntax `tactic) : TermElabM
     throwError "goals left unsolved: {unsolved}"
   instantiateMVars m
 
+/-- `solveGoalWithTactic`, but *running to completion and leaving goals* is reported as `none`
+rather than as an exception.
+
+The distinction matters wherever an unclosed goal is itself a meaningful answer. Catching the
+exception instead would lump it together with the tactic *throwing* — a heartbeat blowout, a
+missing registry entry, an interrupt — which are not answers about the goal at all. Only the
+totality stage needs this today; see `runSynthesisPipeline`. -/
+def solveGoalWithTactic? (goalType : Expr) (tactic : TSyntax `tactic) :
+    TermElabM (Option Expr) := do
+  let m ← mkFreshExprMVar goalType
+  let unsolved ← Tactic.run m.mvarId! (Tactic.evalTactic tactic)
+  if unsolved.length > 0 then return none
+  return some (← instantiateMVars m)
+
 /-- One run of the synthesis pipeline: search → extract → optimize → totality.
 
 The pipeline used to compute three proofs and keep none of them. `CorrectGen.property`
@@ -74,9 +88,12 @@ structure SynthesisResult where
   supportProof : Expr
   /-- A `Palamedes.Gen.total gen` witness, when the totality stage ran and succeeded. Since `total`
   is `Type`-valued this *is* the failure-free generator, not merely evidence that one exists —
-  `.val.run` is a Basalt-shaped generator. `none` means the generator filters (or that the check
-  was skipped). -/
+  `.val.run` is a Basalt-shaped generator.
+
+  `none` on its own does **not** mean the generator filters; read `totalityFailure?` too. -/
   totalWitness? : Option Expr
+  /-- Why there is no witness, when the reason was not "the generator filters". -/
+  totalityFailure? : Option MessageData
 
 /-- Run the shared pipeline against a predicate `pred : α → Prop`.
 
@@ -142,18 +159,25 @@ def runSynthesisPipeline (α pred : Expr) (checkTotal verbose : Bool) :
     mkExpectedTypeHint chained stmt
 
   -- 4. Totality: rebuild a `TGen` witness over the combinator spine.
-  let totalWitness? ←
-    if checkTotal then
-      try
-        pure <| some (← solveGoalWithTactic
-          (← mkAppM ``Palamedes.Gen.total #[gen''])
-          (← `(tactic| totality)))
-      catch _ =>
-        pure none
-    else
-      pure none
+  --
+  -- Three outcomes, kept apart. A witness is success. The tactic running to completion and leaving
+  -- goals is the designed "this generator filters" signal. The tactic *throwing* is neither — it is
+  -- a gap in the reconstruction basis, and reporting it as a filter would send the user to add an
+  -- `Option` their generator does not need (and `totalize` would accept, silently, forever).
+  let mut totalWitness? : Option Expr := none
+  let mut totalityFailure? : Option MessageData := none
+  if checkTotal then
+    try
+      totalWitness? ← solveGoalWithTactic?
+        (← mkAppM ``Palamedes.Gen.total #[gen''])
+        (← `(tactic| totality))
+    catch e =>
+      -- Never a statement about the generator: rethrow rather than record. `catch _` here would
+      -- turn a Ctrl-C into "your generator filters".
+      if e.isInterrupt || e.isMaxHeartbeat || e.isMaxRecDepth then throw e
+      totalityFailure? := some e.toMessageData
 
-  return { gen := gen'', supportProof, totalWitness? }
+  return { gen := gen'', supportProof, totalWitness?, totalityFailure? }
 
 /-- What the *declared return type* says the generator should be. Whether a generator filters is a
 fact about its type, visible at every use site. -/
@@ -270,6 +294,51 @@ def extractWitness (e : Expr) : MetaM Expr := do
   let (r, _) ← simp e ctx
   return r.expr
 
+/-- Why the totality stage produced no witness, as far as the evidence actually supports. -/
+inductive TotalityDiagnosis where
+  /-- The generator genuinely filters: an `assume` is present and reconstruction stopped at it. -/
+  | filters
+  /-- Reconstruction could not cover this generator, which is a fact about the *basis*, not about
+  the generator. Carries the underlying error when the tactic threw rather than left goals. -/
+  | gap (err? : Option MessageData)
+
+/-- Distinguish a genuine filter from a gap in the reconstruction basis.
+
+Two signals, because neither alone is enough:
+
+* The tactic **throwing** is never an answer about the generator (an error inside a registry lemma,
+  say). `totalityFailure?` records those.
+* The tactic **leaving goals** is the designed filter signal — but only if there is something to
+  filter on. `totality` is `repeat' first | …`, and `repeat'` does not fail, so a datatype with no
+  `@[total]` lemma also just leaves goals. That is the common registry gap, and it is
+  indistinguishable from a filter by control flow alone.
+
+So check the term: `Gen.assume` is the only thing a generator can fail at, and the optimizer floats
+every *satisfiable* one out. No `assume` anywhere means "it filters" is not a claim the evidence
+supports, whatever the tactic did.
+
+Erring toward `.gap` only ever changes the wording of a message, never whether one is emitted, so a
+term whose `assume` is somehow hidden behind an un-unfolded constant costs a confusing sentence
+rather than a wrong outcome. -/
+def diagnoseTotality (res : SynthesisResult) : TotalityDiagnosis :=
+  match res.totalityFailure? with
+  | some err => .gap (some err)
+  | none =>
+    if (res.gen.find? (·.isConstOf ``Palamedes.Gen.assume)).isSome then .filters else .gap none
+
+/-- The shared explanation for a reconstruction gap: what it is, and what not to do about it. -/
+def gapMessage (err? : Option MessageData) : MessageData :=
+  let cause := match err? with
+    | some err => m!"Totality reconstruction errored rather than simply not applying. The \
+        underlying error was:{indentD err}"
+    | none => m!"Totality reconstruction left goals unclosed, but the generator contains no \
+        `Gen.assume` — so there is nothing in it that can fail, and the usual cause is a datatype \
+        with no `@[total]` lemma registered."
+  m!"{cause}\n\nThis is a gap in the reconstruction basis, **not** evidence that the generator \
+    filters. Declaring it at `G (Option _)` would compile — `totalize` accepts any generator — but \
+    it would bury the gap behind an `Option` the generator does not need, and weaken the emitted \
+    law from `IsSoundAndComplete` to `IsSomeSoundAndComplete`. Fix the registration instead."
+
 /-- Package the pipeline's result at the shape the declaration asked for.
 
 This is the whole of "Basalt owns the vocabulary": the pipeline is identical in every case and only
@@ -279,20 +348,38 @@ def packageFor (target : Target) (res : SynthesisResult) (report : MessageData �
   match target with
   | .palamedes _ =>
     if res.totalWitness?.isNone then
-      report m!"this generator filters: a `Gen.assume` survived optimization, so it can fail when \
-        sampled. Declare it as `[Gen G] → G (Option _)` to reflect that in the type."
+      match diagnoseTotality res with
+      | .filters =>
+        report m!"this generator filters: a `Gen.assume` survived optimization, so it can fail when \
+          sampled. Declare it as `[Gen G] → G (Option _)` to reflect that in the type."
+      | .gap err? =>
+        report m!"could not reconstruct a totality witness.\n\n{gapMessage err?}"
     return res.gen
   | .basalt G α =>
     let some w := res.totalWitness?
-      | throwError "generator_search: this generator filters — a `Gen.assume` survived \
-          optimization — so it cannot be emitted at{indentExpr (mkApp G α)}, which is `Fail`-free \
-          by construction.\n\nDeclare it as `G (Option _)` instead, so the type reflects that it \
-          can fail."
+      | match diagnoseTotality res with
+        | .filters =>
+          throwError "generator_search: this generator filters — a `Gen.assume` survived \
+            optimization — so it cannot be emitted at{indentExpr (mkApp G α)}, which is `Fail`-free \
+            by construction.\n\nDeclare it as `G (Option _)` instead, so the type reflects that it \
+            can fail."
+        | .gap err? =>
+          throwError "generator_search: could not reconstruct a totality witness, so this \
+            generator cannot be emitted at{indentExpr (mkApp G α)}.\n\n{gapMessage err?}"
     let tgen ← mkAppOptM ``Subtype.val #[none, none, w]
     extractWitness (← mkAppOptM ``Palamedes.TGen.run #[some α, some tgen, some G, none])
   | .basaltOption G α =>
     if res.totalWitness?.isSome then
       report m!"this generator never fails, so the `Option` is not needed — `{← ppExpr (mkApp G α)}` will do."
+    -- `totalize` accepts any generator, so this shape cannot tell a genuine filter from a
+    -- reconstruction gap on its own — which is precisely how an `Option` added on a bad diagnosis
+    -- would stay forever. Say so, since the check above is silent in exactly this case.
+    if res.totalWitness?.isNone then
+      if let .gap err? := diagnoseTotality res then
+        report m!"the `Option` in this generator's type may be unnecessary: nothing here \
+          established that the generator can actually fail, and `totalize` accepts it either \
+          way. If the gap below is fixed and the generator turns out to be total, declare it at \
+          `{← ppExpr (mkApp G α)}` instead.\n\n{gapMessage err?}"
     mkAppOptM ``Palamedes.Gen.totalize #[some α, some res.gen, some G, none]
 
 def generatorSearchElab
@@ -309,15 +396,28 @@ def generatorSearchElab
   let α := target.elemType
 
   if verbose then do
-    TryThis.addSuggestion stx
-      s!"-- generator_search ({← ppExpr mpred})
+    -- The pipeline, spelled out as the tactics a reader could run by hand. The tail differs per
+    -- declared shape, because `packageFor` emits a different term for each: the carrier directly,
+    -- the `TGen` witness projected, or `totalize`. A single template would be type-incorrect for
+    -- two of the three. What this does *not* show is `extractWitness`'s `twitness` normalization,
+    -- which only makes the projected term readable — the pasted version is defeq, just denser.
+    let common := s!"-- generator_search ({← ppExpr mpred})
   let cg : CorrectGen ({← ppExpr mpred}) := by
     cgenerator_search
-  let g : Gen ({← ppExpr α}) := by
-    optimize_gen cg.val
-  let _ : Gen.total g := by
+  let g : Palamedes.Gen ({← ppExpr α}) := by
+    optimize_gen cg.val"
+    let tail ← match target with
+      | .palamedes _ => pure "
+  let _ : Palamedes.Gen.total g := by
     totality
   exact g"
+      | .basalt _ _ => pure "
+  let w : Palamedes.Gen.total g := by
+    totality
+  exact w.val.run"
+      | .basaltOption _ _ => pure "
+  exact Palamedes.Gen.totalize g"
+    TryThis.addSuggestion stx (common ++ tail)
 
   let prettyPred ←
     try
