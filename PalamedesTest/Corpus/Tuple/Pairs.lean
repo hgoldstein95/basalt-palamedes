@@ -8,8 +8,13 @@ def genFstIsTwo : Gen (Nat × Nat) := by
 def genFixedPair : Gen (Nat × Nat) := by
   generator_search (fun p => p.1 = 2 ∧ p.2 = 3)
 
+/--
+info: Try this:
+  [apply] exact pure (2, 3)
+-/
+#guard_msgs in
 def genSuccPair : Gen (Nat × Nat) := by
-  generator_search (fun p => p.1 = 2 ∧ p.2 = p.1 + 1)
+  generator_search? (fun p => p.1 = 2 ∧ p.2 = p.1 + 1)
 
 def genDiagonal : Gen (Nat × Nat) := by
   generator_search (fun p => p.1 = p.2)

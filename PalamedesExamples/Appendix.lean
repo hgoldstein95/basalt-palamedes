@@ -1,18 +1,29 @@
 import Palamedes.Synthesizer
 
-set_option linter.auxLemma false
+-- The synthesized halves are pasted verbatim, and the emitted step function binds its depth as `d`
+-- whether or not the body reads it. Renaming to `_d` would break that fidelity, so the linter is
+-- off rather than the paste being edited.
+set_option linter.unusedVariables false
 
 open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
 
+/-!
+The synthesized halves below are `generator_search?` output, pasted verbatim. Two shapes recur in
+every one of them, so they are noted here rather than repeated in each comparison:
+
+- The synthesizer emits a **uniform `oneOf` over a list**, where a hand-written generator reaches
+  for the binary `pick`.
+- Recursive cases round-trip through an **identity `match` on the base functor** (`match tv with
+  | ListF.nil => pure ListF.nil | ...`), an artifact of the fusion the search performs. A person
+  writes the collector directly.
+-/
+
 def genOneOrInRange (lo hi : Nat) : Gen Nat :=
-  if h : decide (lo <= hi) = true then
-    pick (pure 0) (choose lo hi (s_between_partial._proof_1 h))
-  else
-    pure 0
+  if h : decide (lo ≤ hi) = true then Gen.oneOf [pure 0, choose lo hi] else pure 0
 
 /-
 Differences:
-- Simplify proof for choose.
+- Test the bound in `Prop` form rather than as `decide _ = true`.
 -/
 def genOneOrInRange_manual (lo hi : Nat) : Gen Nat :=
   if h : lo <= hi then
@@ -22,12 +33,16 @@ def genOneOrInRange_manual (lo hi : Nat) : Gen Nat :=
 
 def genCompleteTree (n : Nat) : Gen (Palamedes.Tree Nat) :=
   Palamedes.Tree.unfold
-    (fun _d x =>
-      if x.snd = 0 then pure TreeF.leaf
-      else do
-        let a <- arbNat
-        pure (TreeF.node ((), x.2 - 1) a ((), x.2 - 1)))
-    ((), n)
+    (fun d p => do
+      let tv ←
+        if p.2 = 0 then pure TreeF.leaf
+          else do
+            let a ← arbNat
+            pure (TreeF.node PUnit.unit a PUnit.unit)
+      match tv with
+        | TreeF.leaf => pure TreeF.leaf
+        | TreeF.node a1 a2 a3 => pure (TreeF.node (a1, p.2 - 1) a2 (a3, p.2 - 1)))
+    (PUnit.unit, n)
 
 /-
 Differences:
@@ -45,18 +60,22 @@ def genComplete_manual (n : Nat) : Gen (Palamedes.Tree Nat) :=
 
 def genSortedBetween (lo hi : Nat) : Gen (List Nat) :=
   List.unfold
-    (fun _d x =>
-      if h : decide (x.snd.fst <= x.snd.snd) = true then
-        pick (pure ListF.nil) do
-          let a <- choose x.2.1 x.2.2 (s_between_partial._proof_1 h)
-          pure (ListF.cons a (PUnit.unit, a, x.2.2))
-      else
-        pure ListF.nil)
+    (fun d p => do
+      let tv ←
+        if h : decide (p.2.1 ≤ p.2.2) = true then
+            Gen.oneOf
+              [pure ListF.nil, do
+                let a ← choose p.2.1 p.2.2
+                pure (ListF.cons a PUnit.unit)]
+          else pure ListF.nil
+      match tv with
+        | ListF.nil => pure ListF.nil
+        | ListF.cons a1 a2 => pure (ListF.cons a1 (a2, a1, p.2.2)))
     (PUnit.unit, lo, hi)
 
 /-
 Differences:
-- Simplify proof for choose.
+- Test the bound in `Prop` form rather than as `decide _ = true`.
 - Remove extra unit in collector.
 -/
 def genSortedBetween_manual (lo hi : Nat) : Gen (List Nat) :=
@@ -74,9 +93,11 @@ def genSortedBetween_manual (lo hi : Nat) : Gen (List Nat) :=
 
 def genLengthKAllTwos (k : Nat): Gen (List Nat) :=
   List.unfold
-    (fun _d x =>
-      if x.fst.fst = 0 then pure ListF.nil
-      else pure (ListF.cons 2 ((Nat.pred x.1.1, PUnit.unit), PUnit.unit, PUnit.unit)))
+    (fun d p => do
+      let tv ← if p.1.1 = 0 then pure ListF.nil else pure (ListF.cons 2 (Nat.pred p.1.1, PUnit.unit))
+      match tv with
+        | ListF.nil => pure ListF.nil
+        | ListF.cons a1 a2 => pure (ListF.cons a1 (a2, PUnit.unit, PUnit.unit)))
     ((k, PUnit.unit), PUnit.unit, PUnit.unit)
 
 /-
@@ -94,32 +115,34 @@ def genLengthKAllTwos_manual (k : Nat): Gen (List Nat) :=
 
 def genAVL (height lo hi : Nat) : Gen (Palamedes.Tree Nat) :=
   Palamedes.Tree.unfold
-    (fun _d x => do
-      let __do_lift <-
-        if x.snd.snd = 0 then pure TreeF.leaf
-          else
-            if Nat.pred x.snd.snd = 0 then
-              if h : decide (x.snd.fst.fst <= x.snd.fst.snd) = true then
-                pick (pure TreeF.leaf) do
-                  let a <- choose x.2.1.1 x.2.1.2 (s_between_partial._proof_1 h)
-                  pure (TreeF.node (PUnit.unit, PUnit.unit) a (PUnit.unit, PUnit.unit))
+    (fun d p =>
+      if p.2.1 = 0 then pure TreeF.leaf
+      else
+        if Nat.pred p.2.1 = 0 then do
+          let tv ←
+            if h : decide (p.2.2.1 ≤ p.2.2.2) = true then
+                Gen.oneOf
+                  [pure TreeF.leaf, do
+                    let a ← choose p.2.2.1 p.2.2.2
+                    pure (TreeF.node (PUnit.unit, PUnit.unit) a (PUnit.unit, PUnit.unit))]
               else pure TreeF.leaf
-            else
-              assume (decide (x.snd.fst.fst <= x.snd.fst.snd)) fun h => do
-                let a <- choose x.2.1.1 x.2.1.2 (s_between_partial._proof_1 h)
-                pure (TreeF.node (PUnit.unit, PUnit.unit) a (PUnit.unit, PUnit.unit))
-      match __do_lift with
-        | TreeF.leaf => pure TreeF.leaf
-        | TreeF.node bl x_1 br =>
-          pure
-            (TreeF.node (bl, (x.2.1.1, x_1 - 1), x.2.2 - 1) x_1
-              (br, (x_1 + 1, x.2.1.2), x.2.2 - 1)))
-    ((PUnit.unit, PUnit.unit), (lo, hi), height)
+          match tv with
+            | TreeF.leaf => pure TreeF.leaf
+            | TreeF.node a1 a2 a3 =>
+              pure (TreeF.node (a1, p.2.1 - 1, p.2.2.1, a2 - 1) a2 (a3, p.2.1 - 1, a2 + 1, p.2.2.2))
+        else
+          assume (decide (p.2.2.1 ≤ p.2.2.2)) fun h => do
+            let a ← choose p.2.2.1 p.2.2.2
+            pure
+                (TreeF.node ((PUnit.unit, PUnit.unit), p.2.1 - 1, p.2.2.1, a - 1) a
+                  ((PUnit.unit, PUnit.unit), p.2.1 - 1, a + 1, p.2.2.2)))
+    ((PUnit.unit, PUnit.unit), height, lo, hi)
 
 /-
 Differences:
 - Remove two extra units in collector.
 - Nicer match on height to reduce some duplication.
+- Reorder the seed to `(lo, hi, height)`, so the bounds a `choose` reads sit next to each other.
 -/
 def genAVL_manual (height lo hi : Nat) : Gen (Palamedes.Tree Nat) :=
   Palamedes.Tree.unfold

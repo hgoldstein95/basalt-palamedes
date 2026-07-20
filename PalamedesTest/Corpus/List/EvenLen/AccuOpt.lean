@@ -13,7 +13,27 @@ def isEvenLenAccuOpt (xs : List α) : Option Bool :=
       xs
       ()
 
+/--
+info: Try this:
+  [apply] exact
+    List.unfold
+      (fun d p => do
+        let tv ←
+          if h : p.1 = true then
+              Gen.oneOf
+                [pure ListF.nil, do
+                  let a ← arbNat
+                  pure (ListF.cons a false)]
+            else do
+              let a ← arbNat
+              pure (ListF.cons a true)
+        match tv with
+          | ListF.nil => pure ListF.nil
+          | ListF.cons a1 a2 => pure (ListF.cons a1 (a2, PUnit.unit)))
+      (true, PUnit.unit)
+-/
+#guard_msgs in
 def genEvenLenAccuOpt : Gen (List Nat) := by
-  generator_search (fun xs => isEvenLenAccuOpt xs = some true)
+  generator_search? (fun xs => isEvenLenAccuOpt xs = some true)
 
 end EvenLenAccuOpt

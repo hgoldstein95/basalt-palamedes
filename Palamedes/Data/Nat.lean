@@ -31,24 +31,32 @@ def gt (lo : Nat) : Gen Nat := (lo + 1 + · ) <$> arbNat
 
 def mod2 (r : Nat) (_ : r < 2) : Gen Nat := (2 * · + r) <$> arbNat
 
-def choose (lo hi : Nat) (h : lo ≤ hi := by simp) : Gen Nat :=
+syntax "choose_bounds" : tactic
+macro_rules | `(tactic| choose_bounds) => `(tactic| first | simp | simp_all only [decide_eq_true_eq])
+
+def choose (lo hi : Nat) (h : lo ≤ hi := by choose_bounds) : Gen Nat :=
   ⟨fun {_G} _ _ => RandomChoice.choose lo hi h >>= fun r => Pure.pure r.down.val⟩
 
-def TGen.choose (lo hi : Nat) (h : lo ≤ hi := by simp) : TGen Nat :=
+def TGen.choose (lo hi : Nat) (h : lo ≤ hi := by choose_bounds) : TGen Nat :=
   ⟨fun {_G} _ => RandomChoice.choose lo hi h >>= fun r => Pure.pure r.down.val⟩
 
 def lt (hi : Nat) (_ : hi > 0) : Gen Nat :=
   choose 0 (hi - 1) (by simp)
 
 open Lean PrettyPrinter Delaborator SubExpr in
-/-- Hide `choose`'s bounds proof when both bounds are literals with `lo ≤ hi`. -/
+
 @[app_delab Palamedes.Gen.choose]
 def delabChoose : Delab := do
   let e ← getExpr
   guard <| e.isAppOfArity ``Palamedes.Gen.choose 3
-  let some lo := natLit? (e.getArg! 0) | failure
-  let some hi := natLit? (e.getArg! 1) | failure
-  guard <| lo ≤ hi
+  let litBounds : Bool := Id.run do
+    let some lo := natLit? (e.getArg! 0) | return false
+    let some hi := natLit? (e.getArg! 1) | return false
+    return lo ≤ hi
+  let auxProof : Bool :=
+    let p := e.getArg! 2
+    p.getAppFn.constName?.any (·.getString!.startsWith "_proof_") && p.getAppArgs.any Expr.isFVar
+  guard <| litBounds || auxProof
   let loStx ← withNaryArg 0 delab
   let hiStx ← withNaryArg 1 delab
   let fn := mkIdent (← unresolveNameGlobal ``Palamedes.Gen.choose)

@@ -40,7 +40,23 @@ def genAllTwosFold : Gen (LeafTree Nat) := by
 def isCompleteFold (t : LeafTree Nat) (d : Nat) : Bool :=
   LeafTree.fold (fun _ s => s == 0) (fun bl br s => decide (s > 0) && bl (s - 1) && br (s - 1)) t d
 
+/--
+info: Try this:
+  [apply] exact
+    LeafTree.unfold
+      (fun d p => do
+        let tv ←
+          if p.2 = 0 then do
+              let a ← arbNat
+              pure (LeafTreeF.tip a)
+            else pure (LeafTreeF.branch PUnit.unit PUnit.unit)
+        match tv with
+          | LeafTreeF.tip a1 => pure (LeafTreeF.tip a1)
+          | LeafTreeF.branch a1 a2 => pure (LeafTreeF.branch (a1, p.2 - 1) (a2, p.2 - 1)))
+      (PUnit.unit, d)
+-/
+#guard_msgs in
 def genCompleteFold (d : Nat) : Gen (LeafTree Nat) := by
-  generator_search (fun t => isCompleteFold t d = true)
+  generator_search? (fun t => isCompleteFold t d = true)
 
 end LeafTreeDemo
