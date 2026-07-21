@@ -1,6 +1,6 @@
 name = "palamedes"
 version = "0.1.0"
-defaultTargets = ["Palamedes", "PalamedesExamples", "PalamedesTest"]
+defaultTargets = ["Palamedes", "PalamedesTest"]
 
 # The library: the `generator_search` tactic, synthesis rules, supported datatypes, and sampler.
 # `Palamedes.*` globs every library module so a plain `lake build` compiles all of them, not just
@@ -8,11 +8,6 @@ defaultTargets = ["Palamedes", "PalamedesExamples", "PalamedesTest"]
 [[lean_lib]]
 name = "Palamedes"
 globs = ["Palamedes", "Palamedes.+"]
-
-# Teaching material: no assertions, nothing here guards anything.
-[[lean_lib]]
-name = "PalamedesExamples"
-globs = ["PalamedesExamples.+"]
 
 # The tests. `PalamedesTest.Corpus.+` is the synthesis corpus: every module synthesizes a generator
 # at elaboration time and fails to compile if synthesis fails. The files above it guard one library
