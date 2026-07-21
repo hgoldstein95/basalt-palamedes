@@ -4,59 +4,44 @@ Released under MIT license as described in the file LICENSE.
 Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
   Leonidas Lampropoulos, Benjamin C. Pierce
 -/
-
 import Basalt
 
 /-!
-# Palamedes generators, on top of Basalt
+# Palamedes Generators
 
-A Palamedes `PGen α` wraps a *polymorphic Basalt generator*: a term usable at any generator monad `G`
-(i.e. any `Gen G`, Basalt's generator typeclass) that *additionally* supports failure
-(`Fail G`). The wrapped term, `g.run`, is the bare Basalt generator; it can be instantiated at `SPMF`
-for proofs or `Plausible.Gen` for sampling. Synthesis builds these `PGen` terms as data; a generator
-acquires meaning only by *interpreting* its `run` at a chosen `G`. The proof interpretation is Basalt's
-sub-probability mass function (`SPMF`), so `support` is `SPMF.support`.
+A Palamedes `PGen α` wraps a polymorphic Basalt generator that additionally supports failure (`Fail
+G`). The wrapped term, `g.run`, is the bare Basalt generator; it can be instantiated at `SPMF` for
+proofs or `Plausible.Gen` for sampling. Synthesis builds these `PGen` terms as data; a generator
+acquires meaning only by interpreting its `run` at a chosen `G`. The proof interpretation is
+Basalt's sub-probability mass function (`SPMF`), so `support` is `SPMF.support`.
 
-## Failure as a capability (`Fail`)
+## Failure
 
 Filtering (`assume`/`empty`) needs a notion of *failure*. We make that an explicit capability `Fail`
 rather than reusing Basalt's CCPO bottom (`Lean.Order.bot`) for two reasons:
 
 * **Computability.** `Lean.Order.bot` is the supremum of the empty chain, defined via
-  `Classical.choose`, so it is `noncomputable` *even when the underlying CCPO has a perfectly
-  computable bottom* (e.g. `Except.error default` for `Plausible.Gen`). Routing failure through a
-  `Fail.fail` method lets each interpretation supply its own computable failure.
-* **Totality.** A generator that never fails is exactly one definable *without* the `Fail`
-  capability. Splitting `Fail` out of the base `Gen` class makes "assume-free" a structural fact: see
-  `TGen` below and `Palamedes.PGen.total`.
-
-Basalt already owns the name `Gen` (its generator typeclass, at the root namespace), so the Palamedes
-carrier is named `PGen` (under `namespace Palamedes`) to avoid the clash; bare `Gen` unambiguously
-means Basalt's class.
+  `Classical.choose`, so it is `noncomputable`. (Even worse, in some interpretations
+  `Lean.Order.bot` corresponds to divergence.) Routing failure through a `Fail.fail` method lets
+  each interpretation supply its own computable failure.
+* **Totality.** We explicitly try to remove all failures from generators during optimization.
+  If our optimizer is able to produce a generator that typechecks without `Fail`, we are guaranteed
+  that this failure has been removed.
 -/
 
 namespace Palamedes
 
 open Lean.Order
 
-/-- The failure capability: a generator monad with a designated "produces nothing" element. This is
-  deliberately *separate* from Basalt's base `Gen` class so that generators which never fail can be
-  typed without it (see `TGen`). For `SPMF` the failure is the bottom distribution `⊥` (mass 0); the
-  executable interpretations reflect it into an explicit `none` through the `OptionT` layer
-  (`Palamedes/Failure.lean`), which the sampler then retries. -/
+/-- The failure capability: a generator monad with a designated "produces nothing" element. -/
 class Fail (G : Type → Type) where
   fail : ∀ {α}, G α
 
-/-- A Palamedes generator wraps a Basalt generator that is polymorphic over the choice of generator
-  monad — any `Gen G` that also supports failure (`Fail G`). `g.run` is the underlying Basalt
-  generator. -/
+/-- A Palamedes generator wraps a Basalt generator that also supports failure. -/
 structure PGen (α : Type) : Type 1 where
   run : ∀ {G : Type → Type} [Gen G] [Fail G], G α
 
-/-- A *failure-free* Palamedes generator: polymorphic over every `Gen G`, with **no** `Fail`
-  requirement. A `TGen` cannot mention `assume`/`empty`, so it is "assume-free" by construction. It
-  coerces into `PGen` (forgetting that it never needed `Fail`); `Palamedes.PGen.total` is defined as
-  "factors through a `TGen`." -/
+/-- A failure-free Palamedes generator. -/
 structure TGen (α : Type) : Type 1 where
   run : ∀ {G : Type → Type} [Gen G], G α
 
@@ -81,15 +66,13 @@ instance : Monad PGen where
 def pick (x y : PGen α) : PGen α :=
   ⟨fun {_G} _ _ => RandomChoice.pick (fun () => x.run) (fun () => y.run)⟩
 
-/-- Weighted n-ary choice. Branch `(wⱼ, gⱼ)` is selected with probability `wⱼ / Σw`. The optimizer
-flattens `pick` chains into `frequency` so that a k-way choice is a function of the weights rather
-than of how the chain was associated. -/
+/-- Weighted n-ary choice. Branch `(wⱼ, gⱼ)` is selected with probability `wⱼ / Σw`. -/
 def frequency (gs : List (Nat × PGen α)) (h : 0 < (gs.map Prod.fst).sum := by simp) : PGen α :=
   ⟨fun {_G} _ _ =>
     _root_.frequency (gs.map fun p => (p.1, fun _ => p.2.run))
       (by simpa [List.map_map, Function.comp_def] using h)⟩
 
-/-- Uniform n-ary choice: `frequency` with all weights 1. -/
+/-- Uniform n-ary choice. -/
 def oneOf (gs : List (PGen α)) (h : gs ≠ [] := by simp) : PGen α :=
   frequency (gs.map fun g => (1, g)) (by cases gs <;> simp_all)
 
@@ -97,9 +80,10 @@ section Delab
 
 open Lean PrettyPrinter Delaborator SubExpr
 
-/-! The side-condition arguments of `frequency`/`oneOf` are autoParams (`by simp`), so an
-application that omits them still elaborates whenever `simp` can discharge the condition. The
-delaborators below therefore drop the argument in that case rather than rendering it. -/
+/-! ## Delaborator Hacks
+
+We hack the delaborator so it doesn't print the side-condition arguments of `frequency`/`oneOf` when
+they are not needed. -/
 
 @[app_delab Palamedes.PGen.oneOf]
 def delabOneOf : Delab := do
@@ -117,10 +101,10 @@ def natLit? (e : Expr) : Option Nat :=
     | OfNat.ofNat _ n _ => n.nat?
     | _ => none
 
-/-- Is `w` positive for *every* value of the variables in it, by inspection? A positive numeral, a
-sum with a positive summand, or a product of positives. Weights are not always closed: a hand-written
-depth-indexed `frequency` (e.g. `arbTy`'s `2 + 3 * d`) mentions the recursion's depth, so a delaborator
-that could only add up numerals would give up on precisely the generators that need weights. -/
+/-- Is `w` positive for every value of the variables in it, by inspection?
+
+This is a rough heuristic, but it works well for expressions like `2 + 3 * d` which come up commonly
+in our automated tuning setup. -/
 private partial def weightPos (w : Expr) : Bool :=
   match natLit? w with
   | some n => 0 < n
@@ -130,8 +114,7 @@ private partial def weightPos (w : Expr) : Bool :=
     | HMul.hMul _ _ _ _ x y => weightPos x && weightPos y
     | _ => false
 
-/-- Does `l` have a branch whose weight is positive by inspection? Then `0 < Σw`, which is what the
-autoParam has to re-derive, so the proof can be dropped. -/
+/-- Does `l` have a branch whose weight is positive by inspection? -/
 private partial def someWeightPos (l : Expr) : Bool :=
   match_expr l with
   | List.cons _ hd tl =>
@@ -151,41 +134,21 @@ def delabFrequency : Delab := do
 
 end Delab
 
-/-- The empty generator: produces nothing. It is the `Fail` capability's `fail`; in `SPMF` that is
-  `⊥` (mass 0), and in an executable interpretation it is an explicit `none` (via `totalize`,
-  `Palamedes/Failure.lean`), which the sampler treats as a failed draw to retry. It is computable
-  whenever the chosen interpretation's `Fail` instance is. -/
+/-- The empty generator: produces nothing. -/
 def empty : PGen α := ⟨fun {_G} _ _ => Fail.fail⟩
 
-/-- A guarded generator: `f` when `b` holds, `empty` otherwise — so the failing branch contributes
-  nothing to the support. This is how a `Bool`-valued side condition is woven into a generator.
+/-- A guarded generator: `f` when `b` holds, otherwise failure.
 
-  Operationally it is a *filter*, not a backtracking point: on a failing `assume` the sampler discards
-  the whole draw and redraws — a global restart (`Palamedes/Sample.lean`) — rather than backtracking to
-  the innermost choice. An `assume` the optimizer could not discharge is therefore a real filter, which
-  is what declaring the generator at `G (Option α)` exists to permit; its acceptance rate
-  (`massSome`) governs the sampling
-  cost. -/
+This is needed for synthesis (see synthesis rules like `s_between_partial` to see why), but ideally
+it should be optimized away before the generator is used. -/
 def assume (b : Bool) (f : b → PGen α) : PGen α :=
   if h : b then f h else empty
-
-/-! ## Recursion
-
-Recursion is *not* a single core combinator. Following Basalt, each recursive datatype defines its
-own `unfold` operator as a direct `partial_fixpoint` over Basalt's CCPO, along with its own `support`
-lemma and totality proof. `derive_palamedes` emits all of that per datatype (see
-`Palamedes/Derive.lean`); `Palamedes/Data/` just invokes it. -/
-
-/-! ## The `SPMF` interpretation
-
-`support` interprets a generator at `SPMF`. That needs a `Fail SPMF` instance; failure is the bottom
-distribution. It is `noncomputable`, but `SPMF` is the proof-only interpretation, so that is fine. -/
 
 noncomputable instance : Fail SPMF := ⟨Lean.Order.bot⟩
 
 /-! ## Support
 
-`support g` is the set of values `g` can produce, computed via the `SPMF` interpretation. -/
+`support g` is the set of values `g` can produce. -/
 
 /-- The set of values a generator can produce, via its `SPMF` interpretation. -/
 def support (g : PGen α) : α → Prop := SPMF.support g.run
