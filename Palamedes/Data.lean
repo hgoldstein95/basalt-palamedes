@@ -1,3 +1,10 @@
+/-
+Copyright (c) 2026 Harrison Goldstein. All rights reserved.
+Released under MIT license as described in the file LICENSE.
+Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
+  Leonidas Lampropoulos, Benjamin C. Pierce
+-/
+
 -- Aggregator for the supported datatypes. The synthesis rules for each datatype are *registered by
 -- its module* (an Aesop tag is only visible downstream of the module that declares it), so a user
 -- who imports the library but not the right `Data` module gets a `generator_search` that silently

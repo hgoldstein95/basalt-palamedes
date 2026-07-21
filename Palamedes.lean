@@ -1,3 +1,10 @@
+/-
+Copyright (c) 2026 Harrison Goldstein. All rights reserved.
+Released under MIT license as described in the file LICENSE.
+Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
+  Leonidas Lampropoulos, Benjamin C. Pierce
+-/
+
 -- This module is the root of the `Palamedes` library: importing it brings the full public API into
 -- scope — the `generator_search` tactic and `correct def` command (`Synthesizer`), the
 -- `derive_palamedes` command that adds a datatype to the synthesizer (`Derive`), the supported

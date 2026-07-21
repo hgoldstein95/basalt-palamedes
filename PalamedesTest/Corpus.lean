@@ -1,4 +1,11 @@
 /-
+Copyright (c) 2026 Harrison Goldstein. All rights reserved.
+Released under MIT license as described in the file LICENSE.
+Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
+  Leonidas Lampropoulos, Benjamin C. Pierce
+-/
+
+/-
 Aggregates the full example corpus. Compiling this module elaborates every example, each of which
 synthesizes a generator at elaboration time and *fails to compile* if synthesis fails — so this
 file is the de facto test suite. `PalamedesTest.ExtractionAudit` imports it to walk the corpus.
