@@ -1,16 +1,16 @@
-import Palamedes.Gen
+import Palamedes.PGen
 import Palamedes.CorrectGen
 import Palamedes.Total
 import Palamedes.RuleSets
 
 namespace Palamedes
 
-open _root_.Palamedes.Gen
+open Palamedes.PGen
 
-namespace Gen
+namespace PGen
 
 @[reducible, extract]
-def arbUnit : Gen Unit := pure ()
+def arbUnit : PGen Unit := pure ()
 
 namespace CorrectGen
 
@@ -28,6 +28,6 @@ def total_arbUnit : total arbUnit :=
 
 end Total
 
-end Gen
+end PGen
 
 end Palamedes

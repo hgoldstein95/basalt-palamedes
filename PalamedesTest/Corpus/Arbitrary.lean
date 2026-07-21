@@ -1,12 +1,12 @@
 import Palamedes.Synthesizer
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
-def genUnit : Gen Unit := by
+def genUnit : PGen Unit := by
   generator_search (fun (_ : Unit) => True)
 
-def genBool : Gen Bool := by
+def genBool : PGen Bool := by
   generator_search (fun _ => True)
 
-def genNat : Gen Nat := by
+def genNat : PGen Nat := by
   generator_search (fun _ => True)

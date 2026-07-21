@@ -1,15 +1,15 @@
-import Palamedes.Gen
+import Palamedes.PGen
 import Palamedes.Extract
 
 namespace Palamedes
 
-open _root_.Palamedes.Gen
+open Palamedes.PGen
 
 /-- A generator bundled with a proof that its `support` (via the `SPMF` interpretation) equals the
 target predicate `P`. This subtype is the object the deductive search actually constructs. -/
-@[implicit_reducible] def CorrectGen (P : α → Prop) := {g : Gen α // g.support = P}
+@[implicit_reducible] def CorrectGen (P : α → Prop) := {g : PGen α // g.support = P}
 
-namespace Gen
+namespace PGen
 
 namespace CorrectGen
 
@@ -65,6 +65,6 @@ attribute [extract] id_eq
 
 end CorrectGen
 
-end Gen
+end PGen
 
 end Palamedes

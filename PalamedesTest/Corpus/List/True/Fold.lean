@@ -1,6 +1,6 @@
 import Palamedes.Synthesizer
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace TrueFold
 
@@ -8,7 +8,7 @@ namespace TrueFold
 def isTrueFold (xs : List α) : Bool :=
   List.fold true (fun _ b => b) xs
 
-def genTrueFold : Gen (List Nat) := by
+def genTrueFold : PGen (List Nat) := by
   generator_search (fun xs => isTrueFold xs = true)
 
 end TrueFold

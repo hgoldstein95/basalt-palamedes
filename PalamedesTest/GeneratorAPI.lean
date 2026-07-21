@@ -24,7 +24,7 @@ a fact about the generator. See `diagnoseTotality` (`Synthesizer/FrontEnd.lean`)
 the bottom of this file.
 -/
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 @[simp]
 def isAllTwos : List Nat → Bool
@@ -33,7 +33,7 @@ def isAllTwos : List Nat → Bool
 
 /-! ## Row 1 — total, declared total: a Basalt generator, no wrapper -/
 
-def genAllTwos [_root_.Gen G] : G (List Nat) := by
+def genAllTwos [Gen G] : G (List Nat) := by
   generator_search (fun xs => isAllTwos xs)
 
 -- It is a Basalt generator, so Basalt's own tooling takes it directly — no adapter, no `.run`.
@@ -65,7 +65,7 @@ info: genAllTwos — 30 draws (seed 0, fuel 10000)
 
 /-! ## Row 2 — filtering, declared filtering: emitted via `totalize` -/
 
-def genBetween (lo hi : Nat) [_root_.Gen G] : G (Option Nat) := by
+def genBetween (lo hi : Nat) [Gen G] : G (Option Nat) := by
   generator_search (fun n => lo ≤ n ∧ n ≤ hi)
 
 -- Already `Option`-reflected by its type, so it samples through the retry loop directly.
@@ -77,17 +77,17 @@ def genBetween (lo hi : Nat) [_root_.Gen G] : G (Option Nat) := by
 /-! ## Row 3 — filtering, declared total: an error, naming the fix
 
 `G α` is `Fail`-free by construction, so there is no term to emit — hence an error, not a warning.
-A warning is only implementable for the synthesis-internal `Palamedes.Gen α` carrier (row 5), where
+A warning is only implementable for the synthesis-internal `Palamedes.PGen α` carrier (row 5), where
 a filtering term *does* exist. -/
 
 /--
-error: generator_search: this generator filters — a `Gen.assume` survived optimization — so it cannot be emitted at
+error: generator_search: this generator filters — a `PGen.assume` survived optimization — so it cannot be emitted at
   G ℕ, which is `Fail`-free by construction.
 
 Declare it as `G (Option _)` instead, so the type reflects that it can fail.
 -/
 #guard_msgs in
-example (lo hi : Nat) [_root_.Gen G] : G Nat := by
+example (lo hi : Nat) [Gen G] : G Nat := by
   generator_search (fun n => lo ≤ n ∧ n ≤ hi)
 
 /-! ## Row 4 — total, declared filtering: a hint, and the generator still works
@@ -99,10 +99,10 @@ row 3 this stays a warning. -/
 warning: this generator never fails, so the `Option` is not needed — `G (List ℕ)` will do.
 -/
 #guard_msgs in
-def genAllTwosOpt [_root_.Gen G] : G (Option (List Nat)) := by
+def genAllTwosOpt [Gen G] : G (Option (List Nat)) := by
   generator_search (fun xs => isAllTwos xs)
 
-/-! ## Row 5 — filtering, declared at the `Palamedes.Gen α` carrier: a warning
+/-! ## Row 5 — filtering, declared at the `Palamedes.PGen α` carrier: a warning
 
 The carrier is not `Fail`-free, so a filtering term *does* exist and can be emitted — hence a
 warning where row 3's Basalt `G α` is an error. This is the only row that fires on the carrier
@@ -111,15 +111,15 @@ unreachable from the whole build.
 -/
 
 /--
-warning: this generator filters: a `Gen.assume` survived optimization, so it can fail when sampled. Declare it as `[Gen G] → G (Option _)` to reflect that in the type.
+warning: this generator filters: a `PGen.assume` survived optimization, so it can fail when sampled. Declare it as `[Gen G] → G (Option _)` to reflect that in the type.
 -/
 #guard_msgs in
-def genBetweenCarrier (lo hi : Nat) : Palamedes.Gen Nat := by
+def genBetweenCarrier (lo hi : Nat) : Palamedes.PGen Nat := by
   generator_search (fun n => lo ≤ n ∧ n ≤ hi)
 
 -- The warning is a hint, not a rejection: the generator is emitted and filters as advertised.
 #eval show IO Unit from do
-  let n ← Palamedes.samplePartial (Palamedes.Gen.totalize (genBetweenCarrier 3 7))
+  let n ← Palamedes.samplePartial (Palamedes.PGen.totalize (genBetweenCarrier 3 7))
   unless 3 ≤ n && n ≤ 7 do
     throw <| IO.userError s!"genBetweenCarrier produced {n}, outside [3,7]"
 
@@ -136,13 +136,13 @@ error: generator_search: the predicate must have type
   ℕ → Prop
 -/
 #guard_msgs in
-example : Palamedes.Gen Nat := by generator_search (fun xs => isAllTwos xs)
+example : Palamedes.PGen Nat := by generator_search (fun xs => isAllTwos xs)
 
 -- A goal whose type constructor has no Basalt `Gen` instance.
 /--
 error: generator_search: the goal's type constructor
   List
-is not a Basalt generator monad (no `Gen` instance), and the goal is not `Palamedes.Gen α`
+is not a Basalt generator monad (no `Gen` instance), and the goal is not `Palamedes.PGen α`
 -/
 #guard_msgs in
 example : List Nat := by generator_search (fun n => n = 2)
@@ -173,7 +173,7 @@ silent (it keys on a witness that is absent either way), and the law emitted for
 weakens from `IsSoundAndComplete` to `IsSomeSoundAndComplete`. The bad diagnosis is actionable, the
 action succeeds, and the evidence is buried.
 
-So `diagnoseTotality` reads the *term* as well: `Gen.assume` is the only thing a generator can fail
+So `diagnoseTotality` reads the *term* as well: `PGen.assume` is the only thing a generator can fail
 at, and the optimizer floats every satisfiable one out, so no `assume` anywhere means "it filters"
 is not a claim the evidence supports. The corpus covers the `.filters` rows — five filtering
 generators synthesize without a spurious warning — but nothing in it reaches a basis gap, so the
@@ -189,7 +189,7 @@ private def diagnosisLabel : TotalityDiagnosis → String
 
 /-- info: "filters" -/
 #guard_msgs in
-#eval diagnosisLabel (diagnoseTotality (mkRes (Lean.mkConst ``Palamedes.Gen.assume) none))
+#eval diagnosisLabel (diagnoseTotality (mkRes (Lean.mkConst ``Palamedes.PGen.assume) none))
 
 /-- info: "gap (left goals, no assume)" -/
 #guard_msgs in
@@ -199,4 +199,4 @@ private def diagnosisLabel : TotalityDiagnosis → String
 /-- info: "gap (errored)" -/
 #guard_msgs in
 #eval diagnosisLabel
-  (diagnoseTotality (mkRes (Lean.mkConst ``Palamedes.Gen.assume) (some m!"boom")))
+  (diagnoseTotality (mkRes (Lean.mkConst ``Palamedes.PGen.assume) (some m!"boom")))

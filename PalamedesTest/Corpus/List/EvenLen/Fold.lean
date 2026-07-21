@@ -1,6 +1,6 @@
 import Palamedes.Synthesizer
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace EvenLenFold
 
@@ -8,7 +8,7 @@ namespace EvenLenFold
 def isEvenLenFold (xs : List α) : Bool :=
   List.fold true (fun _ b => !b) xs
 
-def genEvenLenFold : Gen (List Nat) := by
+def genEvenLenFold : PGen (List Nat) := by
   generator_search (fun xs => isEvenLenFold xs = true)
 
 end EvenLenFold

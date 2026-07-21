@@ -1,6 +1,6 @@
 import Palamedes.Synthesizer
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
-def genGt5 : Gen Nat := by
+def genGt5 : PGen Nat := by
   generator_search fun n => n > 5

@@ -1,7 +1,7 @@
 import Palamedes.Synthesizer
 import Palamedes.Data.Color
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace RBT
 
@@ -34,7 +34,7 @@ def isRBT : Palamedes.Tree (Color × Nat) → Nat → Nat → Nat → Bool := λ
   isRR t && isBST t (lo, hi) && isBH t height
 
 -- Filtering, declared in the return type.
-def genRBT (height lo hi : Nat) [_root_.Gen G] :
+def genRBT (height lo hi : Nat) [Gen G] :
     G (Option (Palamedes.Tree (Color × Nat))) := by
   generator_search (fun t => isRBT t height lo hi)
 

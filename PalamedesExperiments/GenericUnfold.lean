@@ -70,7 +70,7 @@ class HasInto (T : Type) (F : Type → Type) where
 
 /-- The generic anamorphism at any Basalt generator monad — written once, for every datatype.
 `partial_fixpoint` discharges the monotonicity obligation through `monotone_mapMF`. -/
-def unfoldGo {G : Type → Type} [_root_.Gen G] {F : Type → Type} [MTraversable F]
+def unfoldGo {G : Type → Type} [Gen G] {F : Type → Type} [MTraversable F]
     {T β : Type} [HasInto T F]
     (step : β → G (F β)) (b : β) : G T :=
   step b >>= fun fb =>
@@ -99,7 +99,7 @@ instance : HasInto (Palamedes.Tree α) (TreeF α) where
     | .node l x r => .node l x r
 
 /-- The generic unfold, specialized to `Tree` at the Palamedes carrier. -/
-noncomputable def treeUnfold (f : β → Gen (TreeF α β)) (v : β) : Gen (Palamedes.Tree α) :=
+noncomputable def treeUnfold (f : β → PGen (TreeF α β)) (v : β) : PGen (Palamedes.Tree α) :=
   ⟨fun {_G} _ _ => unfoldGo (fun b => (f b).run) v⟩
 
 #check @unfoldGo.eq_def  -- the fixpoint was accepted: its equation lemma exists

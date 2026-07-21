@@ -14,12 +14,12 @@ derive_palamedes Ty
 
 namespace Palamedes
 
-open _root_.Palamedes.Gen
+open Palamedes.PGen
 
-namespace Gen
+namespace PGen
 
 @[irreducible]
-def arbTy : Gen Ty := Ty.unfold
+def arbTy : PGen Ty := Ty.unfold
   (fun d _ => frequency
     [(2 + 3 * d, pure TyF.unit),
      (1, pure (TyF.arrow PUnit.unit PUnit.unit))])
@@ -27,9 +27,9 @@ def arbTy : Gen Ty := Ty.unfold
 
 def caseTy
     (τ : Ty)
-    (gu : (τ = Ty.unit) → Gen α)
-    (ga : (τ₁ τ₂ : Ty) → (τ = Ty.arrow τ₁ τ₂) → Gen α) :
-    Gen α :=
+    (gu : (τ = Ty.unit) → PGen α)
+    (ga : (τ₁ τ₂ : Ty) → (τ = Ty.arrow τ₁ τ₂) → PGen α) :
+    PGen α :=
   match τ with
   | .unit => gu rfl
   | .arrow τ₁ τ₂ => (ga τ₁ τ₂ rfl)
@@ -68,8 +68,8 @@ theorem someSupport_arbTy :
 
 @[simp]
 theorem support_Ty_caseTy
-    {gu : (τ = Ty.unit) → Gen α}
-    {ga : (τ₁ τ₂ : Ty) → (τ = Ty.arrow τ₁ τ₂) → Gen α} :
+    {gu : (τ = Ty.unit) → PGen α}
+    {ga : (τ₁ τ₂ : Ty) → (τ = Ty.arrow τ₁ τ₂) → PGen α} :
     support (caseTy
             τ
             (fun h => gu h)
@@ -87,7 +87,7 @@ theorem support_Ty_caseTy
 
 @[gen_congr]
 theorem support_caseTy_congr
-    {unitCase : (τ = .unit) → Gen α}
+    {unitCase : (τ = .unit) → PGen α}
     {h_unitCase : ∀ {h}, support (unitCase h) = support (unitCase' h)}
     {h_arrowCase : ∀ {τ₁ τ₂ h}, support (arrowCase τ₁ τ₂ h) = support (arrowCase' τ₁ τ₂ h)} :
     support (caseTy τ unitCase arrowCase) = support (caseTy τ unitCase' arrowCase') := by
@@ -125,7 +125,7 @@ namespace Total
 
 @[total]
 def total_arbTy : total arbTy := by
-  simp only [Gen.arbTy]
+  simp only [PGen.arbTy]
   apply _root_.Ty.total_unfold
   intro _d _b
   exact total_frequency
@@ -133,11 +133,11 @@ def total_arbTy : total arbTy := by
 
 @[total]
 def total_Ty_caseTy
-    {gu : (τ = Ty.unit) → Gen α}
-    {ga : (τ₁ τ₂ : Ty) → (τ = Ty.arrow τ₁ τ₂) → Gen α}
+    {gu : (τ = Ty.unit) → PGen α}
+    {ga : (τ₁ τ₂ : Ty) → (τ = Ty.arrow τ₁ τ₂) → PGen α}
     (hu : ∀ h, total (gu h))
     (ha : ∀ τ₁ τ₂ h, total (ga τ₁ τ₂ h)) :
-    total (Gen.caseTy τ (fun h => gu h) (fun τ₁ τ₂ h => ga τ₁ τ₂ h))
+    total (PGen.caseTy τ (fun h => gu h) (fun τ₁ τ₂ h => ga τ₁ τ₂ h))
   := by
   cases τ
   case unit => exact hu rfl
@@ -145,7 +145,7 @@ def total_Ty_caseTy
 
 end Total
 
-end Gen
+end PGen
 
 end Palamedes
 

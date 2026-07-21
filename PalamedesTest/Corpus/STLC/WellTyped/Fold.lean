@@ -1,6 +1,6 @@
 import Palamedes.Synthesizer
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 set_option maxHeartbeats 1000000
 
@@ -28,7 +28,7 @@ def isWellTypedFold (Γ : List Ty) (t : Term) : Prop :=
   ∃ τ, getTypeFold t Γ = some τ
 
 attribute [local simp] Ty.as_or Ty.deforest_eq in
-def genWellTypedFold (Γ : List Ty) : Gen Term := by
+def genWellTypedFold (Γ : List Ty) : PGen Term := by
   generator_search (fun t => isWellTypedFold Γ t)
 
 end WellTypedFold

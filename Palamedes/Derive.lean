@@ -1,5 +1,5 @@
 import Lean
-import Palamedes.Gen
+import Palamedes.PGen
 import Palamedes.Support
 import Palamedes.SomeSupport
 import Palamedes.CorrectGen
@@ -44,7 +44,7 @@ Debugging: `set_option trace.Palamedes.derive true` prints every generated comma
 
 open Lean Elab Command Meta
 open Lean.Parser.Term (matchAltExpr matchAlt)
-open Palamedes Palamedes.Gen Palamedes.Gen.Support
+open Palamedes Palamedes.PGen Palamedes.PGen.Support
 
 namespace Palamedes.Derive
 
@@ -468,7 +468,7 @@ def genUnfoldFamily (ctx : Ctx) : CommandElabM Unit := do
   let suffix ← `(Lean.Parser.Termination.suffix| partial_fixpoint)
   let mut goBinders : Array BB := #[]
   goBinders := goBinders.push (← impB #[G] (← `(Type → Type)))
-  goBinders := goBinders.push (← instBn (← `(_root_.Gen $G)))
+  goBinders := goBinders.push (← instBn (← `(Gen $G)))
   goBinders := goBinders ++ (← ctx.paramBinders)
   goBinders := goBinders.push (← impB #[β] (← `(Type)))
   addCmd (← `(command|
@@ -484,8 +484,8 @@ def genUnfoldFamily (ctx : Ctx) : CommandElabM Unit := do
   let d₀Binder : BB := ⟨(← `(explicitBinderF| ($d₀ : Nat := 0))).raw⟩
   addCmd (← `(command|
     def $(ctx.declId "unfold"):ident $uBinders:bracketedBinder*
-        ($f : Nat → $β → Palamedes.Gen $baseβ) ($b : $β) $d₀Binder:bracketedBinder :
-        Palamedes.Gen $self :=
+        ($f : Nat → $β → Palamedes.PGen $baseβ) ($b : $β) $d₀Binder:bracketedBinder :
+        Palamedes.PGen $self :=
       ⟨fun {_G} _ _ => $goRef (fun $d $x => ($f $d $x).run) $d₀ $b⟩))
   -- TGen unfold
   addCmd (← `(command|
@@ -496,8 +496,8 @@ def genUnfoldFamily (ctx : Ctx) : CommandElabM Unit := do
   -- run_unfold
   addCmd (← `(command|
     @[simp] theorem $(ctx.declId "run_unfold"):ident $uBinders:bracketedBinder*
-        ($f : Nat → $β → Palamedes.Gen $baseβ) ($b : $β) ($d₀ : Nat)
-        ($G : Type → Type) [_root_.Gen $G] [Palamedes.Fail $G] :
+        ($f : Nat → $β → Palamedes.PGen $baseβ) ($b : $β) ($d₀ : Nat)
+        ($G : Type → Type) [Gen $G] [Palamedes.Fail $G] :
         ($unfoldRef $f $b $d₀).run (G := $G) = $goRef (fun $d $x => ($f $d $x).run) $d₀ $b := rfl))
   -- The `TGen` twin of `run_unfold`. Tagged `@[twitness]` rather than `@[simp]`: this is what lets
   -- the emitted generator's recursion unfold from the totality witness back to `unfoldGo`, so a
@@ -506,7 +506,7 @@ def genUnfoldFamily (ctx : Ctx) : CommandElabM Unit := do
   addCmd (← `(command|
     @[twitness] theorem $(ctx.declId "trun_unfold"):ident $uBinders:bracketedBinder*
         ($f : Nat → $β → Palamedes.TGen $baseβ) ($b : $β) ($d₀ : Nat)
-        ($G : Type → Type) [_root_.Gen $G] :
+        ($G : Type → Type) [Gen $G] :
         ($tgenRef $f $b $d₀).run (G := $G) = $goRef (fun $d $x => ($f $d $x).run) $d₀ $b := rfl))
 
 /-- `X.unfold_support P d b t`: the support characterization of an unfold, indexed by the depth the
@@ -552,7 +552,7 @@ def genUnfoldSupport (ctx : Ctx) : CommandElabM Unit := do
 
 /-- Which support notion `genSupportUnfold` is emitting the characterization for.
 
-There are two: `Gen.support`, reading the generator at `SPMF` (where `Fail` is `⊥`), and
+There are two: `PGen.support`, reading the generator at `SPMF` (where `Fail` is `⊥`), and
 `someSupport`, reading it at `OptionT SPMF` (where `Fail` is `pure none`). The second is what a
 *filtering* generator's emitted definition actually runs, so it is the one a law about `totalize g`
 needs.
@@ -585,10 +585,10 @@ structure SupportKit where
   `OptionT` side the equation is between `Option`s, so it needs peeling first. -/
   wrapInj : Term → CommandElabM Term
 
-/-- The `Gen.support` kit. -/
+/-- The `PGen.support` kit. -/
 def SupportKit.spmf : SupportKit where
   thmName := "support_unfold"
-  supportOf := fun g => `(Palamedes.Gen.support $g)
+  supportOf := fun g => `(Palamedes.PGen.support $g)
   bindLem := mkIdent ``SPMF.support_bind
   pureLem := mkIdent ``SPMF.support_pure
   memLems := #[mkIdent ``Set.mem_setOf_eq, mkIdent ``Set.mem_singleton_iff]
@@ -739,7 +739,7 @@ def genSupportUnfold (ctx : Ctx) (kit : SupportKit) : CommandElabM Unit := do
   let proofTail ← seqTac cases
   let mut binders : Array BB := (← ctx.paramBinders)
   binders := binders.push (← impB #[β] (← `(Type)))
-  binders := binders.push (← impB #[f] (← `(Nat → $β → Palamedes.Gen $baseβ)))
+  binders := binders.push (← impB #[f] (← `(Nat → $β → Palamedes.PGen $baseβ)))
   binders := binders.push (← impB #[b] (β : Term))
   binders := binders.push (← impB #[d₀] (← `(Nat)))
   -- `unfoldGo` is polymorphic in `G`, so the only thing the `OptionT` reading changes here is which
@@ -772,15 +772,15 @@ def genSupportUnfoldCongr (ctx : Ctx) : CommandElabM Unit := do
   let baseβ ← ctx.baseTy (β : Term)
   let mut binders : Array BB := (← ctx.paramBinders)
   binders := binders.push (← impB #[β] (← `(Type)))
-  binders := binders.push (← impB #[f, f'] (← `(Nat → $β → Palamedes.Gen $baseβ)))
+  binders := binders.push (← impB #[f, f'] (← `(Nat → $β → Palamedes.PGen $baseβ)))
   binders := binders.push (← impB #[b] (β : Term))
   binders := binders.push (← impB #[d₀] (← `(Nat)))
   addCmd (← `(command|
     @[gen_congr] theorem $(ctx.declId "support_unfold_congr"):ident $binders:bracketedBinder*
         ($hf : ∀ {$d:ident $x:ident},
-          Palamedes.Gen.support ($f $d $x) = Palamedes.Gen.support ($f' $d $x)) :
-        Palamedes.Gen.support ($(ctx.ref "unfold") $f $b $d₀)
-          = Palamedes.Gen.support ($(ctx.ref "unfold") $f' $b $d₀) := by
+          Palamedes.PGen.support ($f $d $x) = Palamedes.PGen.support ($f' $d $x)) :
+        Palamedes.PGen.support ($(ctx.ref "unfold") $f $b $d₀)
+          = Palamedes.PGen.support ($(ctx.ref "unfold") $f' $b $d₀) := by
       aesop))
 
 def genTotalUnfold (ctx : Ctx) : CommandElabM Unit := do
@@ -796,14 +796,14 @@ def genTotalUnfold (ctx : Ctx) : CommandElabM Unit := do
   let baseβ ← ctx.baseTy (β : Term)
   let mut binders : Array BB := (← ctx.paramBinders)
   binders := binders.push (← impB #[β] (← `(Type)))
-  binders := binders.push (← impB #[g] (← `(Nat → $β → Palamedes.Gen $baseβ)))
+  binders := binders.push (← impB #[g] (← `(Nat → $β → Palamedes.PGen $baseβ)))
   binders := binders.push (← impB #[b] (β : Term))
   binders := binders.push (← impB #[d₀] (← `(Nat)))
   addCmd (← `(command|
     @[total]
     def $(ctx.declId "total_unfold"):ident $binders:bracketedBinder*
-        ($h : ∀ $d:ident $x:ident, Palamedes.Gen.total ($g $d $x)) :
-        Palamedes.Gen.total ($(ctx.ref "unfold") $g $b $d₀) :=
+        ($h : ∀ $d:ident $x:ident, Palamedes.PGen.total ($g $d $x)) :
+        Palamedes.PGen.total ($(ctx.ref "unfold") $g $b $d₀) :=
       ⟨$(mkIdent ctx.tgenUnfoldName) (fun $d $y => ($h $d $y).val) $b $d₀, by
         have $heq:ident : (fun $d $y => (($h $d $y).val).toGen) = $g :=
           funext fun $d:ident => funext fun $y:ident => ($h $d $y).property
@@ -833,11 +833,11 @@ def genTotalCases (ctx : Ctx) : CommandElabM Unit := do
   -- One branch generator per constructor, taking that constructor's fields.
   for c in ctx.ctors, gid' in gs do
     let fieldTys := c.fields.map fun f => if f.isRec then (β : Term) else f.tyStx
-    binders := binders.push (← impB #[gid'] (← mkArrows fieldTys (← `(Palamedes.Gen $γ))))
+    binders := binders.push (← impB #[gid'] (← mkArrows fieldTys (← `(Palamedes.PGen $γ))))
   -- ...and a totality witness for each, universally quantified over those fields.
   for c in ctx.ctors, gid' in gs, hid in hs do
     let fieldTys := c.fields.map fun f => if f.isRec then (β : Term) else f.tyStx
-    let concl ← `(Palamedes.Gen.total ($gid' $(c.fieldIds)*))
+    let concl ← `(Palamedes.PGen.total ($gid' $(c.fieldIds)*))
     let ty ← c.fields.zip fieldTys |>.foldrM
       (fun (fd, fty) acc => `(∀ ($(fd.id) : $fty), $acc)) concl
     binders := binders.push (← expB hid ty)
@@ -854,7 +854,7 @@ def genTotalCases (ctx : Ctx) : CommandElabM Unit := do
   addCmd (← `(command|
     @[total]
     def $(ctx.declId "total_cases"):ident $binders:bracketedBinder* :
-        Palamedes.Gen.total (match $t:ident with $goalAlts:matchAlt*) :=
+        Palamedes.PGen.total (match $t:ident with $goalAlts:matchAlt*) :=
       ⟨⟨fun {_G} _ => match $t:ident with $witAlts:matchAlt*⟩,
        match $t:ident with $proofAlts:matchAlt*⟩))
 

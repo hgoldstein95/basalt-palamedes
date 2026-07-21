@@ -1,6 +1,6 @@
 import Palamedes.Synthesizer
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace BST
 
@@ -20,7 +20,7 @@ info: Try this:
       (fun d p => do
         let tv ←
           if h : decide (p.2.1 ≤ p.2.2) = true then
-              Gen.oneOf
+              PGen.oneOf
                 [pure TreeF.leaf, do
                   let a ← choose p.2.1 p.2.2
                   pure (TreeF.node PUnit.unit a PUnit.unit)]
@@ -31,7 +31,7 @@ info: Try this:
       (PUnit.unit, lo, hi)
 -/
 #guard_msgs in
-def genBST (lo hi : Nat) : Gen (Palamedes.Tree Nat) := by
+def genBST (lo hi : Nat) : PGen (Palamedes.Tree Nat) := by
   generator_search? (fun t => isBST t (lo, hi) = true)
 
 end BST

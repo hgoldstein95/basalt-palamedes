@@ -1,6 +1,6 @@
 import Palamedes.Synthesizer
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace TrueAccuOpt
 
@@ -13,7 +13,7 @@ def isTrueAccuOpt (xs : List α) : Option Unit :=
       xs
       ()
 
-def genTrueAccuOpt : Gen (List Nat) := by
+def genTrueAccuOpt : PGen (List Nat) := by
   generator_search (fun xs => isTrueAccuOpt xs = some ())
 
 end TrueAccuOpt

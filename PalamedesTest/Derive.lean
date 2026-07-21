@@ -38,7 +38,7 @@ derive_palamedes DeriveTest.Expr
 
 namespace DeriveTest
 
-open Palamedes Palamedes.Gen
+open Palamedes Palamedes.PGen
 
 -- ── signatures of the generated declarations ──
 
@@ -51,34 +51,34 @@ example : {m : Type → Type} → [Monad m] → {α β σ : Type} →
 -- The recursion threads a `Nat` depth: `unfoldGo` hands it to the step and unfolds children at
 -- `d + 1`, while `unfold` takes a starting depth defaulting to `0`. The seed type is unchanged.
 
-example : {G : Type → Type} → [_root_.Gen G] → {α β : Type} →
+example : {G : Type → Type} → [Gen G] → {α β : Type} →
     (Nat → β → G (MyTreeF α β)) → Nat → β → G (MyTree α) :=
   @MyTree.unfoldGo
 
-example : {α β : Type} → (Nat → β → Gen (MyTreeF α β)) → β → Nat → Gen (MyTree α) := @MyTree.unfold
+example : {α β : Type} → (Nat → β → PGen (MyTreeF α β)) → β → Nat → PGen (MyTree α) := @MyTree.unfold
 
 example : {α β : Type} → (Nat → β → TGen (MyTreeF α β)) → β → Nat → TGen (MyTree α) :=
   @TGen.MyTree.unfold
 
 -- the starting depth is an optional argument: existing call sites are untouched
-example {α β : Type} (f : Nat → β → Gen (MyTreeF α β)) (b : β) :
+example {α β : Type} (f : Nat → β → PGen (MyTreeF α β)) (b : β) :
     MyTree.unfold f b = MyTree.unfold f b 0 := rfl
 
 example : {α β : Type} → (Nat → β → MyTreeF α β → Prop) → Nat → β → MyTree α → Prop :=
   @MyTree.unfold_support
 
 -- `support_unfold` is unconditional: no depth-independence hypothesis is needed to state it.
-example : ∀ {α β : Type} {f : Nat → β → Gen (MyTreeF α β)} {b : β} {d₀ : Nat},
+example : ∀ {α β : Type} {f : Nat → β → PGen (MyTreeF α β)} {b : β} {d₀ : Nat},
     support (MyTree.unfold f b d₀)
       = MyTree.unfold_support (fun d x => support (f d x)) d₀ b :=
   @MyTree.support_unfold
 
-example : ∀ {α β : Type} {f f' : Nat → β → Gen (MyTreeF α β)} {b : β} {d₀ : Nat},
+example : ∀ {α β : Type} {f f' : Nat → β → PGen (MyTreeF α β)} {b : β} {d₀ : Nat},
     (∀ {d x}, support (f d x) = support (f' d x)) →
     support (MyTree.unfold f b d₀) = support (MyTree.unfold f' b d₀) :=
   fun h => MyTree.support_unfold_congr h
 
-example : ∀ {α β : Type} {g : Nat → β → Gen (MyTreeF α β)} {b : β} {d₀ : Nat},
+example : ∀ {α β : Type} {g : Nat → β → PGen (MyTreeF α β)} {b : β} {d₀ : Nat},
     (∀ d x, total (g d x)) → total (MyTree.unfold g b d₀) :=
   fun h => MyTree.total_unfold h
 

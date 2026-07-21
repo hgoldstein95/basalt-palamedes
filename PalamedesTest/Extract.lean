@@ -9,12 +9,12 @@ silent extraction failure does not break the build: if the `extract` simp set fa
 strip the `CorrectGen` combinator wrappers, the generator is left unchanged, so the optimizer's
 support-preservation proof still holds trivially, and a `totality` failure is only a warning. The
 result is a definition that elaborates fine but contains `(… : CorrectGen P).val` wrappers instead
-of raw `Gen` code.
+of raw `PGen` code.
 
 This module walks every generator-typed definition in the example corpus and *fails to compile* if
 any synthesis residue survives in a compiled term.
 
-**It must recognise every generator shape** — `Palamedes.Gen α`, `CorrectGen P`, and the Basalt
+**It must recognise every generator shape** — `Palamedes.PGen α`, `CorrectGen P`, and the Basalt
 `{G} → [Gen G] → G α`, whose head under the telescope is a *local* `G` rather than a constant. A
 shape the walk fails to match is silently unaudited, and the `total == 0` backstop does not catch it
 so long as some other shape still matches.
@@ -27,13 +27,13 @@ namespace PalamedesTest.ExtractionAudit
 /-- Constants that should never survive extraction into a synthesized generator: the
 `CorrectGen` combinators themselves, the `Subtype.val` projection that extraction is supposed
 to eliminate, and `Eq` casts (which would mean a rewrite leaked out of a `convert` proof
-argument into the generator). Matcher auxiliaries (e.g. `Gen.CorrectGen.List.s_unfold.match_1`)
+argument into the generator). Matcher auxiliaries (e.g. `PGen.CorrectGen.List.s_unfold.match_1`)
 are exempt: they are ordinary case splits that legitimately appear in `s_unfold` generators.
 Proof auxiliaries (`…._proof_i`, abstracted out of combinator bodies by the definition
 elaborator) are exempt too: they are compiler-erased proofs of `Prop`s, never a combinator
 wrapper (those are `Type`-valued).
 
-`Gen.pick` is residue too, of the optimizer rather than of extraction: the flatten pass rewrites
+`PGen.pick` is residue too, of the optimizer rather than of extraction: the flatten pass rewrites
 every `pick` tree into a uniform n-ary `oneOf`, so a `pick` surviving in a compiled
 synthesized generator means a chain escaped flattening — and with it the `½, ¼, ⅛, …` distribution
 skew the pass exists to remove. -/
@@ -42,14 +42,14 @@ def isResidue (c : Name) : Bool :=
   else if (c.toString.splitOn "._proof_").length > 1 then false
   else
     c == ``Subtype.val || c == ``Eq.mpr || c == ``Eq.rec || c == ``Palamedes.CorrectGen ||
-    c == ``Palamedes.Gen.pick ||
-    (`Palamedes.Gen.CorrectGen).isPrefixOf c ||
+    c == ``Palamedes.PGen.pick ||
+    (`Palamedes.PGen.CorrectGen).isPrefixOf c ||
     -- Totality residue. A Basalt-shaped generator is emitted from the `TGen` witness, so if the
     -- witness's `.val`/`.run` did not reduce away, what lands in the environment is the *proof* and
     -- not the generator — readable as a witness tree rather than as generator code. `Eq.rec` above
     -- already catches the `▸` such a tree carries; these name the cause rather than the symptom.
-    (`Palamedes.Gen.Total).isPrefixOf c || (`Palamedes.TGen).isPrefixOf c ||
-    c == ``Palamedes.Gen.total || c.toString.endsWith "total_unfold"
+    (`Palamedes.PGen.Total).isPrefixOf c || (`Palamedes.TGen).isPrefixOf c ||
+    c == ``Palamedes.PGen.total || c.toString.endsWith "total_unfold"
 
 run_cmd liftTermElabM do
   let env ← getEnv
@@ -70,7 +70,7 @@ run_cmd liftTermElabM do
       let some val := ci.value? | continue
       let isGen ← forallTelescope ci.type fun args body => do
         -- The synthesis-internal carrier...
-        if body.getAppFn.constName? == some ``Palamedes.Gen then return true
+        if body.getAppFn.constName? == some ``Palamedes.PGen then return true
         -- ...or bundled: a `CorrectGen`-typed def's *data* component is a generator, and skipping
         -- the bundle entirely is how this audit would go quiet at the next representation change.
         -- Only when no *argument* is `CorrectGen`-typed: a def consuming `CorrectGen`s is a

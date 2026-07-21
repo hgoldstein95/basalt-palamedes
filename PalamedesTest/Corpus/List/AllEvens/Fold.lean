@@ -1,6 +1,6 @@
 import Palamedes.Synthesizer
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace AllEvensFold
 
@@ -8,7 +8,7 @@ namespace AllEvensFold
 def isAllEvensFold (xs : List Nat) : Bool :=
   List.fold true (fun x b => x % 2 == 0 && b) xs
 
-def genAllEvensFold : Gen (List Nat) := by
+def genAllEvensFold : PGen (List Nat) := by
   generator_search (fun xs => isAllEvensFold xs = true)
 
 end AllEvensFold

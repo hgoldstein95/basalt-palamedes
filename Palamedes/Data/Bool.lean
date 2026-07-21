@@ -1,4 +1,4 @@
-import Palamedes.Gen
+import Palamedes.PGen
 import Palamedes.CorrectGen
 import Palamedes.Total
 import Palamedes.RuleSets
@@ -7,11 +7,11 @@ import Palamedes.SomeSupport
 
 namespace Palamedes
 
-open _root_.Palamedes.Gen
+open Palamedes.PGen
 
-namespace Gen
+namespace PGen
 
-def arbBool : Gen Bool := pick (pure true) (pure false)
+def arbBool : PGen Bool := pick (pure true) (pure false)
 
 @[simp]
 theorem support_arbBool :
@@ -49,7 +49,7 @@ end CorrectGen
 namespace Total
 
 @[total]
-def total_arbBool : total (arbBool : Gen Bool) :=
+def total_arbBool : total (arbBool : PGen Bool) :=
   total_pick (total_pure _) (total_pure _)
 
 @[total]
@@ -58,6 +58,6 @@ def total_Bool_rec (hf : total gf) (ht : total gt) : total (Bool.rec gf gt b) :=
 
 end Total
 
-end Gen
+end PGen
 
 end Palamedes

@@ -10,10 +10,10 @@ import Basalt
 /-!
 # Palamedes generators, on top of Basalt
 
-A Palamedes `Gen α` wraps a *polymorphic Basalt generator*: a term usable at any generator monad `G`
-(i.e. any `_root_.Gen G`, Basalt's generator typeclass) that *additionally* supports failure
+A Palamedes `PGen α` wraps a *polymorphic Basalt generator*: a term usable at any generator monad `G`
+(i.e. any `Gen G`, Basalt's generator typeclass) that *additionally* supports failure
 (`Fail G`). The wrapped term, `g.run`, is the bare Basalt generator; it can be instantiated at `SPMF`
-for proofs or `Plausible.Gen` for sampling. Synthesis builds these `Gen` terms as data; a generator
+for proofs or `Plausible.Gen` for sampling. Synthesis builds these `PGen` terms as data; a generator
 acquires meaning only by *interpreting* its `run` at a chosen `G`. The proof interpretation is Basalt's
 sub-probability mass function (`SPMF`), so `support` is `SPMF.support`.
 
@@ -28,10 +28,11 @@ rather than reusing Basalt's CCPO bottom (`Lean.Order.bot`) for two reasons:
   `Fail.fail` method lets each interpretation supply its own computable failure.
 * **Totality.** A generator that never fails is exactly one definable *without* the `Fail`
   capability. Splitting `Fail` out of the base `Gen` class makes "assume-free" a structural fact: see
-  `TGen` below and `Palamedes.Gen.total`.
+  `TGen` below and `Palamedes.PGen.total`.
 
-Because Basalt already owns the name `Gen` (its generator typeclass, at the root namespace), the
-Palamedes carrier lives under `namespace Palamedes`; we refer to Basalt's class as `_root_.Gen`.
+Basalt already owns the name `Gen` (its generator typeclass, at the root namespace), so the Palamedes
+carrier is named `PGen` (under `namespace Palamedes`) to avoid the clash; bare `Gen` unambiguously
+means Basalt's class.
 -/
 
 namespace Palamedes
@@ -47,49 +48,49 @@ class Fail (G : Type → Type) where
   fail : ∀ {α}, G α
 
 /-- A Palamedes generator wraps a Basalt generator that is polymorphic over the choice of generator
-  monad — any `_root_.Gen G` that also supports failure (`Fail G`). `g.run` is the underlying Basalt
+  monad — any `Gen G` that also supports failure (`Fail G`). `g.run` is the underlying Basalt
   generator. -/
-structure Gen (α : Type) : Type 1 where
-  run : ∀ {G : Type → Type} [_root_.Gen G] [Fail G], G α
+structure PGen (α : Type) : Type 1 where
+  run : ∀ {G : Type → Type} [Gen G] [Fail G], G α
 
-/-- A *failure-free* Palamedes generator: polymorphic over every `_root_.Gen G`, with **no** `Fail`
+/-- A *failure-free* Palamedes generator: polymorphic over every `Gen G`, with **no** `Fail`
   requirement. A `TGen` cannot mention `assume`/`empty`, so it is "assume-free" by construction. It
-  coerces into `Gen` (forgetting that it never needed `Fail`); `Palamedes.Gen.total` is defined as
+  coerces into `PGen` (forgetting that it never needed `Fail`); `Palamedes.PGen.total` is defined as
   "factors through a `TGen`." -/
 structure TGen (α : Type) : Type 1 where
-  run : ∀ {G : Type → Type} [_root_.Gen G], G α
+  run : ∀ {G : Type → Type} [Gen G], G α
 
-/-- Forget that a failure-free generator never needed `Fail`, viewing it as a `Gen`. -/
-def TGen.toGen (t : TGen α) : Gen α := ⟨fun {_G} _ _ => t.run⟩
+/-- Forget that a failure-free generator never needed `Fail`, viewing it as a `PGen`. -/
+def TGen.toGen (t : TGen α) : PGen α := ⟨fun {_G} _ _ => t.run⟩
 
-namespace Gen
+namespace PGen
 
-@[ext] theorem ext {x y : Gen α} (h : ∀ {G} [_root_.Gen G] [Fail G], x.run = (y.run : G α)) : x = y := by
+@[ext] theorem ext {x y : PGen α} (h : ∀ {G} [Gen G] [Fail G], x.run = (y.run : G α)) : x = y := by
   cases x; cases y; congr; funext G inst finst; exact h
 
-protected def pure (a : α) : Gen α := ⟨fun {_G} _ _ => Pure.pure a⟩
+protected def pure (a : α) : PGen α := ⟨fun {_G} _ _ => Pure.pure a⟩
 
-protected def bind (x : Gen α) (f : α → Gen β) : Gen β :=
+protected def bind (x : PGen α) (f : α → PGen β) : PGen β :=
   ⟨fun {_G} _ _ => x.run >>= fun a => (f a).run⟩
 
-instance : Pure Gen where pure := Gen.pure
-instance : Bind Gen where bind := Gen.bind
-instance : Monad Gen where
+instance : Pure PGen where pure := PGen.pure
+instance : Bind PGen where bind := PGen.bind
+instance : Monad PGen where
 
 /-- Uniform binary choice. -/
-def pick (x y : Gen α) : Gen α :=
+def pick (x y : PGen α) : PGen α :=
   ⟨fun {_G} _ _ => RandomChoice.pick (fun () => x.run) (fun () => y.run)⟩
 
 /-- Weighted n-ary choice. Branch `(wⱼ, gⱼ)` is selected with probability `wⱼ / Σw`. The optimizer
 flattens `pick` chains into `frequency` so that a k-way choice is a function of the weights rather
 than of how the chain was associated. -/
-def frequency (gs : List (Nat × Gen α)) (h : 0 < (gs.map Prod.fst).sum := by simp) : Gen α :=
+def frequency (gs : List (Nat × PGen α)) (h : 0 < (gs.map Prod.fst).sum := by simp) : PGen α :=
   ⟨fun {_G} _ _ =>
     _root_.frequency (gs.map fun p => (p.1, fun _ => p.2.run))
       (by simpa [List.map_map, Function.comp_def] using h)⟩
 
 /-- Uniform n-ary choice: `frequency` with all weights 1. -/
-def oneOf (gs : List (Gen α)) (h : gs ≠ [] := by simp) : Gen α :=
+def oneOf (gs : List (PGen α)) (h : gs ≠ [] := by simp) : PGen α :=
   frequency (gs.map fun g => (1, g)) (by cases gs <;> simp_all)
 
 section Delab
@@ -100,13 +101,13 @@ open Lean PrettyPrinter Delaborator SubExpr
 application that omits them still elaborates whenever `simp` can discharge the condition. The
 delaborators below therefore drop the argument in that case rather than rendering it. -/
 
-@[app_delab Palamedes.Gen.oneOf]
+@[app_delab Palamedes.PGen.oneOf]
 def delabOneOf : Delab := do
   let e ← getExpr
-  guard <| e.isAppOfArity ``Palamedes.Gen.oneOf 3
+  guard <| e.isAppOfArity ``Palamedes.PGen.oneOf 3
   guard <| (e.getArg! 1).isAppOf ``List.cons
   let gs ← withNaryArg 1 delab
-  let fn := mkIdent (← unresolveNameGlobal ``Palamedes.Gen.oneOf)
+  let fn := mkIdent (← unresolveNameGlobal ``Palamedes.PGen.oneOf)
   `($fn $gs)
 
 def natLit? (e : Expr) : Option Nat :=
@@ -139,13 +140,13 @@ private partial def someWeightPos (l : Expr) : Bool :=
       | _ => false) || someWeightPos tl
   | _ => false
 
-@[app_delab Palamedes.Gen.frequency]
+@[app_delab Palamedes.PGen.frequency]
 def delabFrequency : Delab := do
   let e ← getExpr
-  guard <| e.isAppOfArity ``Palamedes.Gen.frequency 3
+  guard <| e.isAppOfArity ``Palamedes.PGen.frequency 3
   guard <| someWeightPos (e.getArg! 1)
   let gs ← withNaryArg 1 delab
-  let fn := mkIdent (← unresolveNameGlobal ``Palamedes.Gen.frequency)
+  let fn := mkIdent (← unresolveNameGlobal ``Palamedes.PGen.frequency)
   `($fn $gs)
 
 end Delab
@@ -154,7 +155,7 @@ end Delab
   `⊥` (mass 0), and in an executable interpretation it is an explicit `none` (via `totalize`,
   `Palamedes/Failure.lean`), which the sampler treats as a failed draw to retry. It is computable
   whenever the chosen interpretation's `Fail` instance is. -/
-def empty : Gen α := ⟨fun {_G} _ _ => Fail.fail⟩
+def empty : PGen α := ⟨fun {_G} _ _ => Fail.fail⟩
 
 /-- A guarded generator: `f` when `b` holds, `empty` otherwise — so the failing branch contributes
   nothing to the support. This is how a `Bool`-valued side condition is woven into a generator.
@@ -165,7 +166,7 @@ def empty : Gen α := ⟨fun {_G} _ _ => Fail.fail⟩
   is what declaring the generator at `G (Option α)` exists to permit; its acceptance rate
   (`massSome`) governs the sampling
   cost. -/
-def assume (b : Bool) (f : b → Gen α) : Gen α :=
+def assume (b : Bool) (f : b → PGen α) : PGen α :=
   if h : b then f h else empty
 
 /-! ## Recursion
@@ -187,7 +188,7 @@ noncomputable instance : Fail SPMF := ⟨Lean.Order.bot⟩
 `support g` is the set of values `g` can produce, computed via the `SPMF` interpretation. -/
 
 /-- The set of values a generator can produce, via its `SPMF` interpretation. -/
-def support (g : Gen α) : α → Prop := SPMF.support g.run
+def support (g : PGen α) : α → Prop := SPMF.support g.run
 
 namespace Support
 
@@ -202,7 +203,7 @@ theorem support_bot : SPMF.support (Lean.Order.bot : SPMF α) = (∅ : Set α) :
 theorem support_pure :
     support (pure a) = (· = a) := by
   funext x
-  simp only [support, Pure.pure, Gen.pure, eq_iff_iff]
+  simp only [support, Pure.pure, PGen.pure, eq_iff_iff]
   show x ∈ SPMF.support (Pure.pure a) ↔ x = a
   simp
 
@@ -225,7 +226,7 @@ theorem support_pick :
   rfl
 
 @[simp]
-theorem support_frequency {gs : List (Nat × Gen α)} (h) :
+theorem support_frequency {gs : List (Nat × PGen α)} (h) :
     support (frequency gs h) = fun a => ∃ w g, (w, g) ∈ gs ∧ 0 < w ∧ support g a := by
   funext a
   apply propext
@@ -242,7 +243,7 @@ theorem support_frequency {gs : List (Nat × Gen α)} (h) :
     exact ⟨w, fun _ => g.run, ⟨⟨w, g⟩, hmem, rfl, rfl⟩, hw, ha⟩
 
 @[simp]
-theorem support_oneOf {gs : List (Gen α)} (h) :
+theorem support_oneOf {gs : List (PGen α)} (h) :
     support (oneOf gs h) = fun a => ∃ g ∈ gs, support g a := by
   funext a
   simp only [oneOf, support_frequency, List.mem_map, eq_iff_iff, Prod.mk.injEq]
@@ -255,7 +256,7 @@ theorem support_oneOf {gs : List (Gen α)} (h) :
 
 @[simp]
 theorem support_empty :
-    support (empty : Gen α) = fun _ => False := by
+    support (empty : PGen α) = fun _ => False := by
   funext a
   simp only [support, empty, eq_iff_iff, iff_false]
   show a ∉ SPMF.support (Fail.fail : SPMF α)
@@ -280,8 +281,8 @@ theorem support_map :
 
 end Support
 
-end Gen
+end PGen
 
 end Palamedes
 
-notation v " ∈ " "〚" g "〛" => Palamedes.Gen.support g v
+notation v " ∈ " "〚" g "〛" => Palamedes.PGen.support g v

@@ -1,7 +1,7 @@
 import Palamedes.Synthesizer
 import Palamedes.Data.Color
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace BadRBT
 
@@ -27,7 +27,7 @@ set_option maxRecDepth 2000
 def isBadRBT : Palamedes.Tree (Color × Nat) → Nat → Bool := λ t height =>
   isRR t && isBH t height
 
-def genBadRBT (height : Nat) : Gen (Palamedes.Tree (Color × Nat)) := by
+def genBadRBT (height : Nat) : PGen (Palamedes.Tree (Color × Nat)) := by
   generator_search (fun t => isBadRBT t height)
 
 end BadRBT

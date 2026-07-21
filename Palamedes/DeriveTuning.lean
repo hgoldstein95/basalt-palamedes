@@ -20,8 +20,8 @@ hand-written one:
 It runs post-elaboration, where the recursion is the `unfold` combinator rather than an `Order.fix`,
 so threading `θ` is a support-preserving rewrite of the `oneOf` sites with no fixpoint to rebuild.
 
-**The rewrite substrate is always the `Palamedes.Gen` carrier.** `installTuning` keys on the
-carrier's `Gen.oneOf`, and the optimizer's `support lhs = support rhs` chaining does not typecheck
+**The rewrite substrate is always the `Palamedes.PGen` carrier.** `installTuning` keys on the
+carrier's `PGen.oneOf`, and the optimizer's `support lhs = support rhs` chaining does not typecheck
 at an abstract `G` — so a Basalt-shaped generator is never rewritten *in place*. Instead it is tuned
 through its **carrier companion** `genFoo.gen`, which `correct def` emits alongside the projection:
 
@@ -101,8 +101,8 @@ def runCarrierTuning (declName : Name) : CommandElabM Bool := do
     -- independently — from `ci.type` here, from the value in `buildTuned`.
     withLocalDeclD `θ (mkConst ``Tuning) fun θ => do
       forallTelescope ci.type fun args _ => do
-        let lhs ← mkAppM ``Gen.support #[mkAppN (.app tunedC θ) args]
-        let rhs ← mkAppM ``Gen.support #[mkAppN declC args]
+        let lhs ← mkAppM ``PGen.support #[mkAppN (.app tunedC θ) args]
+        let rhs ← mkAppM ``PGen.support #[mkAppN declC args]
         let stmt ← mkForallFVars (#[θ] ++ args) (← mkEq lhs rhs)
         unless ← isDefEq (← inferType supportProof) stmt do
           throwError "derive_tuning: the support-preservation proof does not match\
@@ -121,7 +121,7 @@ def runCarrierTuning (declName : Name) : CommandElabM Bool := do
     -- else must not be chained into a law about the tuned generator.
     let ok ← forallTelescope sc.type fun _ body => do
       let some (_, lhs, _) := body.eq? | return false
-      return lhs.isAppOf ``Gen.support
+      return lhs.isAppOf ``PGen.support
     unless ok do return false
     withLocalDeclD `θ (mkConst ``Tuning) fun θ => do
       forallTelescope ci.type fun args _ => do
@@ -168,7 +168,7 @@ def emitBasaltTuned (declName companion : Name) (filtering : Bool) :
       let valueArgs ← args.filterM fun x => do
         if x == G then return false
         let t ← whnf (← inferType x)
-        return !(t.isAppOfArity ``_root_.Gen 1 && t.appArg! == G)
+        return !(t.isAppOfArity ``Gen 1 && t.appArg! == G)
       let tunedBody := tunedVal.beta (#[θ] ++ valueArgs)
       let tunedApp := mkAppN (mkApp (mkConst (companion ++ `tuned)) θ) valueArgs
       let (emittedVal, hw?) ←
@@ -176,14 +176,14 @@ def emitBasaltTuned (declName companion : Name) (filtering : Bool) :
           -- `G (Option β)`: the projection is `totalize`, applied to the *constant* so the emitted
           -- term reads as what it is. No witness enters the data path, so nothing to extract.
           let β := body.appArg!.appArg!
-          pure (← mkAppOptM ``Palamedes.Gen.totalize #[some β, some tunedApp, some G, none], none)
+          pure (← mkAppOptM ``Palamedes.PGen.totalize #[some β, some tunedApp, some G, none], none)
         else
           -- `G α`: rebuild the totality witness on the θ-open tuned term — `total_frequency` never
           -- inspects weights, so the cascade closes exactly as it did pre-tuning — and project it
           -- back to generator code.
           let w ←
             try
-              solveGoalWithTactic (← mkAppM ``Palamedes.Gen.total #[tunedBody])
+              solveGoalWithTactic (← mkAppM ``Palamedes.PGen.total #[tunedBody])
                 (← `(tactic| totality))
             catch e =>
               throwError "derive_tuning: could not rebuild the totality witness for the tuned \
@@ -216,9 +216,9 @@ def emitBasaltTuned (declName companion : Name) (filtering : Bool) :
         | return some m!"{companion} has no `sound_complete` to carry across"
       let ok ← forallTelescope sc.type fun _ scBody => do
         let some (_, lhs, _) := scBody.eq? | return false
-        return lhs.isAppOf ``Gen.support
+        return lhs.isAppOf ``PGen.support
       unless ok do
-        return some m!"{scName} is not a `Gen.support` equation, so there is no carrier law to chain"
+        return some m!"{scName} is not a `PGen.support` equation, so there is no carrier law to chain"
       let tsApp := mkAppN (mkApp (mkConst (companion ++ `tuned_support)) θ) valueArgs
       let scApp := mkAppN (mkConst scName) valueArgs
       let chain ← mkAppM ``Eq.trans #[tsApp, scApp]
@@ -230,7 +230,7 @@ def emitBasaltTuned (declName companion : Name) (filtering : Bool) :
           -- carried out rather than swallowed: the law is reported absent, and why.
           try
             let bridgeGoal ← mkEq (← mkAppM ``Palamedes.someSupport #[tunedBody])
-              (← mkAppM ``Palamedes.Gen.support #[tunedBody])
+              (← mkAppM ``Palamedes.PGen.support #[tunedBody])
             let bridge ← solveGoalWithTactic bridgeGoal (← `(tactic| simp))
             let hsome ← mkAppM ``Eq.trans #[bridge, chain]
             pure (.inl (← mkAppM ``Palamedes.isSomeSoundAndComplete_of_someSupport #[hsome]))
@@ -249,11 +249,11 @@ def emitBasaltTuned (declName companion : Name) (filtering : Bool) :
       -- conclusion (about the witness projection / `totalize` of the companion) by `isDefEq` — the
       -- same instantiation of the same term, checked by the kernel at `addDecl`.
       let spmf := Lean.mkConst ``SPMF [Level.zero]
-      let inst ← synthInstance (← mkAppM ``_root_.Gen #[spmf])
+      let inst ← synthInstance (← mkAppM ``Gen #[spmf])
       let lawArgs ← args.mapM fun x => do
         if x == G then return spmf
         let t ← whnf (← inferType x)
-        if t.isAppOfArity ``_root_.Gen 1 && t.appArg! == G then return inst
+        if t.isAppOfArity ``Gen 1 && t.appArg! == G then return inst
         return x
       let atSPMF := mkAppN (mkApp (mkConst (declName ++ `tuned)) θ) lawArgs
       let proofTy ← inferType proof
@@ -282,7 +282,7 @@ def elabDeriveTuning : CommandElab := fun stx => do
   -- Dispatch on the declared shape, mirroring `generator_search`: the carrier is rewritten in
   -- place; a Basalt-shaped declaration is tuned through its carrier companion and re-projected.
   let shape ← liftTermElabM <| forallTelescope ci.type fun args body => do
-    if body.isAppOf ``Palamedes.Gen then
+    if body.isAppOf ``Palamedes.PGen then
       return some none
     let hd := body.getAppFn
     if hd.isFVar && args.contains hd then
@@ -290,7 +290,7 @@ def elabDeriveTuning : CommandElab := fun stx => do
     return none
   match shape with
   | none =>
-    throwError "derive_tuning: {declName} is neither a `Palamedes.Gen` nor a Basalt-shaped \
+    throwError "derive_tuning: {declName} is neither a `Palamedes.PGen` nor a Basalt-shaped \
       generator, so there is nothing here to reweight."
   | some none =>
     let hasLaw ← runCarrierTuning declName
@@ -306,7 +306,7 @@ def elabDeriveTuning : CommandElab := fun stx => do
     unless (← getEnv).contains companion do
       throwError "derive_tuning: {declName} is Basalt-shaped and has no carrier companion \
         ({companion}) to tune.\n\n\
-        The tuning layer rewrites the `Palamedes.Gen` carrier, and the Basalt shape is a \
+        The tuning layer rewrites the `Palamedes.PGen` carrier, and the Basalt shape is a \
         projection of it — `generator_search` is a tactic and never learns a declaration name, so \
         only `correct def` keeps the carrier around. Re-declare it as\n\n  \
         correct def {declName} … := by generator_search …\n\n\

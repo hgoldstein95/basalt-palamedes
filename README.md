@@ -36,7 +36,7 @@ There is no separate test framework. Every file under `PalamedesTest/Corpus/` sy
 generator at elaboration time and fails to compile if synthesis fails, so a plain `lake build` (what
 CI runs) also runs the tests. Note that a totality-check failure is an **error** for a generator
 declared `G α` (there is no term to emit) but only a **warning** for the synthesis-internal
-`Palamedes.Gen α` shape — grep the build output for warnings, or you will miss the latter.
+`Palamedes.PGen α` shape — grep the build output for warnings, or you will miss the latter.
 
 Beyond the corpus, each file in `PalamedesTest/` guards one library module and is named after it —
 `PalamedesTest/Foo.lean` guards `Palamedes/Foo.lean`, so the two directory listings diff into a
@@ -44,7 +44,7 @@ coverage map. The ones worth knowing about:
 
 - **`Extract.lean`** walks every generator in the corpus (both shapes — Basalt-shaped and the
   internal carrier) and fails the build if synthesis residue (`Subtype.val`, `Eq.mpr`, `CorrectGen`,
-  a totality-witness constructor, or a bare `Gen.pick`) survived into a compiled term's data path.
+  a totality-witness constructor, or a bare `PGen.pick`) survived into a compiled term's data path.
 - **`Derive.lean`** pins the signatures `derive_palamedes` generates, and `#print axioms` on the
   proofs it emits.
 - **`Stats.lean`** and **`Optimizer/Schedule.lean`** pin `#genstats` distribution reports
@@ -79,7 +79,7 @@ def genAllTwos [Gen G] : G (List Nat) := by
 ```
 
 **The declared return type says whether the generator can fail.** A generator that *filters* — one
-whose synthesis leaves a `Gen.assume` that can reject a draw — must be declared at `G (Option α)`;
+whose synthesis leaves a `PGen.assume` that can reject a draw — must be declared at `G (Option α)`;
 declaring it at `G α` is an error naming that fix. This is a fact about the type, visible at every
 use site:
 
@@ -90,11 +90,11 @@ def genBetween (lo hi : Nat) [Gen G] : G (Option Nat) := by
 
 `correct def` is `generator_search` that **names its proofs**: it emits the same generator plus
 `genFoo.sound_complete` (the support fact, in Basalt's law vocabulary) and, for the
-synthesis-internal `Palamedes.Gen` shape, `genFoo.total` and the bundled `genFoo.correct` view. It
+synthesis-internal `Palamedes.PGen` shape, `genFoo.total` and the bundled `genFoo.correct` view. It
 reports what it emitted, so a missing law is something you read rather than assume:
 
 ```lean4
-correct def genAllTwosLawful : Palamedes.Gen (List Nat) := by
+correct def genAllTwosLawful : Palamedes.PGen (List Nat) := by
   generator_search (fun xs => isAllTwos xs)
 -- info: correct def genAllTwosLawful: emitted (generator), sound_complete, total, correct
 ```
@@ -114,7 +114,7 @@ so you can see (and paste) what the search actually produced.
 To draw values:
 
 ```lean4
-#eval Palamedes.sampleN 10 genAllTwosLawful      -- Palamedes.Gen shape: draw 10 values
+#eval Palamedes.sampleN 10 genAllTwosLawful      -- Palamedes.PGen shape: draw 10 values
 #eval Palamedes.samplePartialN 10 (genBetween 3 7)  -- G (Option _) shape: draw through the retry loop
 ```
 
@@ -125,7 +125,7 @@ in `Palamedes/Sample.lean`.
 
 To inspect a generator's *distribution* rather than a few samples, use Basalt's `#genstats` command.
 A Basalt-shaped generator is consumed directly, no adapter: `#genstats (draws := 30) genAllTwos`;
-a `Palamedes.Gen`-shaped one goes through `toStatGen` (`import Palamedes.Stats`).
+a `Palamedes.PGen`-shaped one goes through `toStatGen` (`import Palamedes.Stats`).
 
 ## Adding a datatype
 
@@ -147,23 +147,23 @@ Rejected by design, loudly: mutual, nested, and indexed inductives. (A rose tree
 
 ## Layout
 
-- **`Palamedes/Gen.lean`** — the core types. `Gen α` is a *structure* wrapping a polymorphic Basalt
+- **`Palamedes/PGen.lean`** — the core types. `PGen α` is a *structure* wrapping a polymorphic Basalt
   generator (`∀ {G} [Gen G] [Fail G], G α`), with combinators `pure`/`>>=`/`pick`/`oneOf`/
   `frequency`/`assume`/`empty`. `support g := SPMF.support g.run` is the set of values it can
   produce. `TGen` is the same thing *without* the `Fail` capability, which makes "never filters" the
-  structural fact "typeable without `Fail`" — that is `Gen.total`. (Totality is assume-freedom, *not*
+  structural fact "typeable without `Fail`" — that is `PGen.total`. (Totality is assume-freedom, *not*
   termination; the two are orthogonal.)
-- **`Palamedes/CorrectGen.lean`** — `CorrectGen P := {g : Gen α // g.support = P}`, a generator
+- **`Palamedes/CorrectGen.lean`** — `CorrectGen P := {g : PGen α // g.support = P}`, a generator
   bundled with a proof that its support is exactly `P`, plus the combinators the search composes.
   Synthesis is a proof search for an inhabitant of this.
 - **`Palamedes/Derive.lean`** — the `derive_palamedes` command (see above). This is where the
   recursion scheme lives, in exactly one place, so a change to it reaches every datatype at once.
 - **`Palamedes/Synthesizer/`** — the five-stage pipeline. `CGeneratorSearch.lean` registers the
   synthesis rules with Aesop and defines `cgenerator_search`; `FrontEnd.lean` defines the user-facing
-  `generator_search` (search → extract a raw `Gen` → optimize → check totality → close the goal);
+  `generator_search` (search → extract a raw `PGen` → optimize → check totality → close the goal);
   `Totality.lean` reconstructs the `TGen` witness.
 - **`Palamedes/Extract.lean`** and **`Optimizer.lean`** — stages 2 and 3. Extraction is the `extract`
-  simp set (one `.val` equation per synthesis combinator), which pulls the raw `Gen` out of the
+  simp set (one `.val` equation per synthesis combinator), which pulls the raw `PGen` out of the
   `CorrectGen` term. The optimizer is a **proof-carrying** rewriter: every rewrite composes a
   support-preservation proof, which is type-checked before the goal is closed. Two passes: monad
   laws and assume-floating, then collapsing `pick` trees into uniform `oneOf`s. `Support.lean` holds
@@ -172,7 +172,7 @@ Rejected by design, loudly: mutual, nested, and indexed inductives. (A rose tree
   into `frequency`s reading a `Tuning`, emits the site table, and proves the support unchanged for
   every `θ`. A Basalt-shaped declaration is tuned through the carrier companion `correct def`
   emits, then re-projected — so it needs `correct def` (a plain `def` is rejected with that fix).
-- **`Palamedes/Total.lean`** — `TGen`, `Gen.total` (`Type`-valued: the totality witness *is* the
+- **`Palamedes/Total.lean`** — `TGen`, `PGen.total` (`Type`-valued: the totality witness *is* the
   failure-free generator the Basalt shape is projected from), and the combinator-wise totality
   lemmas that stage 4 reconstructs a witness from.
 - **`Palamedes/Laws.lean`** and **`SomeSupport.lean`** — the bridges from Palamedes' `support` facts

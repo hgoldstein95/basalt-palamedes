@@ -1,7 +1,7 @@
 import Palamedes.Synthesizer
 import Palamedes.Sample
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace BadRBTFold
 
@@ -28,7 +28,7 @@ set_option maxRecDepth 2000
 def isRBTFold (height : Nat) (t : Palamedes.Tree (Color × Nat)) : Bool :=
   isBHFold t height = true ∧ isRRFold t = true
 
-def genRBTFold (height : Nat) : Gen (Palamedes.Tree (Color × Nat)) := by
+def genRBTFold (height : Nat) : PGen (Palamedes.Tree (Color × Nat)) := by
   generator_search (fun t => isRBTFold height t = true)
 
 end BadRBTFold

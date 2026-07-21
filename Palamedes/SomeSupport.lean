@@ -10,13 +10,13 @@ import Palamedes.Support
 /-!
 # The support of a *filtering* generator
 
-`Gen.support g` reads a generator at `SPMF`, where `Fail` is `⊥`, so it describes the values a
+`PGen.support g` reads a generator at `SPMF`, where `Fail` is `⊥`, so it describes the values a
 generator produces *when it does not fail*. A filtering generator is emitted as `totalize g`, which
 runs it at `OptionT SPMF` instead — a different instantiation of the same polymorphic term. This
 file gives the support notion for *that* interpretation, and the three lemmas the per-datatype twins
 need.
 
-`someSupport` and `Gen.support` agree on every generator built from the combinator basis (each such
+`someSupport` and `PGen.support` agree on every generator built from the combinator basis (each such
 equation is a one-liner from the two `bind`/`pure` lemmas below), and the agreement propagates
 through `unfold`. What is **not** available is the global statement `∀ g, someSupport g = g.support`:
 `g.run` is an arbitrary element of `∀ {G} [Gen G] [Fail G], G α`, so relating its `SPMF` instance to
@@ -24,26 +24,26 @@ its `OptionT SPMF` instance is a free theorem about that Π-type, which Lean's l
 See `PalamedesExperiments/SomeSupport.lean`.
 
 This is why the twins are *derived per datatype* rather than obtained by transporting
-`X.support_unfold`: `support_unfold`'s step predicate is `(f d x).support` for a `Gen`-valued `f`,
-and no `Gen` has a prescribed `someSupport` as its support, so there is nothing to transport along.
+`X.support_unfold`: `support_unfold`'s step predicate is `(f d x).support` for a `PGen`-valued `f`,
+and no `PGen` has a prescribed `someSupport` as its support, so there is nothing to transport along.
 -/
 
 namespace Palamedes
 
-open _root_.Palamedes.Gen Helpers
+open Palamedes.PGen Helpers
 
 variable {α β : Type}
 
 /-- The support of a possibly-failing generator, read through `totalize` — the values it can
 actually produce, as opposed to the values it produces when it does not fail. -/
-def someSupport (g : Gen α) : α → Prop :=
-  fun a => some a ∈ SPMF.support (Gen.totalize g (G := SPMF))
+def someSupport (g : PGen α) : α → Prop :=
+  fun a => some a ∈ SPMF.support (PGen.totalize g (G := SPMF))
 
 /-- `totalize` commutes with `unfold` **definitionally**: `X.unfoldGo` is itself polymorphic in `G`,
 and `X.unfold`'s `.run` merely instantiates it. This is what lets the derived twins reuse the
 `unfold`/`induction` skeleton of `X.support_unfold` unchanged. -/
-theorem totalize_run_eq {G : Type → Type} [_root_.Gen G] (g : Gen α) :
-    Gen.totalize g (G := G) = OptionT.run (g.run (G := OptionT G)) := rfl
+theorem totalize_run_eq {G : Type → Type} [Gen G] (g : PGen α) :
+    PGen.totalize g (G := G) = OptionT.run (g.run (G := OptionT G)) := rfl
 
 theorem support_optionT_pure (a : α) :
     SPMF.support (OptionT.run (pure a : OptionT SPMF α)) = {some a} := by
@@ -73,7 +73,7 @@ theorem mem_support_optionT_bind {x : OptionT SPMF α} {k : α → OptionT SPMF 
 /-- The `pick` lemma. `pick` is `choose 0 1 >>= …`, so this follows from the `bind` lemma once the
 two-element index is case-split — but stating it separately is what lets the *primitive* generators
 (`arbNat`'s fixpoint, `arbBool`, `arbColor`) be proved by the same one-line scripts as their
-`Gen.support` counterparts. -/
+`PGen.support` counterparts. -/
 theorem mem_support_optionT_pick {x y : OptionT SPMF α} {w : α} :
     some w ∈ SPMF.support (OptionT.run
         (RandomChoice.pick (fun () => x) (fun () => y) : OptionT SPMF α))
@@ -116,26 +116,26 @@ theorem mem_support_optionT_lift {p : SPMF α} {a : α} :
 Each of these is a one-liner from the two helper lemmas: the `Fail` interpretations differ (`⊥` at
 `SPMF`, `pure none` at `OptionT SPMF`) but agree on `some`-values, and every other combinator is a
 `bind`/`pure`/`choose` composite. What is *not* available is the corresponding statement for an
-opaque `g : Gen α` — that is the free theorem described in this module’s header. -/
+opaque `g : PGen α` — that is the free theorem described in this module’s header. -/
 
 section Combinators
 
 variable {α β : Type}
 
-@[simp] theorem someSupport_pure (a : α) : someSupport (pure a : Gen α) = (· = a) := by
+@[simp] theorem someSupport_pure (a : α) : someSupport (pure a : PGen α) = (· = a) := by
   funext x
   apply propext
   show some x ∈ SPMF.support (OptionT.run (Pure.pure a : OptionT SPMF α)) ↔ _
   rw [support_optionT_pure]
   simp
 
-@[simp] theorem someSupport_empty : someSupport (Gen.empty : Gen α) = fun _ => False := by
+@[simp] theorem someSupport_empty : someSupport (PGen.empty : PGen α) = fun _ => False := by
   funext x
   apply propext
   show some x ∈ SPMF.support ((OptionT.fail : OptionT SPMF α)) ↔ _
   simp [OptionT.fail, OptionT.mk, Pure.pure, SPMF.pure, SPMF.support, DFunLike.coe]
 
-@[simp] theorem someSupport_bind {x : Gen α} {f : α → Gen β} :
+@[simp] theorem someSupport_bind {x : PGen α} {f : α → PGen β} :
     someSupport (x >>= f) = fun b => ∃ a, someSupport x a ∧ someSupport (f a) b := by
   funext w
   apply propext
@@ -143,7 +143,7 @@ variable {α β : Type}
   rw [mem_support_optionT_bind]
   rfl
 
-@[simp] theorem someSupport_map {x : Gen α} {g : α → β} :
+@[simp] theorem someSupport_map {x : PGen α} {g : α → β} :
     someSupport (g <$> x) = fun b => ∃ a, someSupport x a ∧ g a = b := by
   funext w
   apply propext
@@ -151,8 +151,8 @@ variable {α β : Type}
   rw [mem_support_optionT_map]
   rfl
 
-@[simp] theorem someSupport_pick {x y : Gen α} :
-    someSupport (Gen.pick x y) = fun a => someSupport x a ∨ someSupport y a := by
+@[simp] theorem someSupport_pick {x y : PGen α} :
+    someSupport (PGen.pick x y) = fun a => someSupport x a ∨ someSupport y a := by
   funext w
   apply propext
   show some w ∈ SPMF.support (OptionT.run
@@ -161,9 +161,9 @@ variable {α β : Type}
         ∨ some w ∈ SPMF.support (OptionT.run (y.run : OptionT SPMF α)))
   exact mem_support_optionT_pick
 
-@[simp] theorem someSupport_assume {b : Bool} {f : b → Gen α} :
-    someSupport (Gen.assume b f) = fun a => ∃ h : b, someSupport (f h) a := by
-  unfold Gen.assume
+@[simp] theorem someSupport_assume {b : Bool} {f : b → PGen α} :
+    someSupport (PGen.assume b f) = fun a => ∃ h : b, someSupport (f h) a := by
+  unfold PGen.assume
   split
   · next h => funext a; apply propext; exact ⟨fun hh => ⟨h, hh⟩, fun ⟨_, hh⟩ => hh⟩
   · next h =>
@@ -256,13 +256,13 @@ theorem run_frequency {α} (gs : List (Nat × (Unit → OptionT SPMF α))) (h) :
   simp only [hfst]
   exact run_frequencyAux _ _ h _ _
 
-@[simp] theorem someSupport_frequency {α} {gs : List (Nat × Gen α)} (h) :
-    someSupport (Gen.frequency gs h)
+@[simp] theorem someSupport_frequency {α} {gs : List (Nat × PGen α)} (h) :
+    someSupport (PGen.frequency gs h)
       = fun a => ∃ w g, (w, g) ∈ gs ∧ 0 < w ∧ someSupport g a := by
   funext a
   apply propext
   show some a ∈ SPMF.support _ ↔ _
-  rw [show Gen.totalize (Gen.frequency gs h) (G := SPMF)
+  rw [show PGen.totalize (PGen.frequency gs h) (G := SPMF)
       = OptionT.run (_root_.frequency (gs.map fun p => (p.1, fun _ => p.2.run))
           (by simpa [List.map_map, Function.comp_def] using h) : OptionT SPMF α) from rfl]
   rw [run_frequency, SPMF.support_frequency]
@@ -275,10 +275,10 @@ theorem run_frequency {α} (gs : List (Nat × (Unit → OptionT SPMF α))) (h) :
   · rintro ⟨w, g, hmem, hw, ha⟩
     exact ⟨w, fun _ => OptionT.run (g.run : OptionT SPMF α), ⟨⟨w, g⟩, hmem, rfl, rfl⟩, hw, ha⟩
 
-@[simp] theorem someSupport_oneOf {α} {gs : List (Gen α)} (h) :
-    someSupport (Gen.oneOf gs h) = fun a => ∃ g ∈ gs, someSupport g a := by
+@[simp] theorem someSupport_oneOf {α} {gs : List (PGen α)} (h) :
+    someSupport (PGen.oneOf gs h) = fun a => ∃ g ∈ gs, someSupport g a := by
   funext a
-  simp only [Gen.oneOf, someSupport_frequency, List.mem_map, eq_iff_iff, Prod.mk.injEq]
+  simp only [PGen.oneOf, someSupport_frequency, List.mem_map, eq_iff_iff, Prod.mk.injEq]
   constructor
   · rintro ⟨w, g, ⟨g', hmem, hw, hg⟩, _, ha⟩
     subst hg

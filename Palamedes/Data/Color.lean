@@ -1,4 +1,4 @@
-import Palamedes.Gen
+import Palamedes.PGen
 import Palamedes.CorrectGen
 import Palamedes.Total
 import Palamedes.RuleSets
@@ -30,11 +30,11 @@ end TypeDef
 
 namespace Palamedes
 
-open _root_.Palamedes.Gen
+open Palamedes.PGen
 
-namespace Gen
+namespace PGen
 
-def arbColor : Gen Color := pick (pure .red) (pure .black)
+def arbColor : PGen Color := pick (pure .red) (pure .black)
 
 @[simp]
 theorem support_arbColor :
@@ -73,7 +73,7 @@ end CorrectGen
 namespace Total
 
 @[total]
-def total_arbColor : total (arbColor : Gen Color) :=
+def total_arbColor : total (arbColor : PGen Color) :=
   total_pick (total_pure _) (total_pure _)
 
 @[total]
@@ -82,6 +82,6 @@ def total_color_rec (hf : total gr) (ht : total gb) : total (Color.rec gr gb c) 
 
 end Total
 
-end Gen
+end PGen
 
 end Palamedes

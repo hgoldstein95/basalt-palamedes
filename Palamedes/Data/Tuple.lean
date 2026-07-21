@@ -5,9 +5,9 @@ import Palamedes.RuleSets
 
 namespace Palamedes
 
-open _root_.Palamedes.Gen
+open Palamedes.PGen
 
-namespace Gen
+namespace PGen
 
 namespace CorrectGen
 
@@ -22,6 +22,6 @@ def s_arbTuple
 
 end CorrectGen
 
-end Gen
+end PGen
 
 end Palamedes

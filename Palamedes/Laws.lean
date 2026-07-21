@@ -5,23 +5,23 @@ import Palamedes.SomeSupport
 # Bridging Palamedes' `support` to Basalt's law vocabulary
 
 `correct def` emits laws in **Basalt's** names, not Palamedes'. The pipeline proves
-`Palamedes.Gen.support g = P`; Basalt states soundness-and-completeness as
+`Palamedes.PGen.support g = P`; Basalt states soundness-and-completeness as
 `IsSoundAndComplete (g : SPMF α) P`, i.e. `∀ a, a ∈ SPMF.support g ↔ P a`. These two lemmas are the
 whole of the conversion, and they exist so the command can `mkAppM` them rather than assemble the
 `funext`/`propext` plumbing at the `Expr` level.
 
-Both are definitional on the `support` side — `Gen.support g` *is* `SPMF.support g.run` — so the only
+Both are definitional on the `support` side — `PGen.support g` *is* `SPMF.support g.run` — so the only
 real content is `=` on predicates becoming a pointwise `↔`.
 -/
 
 namespace Palamedes
 
-open _root_.Palamedes.Gen
+open Palamedes.PGen
 
 variable {α : Type} {P : α → Prop}
 
 /-- The law for a generator emitted at the synthesis-internal carrier. -/
-theorem isSoundAndComplete_of_support {g : Gen α} (h : g.support = P) :
+theorem isSoundAndComplete_of_support {g : PGen α} (h : g.support = P) :
     IsSoundAndComplete (g.run (G := SPMF)) P := by
   -- `IsSoundAndComplete` is a semireducible `def`; `intro` opens it (the idiom Basalt's own examples
   -- use), where `show`/`unfold` do not.
@@ -34,7 +34,7 @@ This is the step that needs no parametricity: `t.toGen = g` gives `g.run (G := S
 (G := SPMF)` by congruence, because both sides are the *same* instantiation of the same polymorphic
 term. The filtering path has no counterpart — `totalize` runs the generator at `OptionT SPMF`, a
 different instantiation, so the transfer does not go through. -/
-theorem isSoundAndComplete_of_total {t : TGen α} {g : Gen α}
+theorem isSoundAndComplete_of_total {t : TGen α} {g : PGen α}
     (hw : t.toGen = g) (h : g.support = P) :
     IsSoundAndComplete (t.run (G := SPMF)) P := by
   subst hw
@@ -63,8 +63,8 @@ one polymorphic term — `someSupport` is defined at `OptionT SPMF` to begin wit
 interpretation `totalize` runs the emitted definition at. The parametricity gap is only in the
 *global* `someSupport g = g.support`, and the pipeline discharges the instance it needs by simp over
 the combinator twins instead. -/
-theorem isSomeSoundAndComplete_of_someSupport {g : Gen α} (h : someSupport g = P) :
-    IsSomeSoundAndComplete (Gen.totalize g (G := SPMF)) P :=
+theorem isSomeSoundAndComplete_of_someSupport {g : PGen α} (h : someSupport g = P) :
+    IsSomeSoundAndComplete (PGen.totalize g (G := SPMF)) P :=
   fun a => iff_of_eq (congrFun h a)
 
 end Palamedes

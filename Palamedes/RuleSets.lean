@@ -35,13 +35,13 @@ initialize registerBuiltinAttribute {
     unless kind == .global do
       throwError "@[total] must be global"
     -- Reject a mistagged lemma here; otherwise it surfaces as an opaque failure inside the tactic's
-    -- `first | …` cascade. (A `Name` literal, not a `` `` `` one: `Gen.total` lives in a module that
+    -- `first | …` cascade. (A `Name` literal, not a `` `` `` one: `PGen.total` lives in a module that
     -- imports this one, so the constant does not exist yet when this file elaborates.)
     let info ← getConstInfo declName
     let ok ← Lean.Meta.MetaM.run' <| Lean.Meta.forallTelescope info.type fun _ concl =>
-      return concl.getAppFn.isConstOf `Palamedes.Gen.total
+      return concl.getAppFn.isConstOf `Palamedes.PGen.total
     unless ok do
-      throwError "@[total]: `{declName}` does not conclude in `Palamedes.Gen.total _`, so the \
+      throwError "@[total]: `{declName}` does not conclude in `Palamedes.PGen.total _`, so the \
         `totality` tactic could never apply it"
     modifyEnv fun env => totalExt.addEntry env declName
 }

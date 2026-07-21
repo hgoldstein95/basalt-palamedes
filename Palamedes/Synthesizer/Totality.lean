@@ -6,7 +6,7 @@ import Palamedes.Data.Tree
 import Palamedes.Data.Nat
 import Palamedes.Total
 
-open Palamedes Palamedes.Gen Palamedes.Gen.Total
+open Palamedes Palamedes.PGen Palamedes.PGen.Total
 
 /-- Case-split the discriminant of a `match` sitting inside a totality goal.
 
@@ -18,8 +18,8 @@ iota-reduce, so no cast is ever created. `PalamedesTest/Extract.lean` audits for
 elab "total_cases" : tactic => open Lean Elab Tactic Meta in do
   let goal ← getMainGoal
   let ty ← instantiateMVars (← goal.getType)
-  unless ty.isAppOf ``Palamedes.Gen.total do
-    throwError "total_cases: goal is not `Gen.total _`"
+  unless ty.isAppOf ``Palamedes.PGen.total do
+    throwError "total_cases: goal is not `PGen.total _`"
   let some app ← matchMatcherApp? ty.appArg!
     | throwError "total_cases: the generator is not a `match` application"
   for d in app.discrs do
@@ -29,9 +29,9 @@ elab "total_cases" : tactic => open Lean Elab Tactic Meta in do
       return
   throwError "total_cases: no discriminant is a local hypothesis to case on"
 
-/-- Prove `Gen.total g` by reconstructing a `TGen` (`Fail`-free) witness over `g`'s combinator spine.
+/-- Prove `PGen.total g` by reconstructing a `TGen` (`Fail`-free) witness over `g`'s combinator spine.
 
-Each `total_*` lemma maps one `Gen` combinator to its `TGen` twin and closes by `ext; rfl`, so the
+Each `total_*` lemma maps one `PGen` combinator to its `TGen` twin and closes by `ext; rfl`, so the
 `apply` cascade is the structural reconstruction. `optimizeGen` has already eliminated every
 satisfiable `assume`, so an `assume` reaching this tactic denotes a genuine filter and reconstruction
 fails (the generator is partial; declare it at `G (Option α)`, which is what makes

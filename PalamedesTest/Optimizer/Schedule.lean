@@ -22,10 +22,10 @@ so a generator that regresses into diverging makes every draw burn its full fuel
 take minutes.
 -/
 
-open Palamedes Palamedes.Gen
+open Palamedes Palamedes.PGen
 
 /-- `genWellTyped` under the `stlc` schedule — the terminating generator (the uniform one diverges). -/
-def genWTstlc (Γ : List Ty) : Gen Term :=
+def genWTstlc (Γ : List Ty) : PGen Term :=
   WellTyped.genWellTyped.tuned
     (SchedulePolicy.stlc.materialize WellTyped.genWellTyped.sites) Γ
 
@@ -157,7 +157,7 @@ private def mean10 (xs : Array Nat) : String :=
 recomputed here — read them off the `#genstats` output above.
 
 TODO: Consider upstreaming more generic infrastructure to Basalt to support this kind of thing. -/
-def measureShape (g : Palamedes.Gen Term) (draws := 3000) (fuel := 10000) : IO Unit := do
+def measureShape (g : Palamedes.PGen Term) (draws := 3000) (fuel := 10000) : IO Unit := do
   let ok := (GenStats.runDraws (toStatGen g) { draws, fuel, seed := 0 }).filterMap
     fun | .ok (t, _) => some t | .error _ => none
   let withApp := ok.filter Term.hasApp |>.size

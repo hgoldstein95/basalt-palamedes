@@ -5,7 +5,7 @@ import Lean
 
 The datatypes `caseSplitRuleTac` can scrutinise, each paired with its `s_case*` lemma, live in a
 persistent environment extension keyed by the scrutinee's datatype. Tag the lemma at its
-definition site — alongside `@[extract]`, which is what pulls the raw `Gen` back out of the
+definition site — alongside `@[extract]`, which is what pulls the raw `PGen` back out of the
 `CorrectGen` the rule builds (every real registration carries both):
 
 ```

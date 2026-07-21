@@ -12,14 +12,14 @@ Guards the command's output on a small generator — the site table, the uniform
 a real generator is guarded separately in `ScheduleMeasurements.lean`.
 -/
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 @[simp]
 def isAllTwos : List Nat → Bool
   | [] => true
   | x :: xs => x = 2 && isAllTwos xs
 
-def genAllTwos : Palamedes.Gen (List Nat) := by
+def genAllTwos : Palamedes.PGen (List Nat) := by
   generator_search (fun xs => isAllTwos xs)
 
 -- `derive_tuning` reports what it emitted, and names what it did not: `genAllTwos` is a plain
@@ -32,9 +32,9 @@ info: derive_tuning genAllTwos: emitted tuned, defaults, sites, tuned_defaults, 
 derive_tuning genAllTwos
 
 -- The four declarations exist at the right types; `tuned_defaults` is definitional.
-/-- info: genAllTwos.tuned : Tuning → Palamedes.Gen (List ℕ) -/
+/-- info: genAllTwos.tuned : Tuning → PGen (List ℕ) -/
 #guard_msgs in
-#check (genAllTwos.tuned : Tuning → Palamedes.Gen (List Nat))
+#check (genAllTwos.tuned : Tuning → Palamedes.PGen (List Nat))
 
 /-- info: genAllTwos.tuned_defaults : genAllTwos.tuned genAllTwos.defaults = genAllTwos -/
 #guard_msgs in
@@ -96,18 +96,18 @@ info: (toStatGen (genAllTwos.tuned (SchedulePolicy.moderate.materialize genAllTw
 
 /-! ## A plain-`def` Basalt-shaped generator is rejected, and says why
 
-The tuning layer rewrites the `Palamedes.Gen` carrier; a Basalt-shaped declaration is a projection
+The tuning layer rewrites the `Palamedes.PGen` carrier; a Basalt-shaped declaration is a projection
 of it, and only `correct def` keeps the carrier around (`generator_search` is a tactic and never
 learns a declaration name). A plain `def` therefore has nothing to tune, and the error names the
 fix rather than failing deep inside `buildTuned` as a type mismatch.
 -/
 
-def genTwosBasalt [_root_.Gen G] : G (List Nat) := by generator_search (fun xs => isAllTwos xs)
+def genTwosBasalt [Gen G] : G (List Nat) := by generator_search (fun xs => isAllTwos xs)
 
 /--
 error: derive_tuning: genTwosBasalt is Basalt-shaped and has no carrier companion (genTwosBasalt.gen) to tune.
 
-The tuning layer rewrites the `Palamedes.Gen` carrier, and the Basalt shape is a projection of it — `generator_search` is a tactic and never learns a declaration name, so only `correct def` keeps the carrier around. Re-declare it as
+The tuning layer rewrites the `Palamedes.PGen` carrier, and the Basalt shape is a projection of it — `generator_search` is a tactic and never learns a declaration name, so only `correct def` keeps the carrier around. Re-declare it as
 
   correct def genTwosBasalt … := by generator_search …
 
@@ -118,7 +118,7 @@ derive_tuning genTwosBasalt
 
 /-! ## The Basalt shape is tuned through its carrier companion
 
-`correct def` emits `f.gen : Palamedes.Gen α` alongside the projection; `derive_tuning f` tunes the
+`correct def` emits `f.gen : Palamedes.PGen α` alongside the projection; `derive_tuning f` tunes the
 companion with the unchanged carrier machinery, re-runs the `totality` cascade on the θ-open tuned
 term (`total_frequency` never inspects weights), projects the fresh witness back to generator code,
 and transfers the law across the witness equation. The generator, its law, and its weights are one
@@ -127,7 +127,7 @@ artifact — at the Basalt shape.
 
 /-- info: correct def genLawfulB: emitted (generator), sound_complete, gen -/
 #guard_msgs in
-correct def genLawfulB [_root_.Gen G] : G (List Nat) := by
+correct def genLawfulB [Gen G] : G (List Nat) := by
   generator_search (fun xs => isAllTwos xs)
 
 /--
@@ -138,7 +138,7 @@ info: derive_tuning genLawfulB: emitted tuned, defaults, sites, tuned_sound_comp
 derive_tuning genLawfulB
 
 -- The projected `tuned` has the declaration's own shape, θ first.
-/-- info: genLawfulB.tuned : Tuning → {G : Type → Type} → [_root_.Gen G] → G (List ℕ) -/
+/-- info: genLawfulB.tuned : Tuning → {G : Type → Type} → [Gen G] → G (List ℕ) -/
 #guard_msgs in
 #check @genLawfulB.tuned
 
@@ -215,7 +215,7 @@ info: (genLawfulB.tuned (SchedulePolicy.moderate.materialize genLawfulB.sites)) 
 -- Value binders are kept, and the tuned law quantifies over them (after `θ`).
 /-- info: correct def genParamB: emitted (generator), sound_complete, gen -/
 #guard_msgs in
-correct def genParamB (_n : Nat) [_root_.Gen G] : G (List Nat) := by
+correct def genParamB (_n : Nat) [Gen G] : G (List Nat) := by
   generator_search (fun xs => isAllTwos xs)
 
 /--
@@ -247,7 +247,7 @@ the tuned companion, and the law is `IsSomeSoundAndComplete`, discharged through
 
 /-- info: correct def genRangeB: emitted (generator), sound_complete, gen -/
 #guard_msgs in
-correct def genRangeB (lo hi : Nat) [_root_.Gen G] : G (Option Nat) := by
+correct def genRangeB (lo hi : Nat) [Gen G] : G (Option Nat) := by
   generator_search (fun n => lo ≤ n ∧ n ≤ hi)
 
 /--
@@ -287,7 +287,7 @@ companion and this stops elaborating.
 
 /-- info: correct def genFlipB: emitted (generator), sound_complete, gen -/
 #guard_msgs in
-correct def genFlipB [_root_.Gen G] (_n : Nat) : G (List Nat) := by
+correct def genFlipB [Gen G] (_n : Nat) : G (List Nat) := by
   generator_search (fun xs => isAllTwos xs)
 
 /--
@@ -312,9 +312,9 @@ reachable through it — the companion here is hand-written. That is the point: 
 that has to say *why* rather than skip the law silently.
 -/
 
-def genManualB [_root_.Gen G] : G (List Nat) := by generator_search (fun xs => isAllTwos xs)
+def genManualB [Gen G] : G (List Nat) := by generator_search (fun xs => isAllTwos xs)
 
-def genManualB.gen : Palamedes.Gen (List Nat) := genAllTwos
+def genManualB.gen : Palamedes.PGen (List Nat) := genAllTwos
 
 /--
 info: derive_tuning genManualB: emitted tuned, defaults, sites
@@ -325,7 +325,7 @@ info: derive_tuning genManualB: emitted tuned, defaults, sites
 derive_tuning genManualB
 
 -- The generator and its weights are still emitted; only the law is missing.
-/-- info: genManualB.tuned : Tuning → {G : Type → Type} → [_root_.Gen G] → G (List ℕ) -/
+/-- info: genManualB.tuned : Tuning → {G : Type → Type} → [Gen G] → G (List ℕ) -/
 #guard_msgs in
 #check @genManualB.tuned
 
@@ -336,7 +336,7 @@ run_cmd do
 /-! ## A non-generator constant is rejected -/
 
 /--
-error: derive_tuning: isAllTwos is neither a `Palamedes.Gen` nor a Basalt-shaped generator, so there is nothing here to reweight.
+error: derive_tuning: isAllTwos is neither a `Palamedes.PGen` nor a Basalt-shaped generator, so there is nothing here to reweight.
 -/
 #guard_msgs in
 derive_tuning isAllTwos
@@ -350,7 +350,7 @@ the distribution and provably not the set of values.
 
 /-- info: correct def genLawful: emitted (generator), sound_complete, total, correct -/
 #guard_msgs in
-correct def genLawful : Palamedes.Gen (List Nat) := by generator_search (fun xs => isAllTwos xs)
+correct def genLawful : Palamedes.PGen (List Nat) := by generator_search (fun xs => isAllTwos xs)
 
 /--
 info: derive_tuning genLawful: emitted tuned, defaults, sites, tuned_defaults, tuned_support, tuned_sound_complete

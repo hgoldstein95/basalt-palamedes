@@ -1,6 +1,6 @@
 import Palamedes.Synthesizer
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace EvenLenAccuOpt
 
@@ -20,7 +20,7 @@ info: Try this:
       (fun d p => do
         let tv ←
           if h : p.1 = true then
-              Gen.oneOf
+              PGen.oneOf
                 [pure ListF.nil, do
                   let a ← arbNat
                   pure (ListF.cons a false)]
@@ -33,7 +33,7 @@ info: Try this:
       (true, PUnit.unit)
 -/
 #guard_msgs in
-def genEvenLenAccuOpt : Gen (List Nat) := by
+def genEvenLenAccuOpt : PGen (List Nat) := by
   generator_search? (fun xs => isEvenLenAccuOpt xs = some true)
 
 end EvenLenAccuOpt

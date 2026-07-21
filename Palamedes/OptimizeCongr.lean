@@ -1,11 +1,11 @@
 import Lean
-import Palamedes.Gen
+import Palamedes.PGen
 
 /-!
 # The `@[gen_congr]` attribute
 
 Registers `support`-congruence lemmas that tell the generator optimizer how to descend through a
-`Gen` constructor or recursion-scheme combinator. The optimizer reads this registry at run time, so
+`PGen` constructor or recursion-scheme combinator. The optimizer reads this registry at run time, so
 **teaching it about a new datatype is just tagging that datatype's congruence lemma** — no edit to
 the optimizer is required (mirroring how `@[extract]` and the Aesop `synthesis` rule set work).
 
@@ -26,8 +26,8 @@ Returns `none` if the statement is not of that shape (so the attribute can rejec
 def analyzeCongr (lemmaName : Name) : MetaM (Option CongrRule) := do
   forallTelescope (← getConstInfo lemmaName).type fun _ body => do
     let_expr Eq _ lhs rhs := body | return none
-    let_expr Palamedes.Gen.support _ genL := lhs | return none
-    let_expr Palamedes.Gen.support _ genR := rhs | return none
+    let_expr Palamedes.PGen.support _ genL := lhs | return none
+    let_expr Palamedes.PGen.support _ genR := rhs | return none
     let some head := genL.getAppFn.constName? | return none
     -- Both sides must be applications of the *same* head constant.
     unless genR.getAppFn.constName? == some head do return none

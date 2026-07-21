@@ -1,4 +1,4 @@
-import Palamedes.Gen
+import Palamedes.PGen
 import Palamedes.CorrectGen
 import Palamedes.Total
 import Palamedes.SomeSupport
@@ -7,11 +7,11 @@ import Mathlib.Data.List.Basic
 
 namespace Palamedes
 
-open _root_.Palamedes.Gen
+open Palamedes.PGen
 
-namespace Gen
+namespace PGen
 
-def elements (xs : List α) (h : xs.length > 0) : Gen α :=
+def elements (xs : List α) (h : xs.length > 0) : PGen α :=
   match xs with
   | x :: xs =>
     match hxs : xs with
@@ -60,7 +60,7 @@ end CorrectGen
 namespace Total
 
 @[total]
-def total_elements : ∀ {xs : List α} {h : xs.length > 0}, Gen.total (elements xs h)
+def total_elements : ∀ {xs : List α} {h : xs.length > 0}, PGen.total (elements xs h)
   | [_], _ => total_pure _
   | _ :: y :: ys, _ => total_pick (total_pure _) (total_elements (xs := y :: ys) (h := by simp))
 
@@ -76,6 +76,6 @@ theorem getElem?_eq_some_iff_indexesOf_getElem?_eq_some
   rw [List.getElem?_eq_some_iff, List.mem_idxsOf_iff_exists_getElem_pos]
   simp
 
-end Gen
+end PGen
 
 end Palamedes

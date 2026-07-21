@@ -1,11 +1,11 @@
 import Palamedes.Synthesizer
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
-def genFstIsTwo : Gen (Nat × Nat) := by
+def genFstIsTwo : PGen (Nat × Nat) := by
   generator_search (fun p => p.fst = 2)
 
-def genFixedPair : Gen (Nat × Nat) := by
+def genFixedPair : PGen (Nat × Nat) := by
   generator_search (fun p => p.1 = 2 ∧ p.2 = 3)
 
 /--
@@ -13,11 +13,11 @@ info: Try this:
   [apply] exact pure (2, 3)
 -/
 #guard_msgs in
-def genSuccPair : Gen (Nat × Nat) := by
+def genSuccPair : PGen (Nat × Nat) := by
   generator_search? (fun p => p.1 = 2 ∧ p.2 = p.1 + 1)
 
-def genDiagonal : Gen (Nat × Nat) := by
+def genDiagonal : PGen (Nat × Nat) := by
   generator_search (fun p => p.1 = p.2)
 
-def genOffByOne : Gen (Nat × Nat) := by
+def genOffByOne : PGen (Nat × Nat) := by
   generator_search (fun p => ∃ a, p.1 = a ∧ p.2 = a + 1)

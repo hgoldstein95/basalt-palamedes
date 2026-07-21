@@ -1,6 +1,6 @@
 import Palamedes.Synthesizer
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace ConstTrue
 
@@ -9,7 +9,7 @@ def isTrue : List α → Bool
   | [] => true
   | x :: xs => (fun _ => true) x && isTrue xs
 
-def genTrue : Gen (List Nat) := by
+def genTrue : PGen (List Nat) := by
   generator_search (fun xs => isTrue xs = true)
 
 end ConstTrue

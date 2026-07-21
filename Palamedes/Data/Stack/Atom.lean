@@ -1,4 +1,4 @@
-import Palamedes.Gen
+import Palamedes.PGen
 import Palamedes.CorrectGen
 import Palamedes.Total
 import Palamedes.RuleSets
@@ -20,12 +20,12 @@ end TypeDef
 
 namespace Palamedes
 
-open _root_.Palamedes.Gen
+open Palamedes.PGen
 
-namespace Gen
+namespace PGen
 
 @[irreducible]
-def arbLabel  : Gen Label :=
+def arbLabel  : PGen Label :=
   pick (pure .low) (pure .high)
 
 @[simp]
@@ -80,7 +80,7 @@ def total_arbLabel : total arbLabel := by
 
 end Total
 
-end Gen
+end PGen
 
 end Palamedes
 

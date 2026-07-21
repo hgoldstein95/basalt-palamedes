@@ -1,7 +1,7 @@
 import Palamedes.Synthesizer
 import Palamedes.DeriveTuning
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace WellTyped
 
@@ -33,7 +33,7 @@ attribute [local simp] Ty.as_or Ty.deforest_eq in
 freshly generated `σ`, so the seed *grows*. Synthesized uniform it is supercritical and diverges when
 sampled directly; the usable generator is `genWellTyped.tuned (SchedulePolicy.stlc.materialize
 genWellTyped.sites)`, whose depth-decaying weights force closure. -/
-def genWellTyped (Γ : List Ty) : Gen Term := by
+def genWellTyped (Γ : List Ty) : PGen Term := by
   generator_search (fun t => isWellTyped Γ t)
 
 /--

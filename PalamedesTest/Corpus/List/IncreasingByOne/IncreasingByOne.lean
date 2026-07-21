@@ -1,6 +1,6 @@
 import Palamedes.Synthesizer
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace IncreasingByOneList
 
@@ -14,7 +14,7 @@ def isIncreasingByOneAux (xs : List Nat) (prev : Nat) : Bool :=
 def isIncreasingByOne (xs : List Nat) : Bool :=
   isIncreasingByOneAux xs 0
 
-def genIncreasingByOneRec : Gen (List Nat) := by
+def genIncreasingByOneRec : PGen (List Nat) := by
   generator_search (fun xs => isIncreasingByOne xs = true)
 
 end IncreasingByOneList

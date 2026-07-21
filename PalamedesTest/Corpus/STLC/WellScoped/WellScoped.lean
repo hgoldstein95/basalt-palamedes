@@ -1,6 +1,6 @@
 import Palamedes.Synthesizer
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace WellScoped
 
@@ -19,14 +19,14 @@ info: Try this:
       (fun d p => do
         let tv ←
           if h : decide (p.2 > 0) = true then
-              Gen.oneOf
+              PGen.oneOf
                 [pure TermF.unit, do
                   let a ← lt p.2 (s_lt_partial._proof_1 h)
                   pure (TermF.var a), do
                   let a ← arbTy
                   pure (TermF.abs a PUnit.unit), pure (TermF.app PUnit.unit PUnit.unit)]
             else
-              Gen.oneOf
+              PGen.oneOf
                 [pure TermF.unit, do
                   let a ← arbTy
                   pure (TermF.abs a PUnit.unit), pure (TermF.app PUnit.unit PUnit.unit)]
@@ -38,7 +38,7 @@ info: Try this:
       (PUnit.unit, 0)
 -/
 #guard_msgs in
-def genWellScoped : Gen Term := by
+def genWellScoped : PGen Term := by
   generator_search? (fun t => isWellScoped t 0 = true)
 
 end WellScoped

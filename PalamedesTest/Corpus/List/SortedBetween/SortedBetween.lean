@@ -1,6 +1,6 @@
 import Palamedes.Synthesizer
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace SortedBetween
 
@@ -17,7 +17,7 @@ info: Try this:
       (fun d p => do
         let tv ←
           if h : decide (p.2.1 ≤ p.2.2) = true then
-              Gen.oneOf
+              PGen.oneOf
                 [pure ListF.nil, do
                   let a ← choose p.2.1 p.2.2
                   pure (ListF.cons a PUnit.unit)]
@@ -28,7 +28,7 @@ info: Try this:
       (PUnit.unit, lo, hi)
 -/
 #guard_msgs in
-def genSortedBetween (lo hi : Nat) : Gen (List Nat) := by
+def genSortedBetween (lo hi : Nat) : PGen (List Nat) := by
   generator_search? (fun xs => isSortedBetween xs (lo, hi) = true)
 
 end SortedBetween

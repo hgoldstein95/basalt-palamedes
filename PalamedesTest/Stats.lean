@@ -2,7 +2,7 @@ import Palamedes.Stats
 import PalamedesTest.Corpus.Simple.OneOfFour
 import PalamedesTest.Corpus.Tree.BST.Fold
 
-open Palamedes Palamedes.Gen
+open Palamedes Palamedes.PGen
 
 /--
 info: (toStatGen genSmall) — 1000 draws (seed 0, fuel 10000)

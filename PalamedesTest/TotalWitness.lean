@@ -5,7 +5,7 @@ import Palamedes.Stats
 /-!
 # The totality witness is extractable data
 
-`Gen.total` is `Type`-valued, so a totality proof *is* a failure-free generator. This file pins the
+`PGen.total` is `Type`-valued, so a totality proof *is* a failure-free generator. This file pins the
 three consequences that the Basalt-shaped emission stage builds on:
 
 1. the witness can be **named** — it survives out of the `totality` tactic as an ordinary value;
@@ -18,21 +18,21 @@ three consequences that the Basalt-shaped emission stage builds on:
 `totalize` runs the generator at `OptionT SPMF`, a *different* instantiation.
 -/
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 @[simp]
 def isAllTwos : List Nat → Bool
   | [] => true
   | x :: xs => x = 2 && isAllTwos xs
 
-def genAllTwos : Palamedes.Gen (List Nat) := by
+def genAllTwos : Palamedes.PGen (List Nat) := by
   generator_search (fun xs => isAllTwos xs)
 
 -- 1. The witness is data, so it can be given a name and a type.
-def genAllTwosWitness : Gen.total genAllTwos := by totality
+def genAllTwosWitness : PGen.total genAllTwos := by totality
 
 -- 2. It is Basalt-shaped: polymorphic in `G` over Basalt's own `Gen` class, with no `Fail`.
-def genAllTwosBasalt [_root_.Gen G] : G (List Nat) := genAllTwosWitness.val.run
+def genAllTwosBasalt [Gen G] : G (List Nat) := genAllTwosWitness.val.run
 
 -- 3. The support fact crosses to the emitted generator definitionally.
 example : SPMF.support (genAllTwosBasalt (G := SPMF)) = genAllTwos.support := by

@@ -1,4 +1,4 @@
-import Palamedes.Gen
+import Palamedes.PGen
 import Palamedes.CorrectGen
 import Palamedes.RuleSets
 import Palamedes.CaseSplit
@@ -16,7 +16,7 @@ import Palamedes.Data.Color
 import Palamedes.Data.Tuple
 import Palamedes.Util
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 section Guards
 
@@ -286,7 +286,7 @@ end Normalizers
 
 section CaseSplit
 
-open Lean Lean.Meta Lean.Elab.Tactic Aesop Palamedes.Gen.CorrectGen
+open Lean Lean.Meta Lean.Elab.Tactic Aesop Palamedes.PGen.CorrectGen
 
 /- The datatypes the case-split rule can scrutinise, each paired with its `s_case*` lemma, come
    from the `case_split` registry (see `Palamedes.CaseSplit`): every `@[case_split]` lemma has
@@ -375,24 +375,24 @@ generator that then blows `maxRecDepth` downstream. (Two of them could not be at
 -- The `(by …)` rule scripts below are stored as *parsed syntax* and re-elaborated by Aesop at
 -- search time, in the **caller's** scope — unlike a macro quotation, nothing preresolves their
 -- identifiers here. An unqualified name would resolve only at call sites that happen to
--- `open Palamedes.Gen.CorrectGen`; elsewhere the rule silently fails to fire. Hence `_root_`.
+-- `open Palamedes.PGen.CorrectGen`; elsewhere the rule silently fails to fire. Hence `_root_`.
 add_aesop_rules safe (rule_sets := [synthesis]) [
-  (by (repeat apply Palamedes.Gen.CorrectGen.duncurry); intro),
+  (by (repeat apply Palamedes.PGen.CorrectGen.duncurry); intro),
 ]
 
 add_aesop_rules 99% (rule_sets := [synthesis]) [
   (by assumption),
   (by normalize_and_apply),
   (by normalize_and_apply_unfold),
-  (by apply Palamedes.Gen.CorrectGen.s_arbAtom _),
-  (by apply Palamedes.Gen.CorrectGen.s_gt),
-  (by apply Palamedes.Gen.CorrectGen.s_mod2_partial),
-  (by apply Palamedes.Gen.CorrectGen.s_lt_partial),
-  (by apply Palamedes.Gen.CorrectGen.s_between_partial),
-  (by apply (Palamedes.Gen.CorrectGen.s_between (by first | aesop | omega))),
+  (by apply Palamedes.PGen.CorrectGen.s_arbAtom _),
+  (by apply Palamedes.PGen.CorrectGen.s_gt),
+  (by apply Palamedes.PGen.CorrectGen.s_mod2_partial),
+  (by apply Palamedes.PGen.CorrectGen.s_lt_partial),
+  (by apply Palamedes.PGen.CorrectGen.s_between_partial),
+  (by apply (Palamedes.PGen.CorrectGen.s_between (by first | aesop | omega))),
   (by goal_is_eq;
-      apply Palamedes.Gen.CorrectGen.convert (by norm_for_elements)
-        (Palamedes.Gen.CorrectGen.s_elements_partial _)),
+      apply Palamedes.PGen.CorrectGen.convert (by norm_for_elements)
+        (Palamedes.PGen.CorrectGen.s_elements_partial _)),
 ]
 
 -- Case-split is handled by the single `caseSplitRuleTac` rule (see section `CaseSplit`),

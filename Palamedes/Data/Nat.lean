@@ -1,4 +1,4 @@
-import Palamedes.Gen
+import Palamedes.PGen
 import Palamedes.CorrectGen
 import Palamedes.Total
 import Palamedes.RuleSets
@@ -7,48 +7,48 @@ import Palamedes.SomeSupport
 
 namespace Palamedes
 
-open _root_.Palamedes.Gen
+open Palamedes.PGen
 
-namespace Gen
+namespace PGen
 
 /-- Polymorphic Basalt generator for an arbitrary natural number (geometrically distributed): stop at
 `0`, or recurse and add one. A direct `partial_fixpoint` over Basalt's CCPO. -/
-def arbNatGo [_root_.Gen G] : G Nat :=
+def arbNatGo [Gen G] : G Nat :=
   RandomChoice.pick
     (fun () => pure 0)
     (fun () => arbNatGo >>= fun n => pure (n + 1))
   partial_fixpoint
 
-def arbNat : Gen Nat := ⟨fun {_G} _ _ => arbNatGo⟩
+def arbNat : PGen Nat := ⟨fun {_G} _ _ => arbNatGo⟩
 
 /-- Failure-free witness for `arbNat`: the same fixpoint at the `Fail`-free interface. -/
 def TGen.arbNat : TGen Nat := ⟨fun {_G} _ => arbNatGo⟩
 
 @[simp]
-theorem run_arbNat (G : Type → Type) [_root_.Gen G] [Fail G] : arbNat.run (G := G) = arbNatGo := rfl
+theorem run_arbNat (G : Type → Type) [Gen G] [Fail G] : arbNat.run (G := G) = arbNatGo := rfl
 
-def gt (lo : Nat) : Gen Nat := (lo + 1 + · ) <$> arbNat
+def gt (lo : Nat) : PGen Nat := (lo + 1 + · ) <$> arbNat
 
-def mod2 (r : Nat) (_ : r < 2) : Gen Nat := (2 * · + r) <$> arbNat
+def mod2 (r : Nat) (_ : r < 2) : PGen Nat := (2 * · + r) <$> arbNat
 
 syntax "choose_bounds" : tactic
 macro_rules | `(tactic| choose_bounds) => `(tactic| first | simp | simp_all only [decide_eq_true_eq])
 
-def choose (lo hi : Nat) (h : lo ≤ hi := by choose_bounds) : Gen Nat :=
+def choose (lo hi : Nat) (h : lo ≤ hi := by choose_bounds) : PGen Nat :=
   ⟨fun {_G} _ _ => RandomChoice.choose lo hi h >>= fun r => Pure.pure r.down.val⟩
 
 def TGen.choose (lo hi : Nat) (h : lo ≤ hi := by choose_bounds) : TGen Nat :=
   ⟨fun {_G} _ => RandomChoice.choose lo hi h >>= fun r => Pure.pure r.down.val⟩
 
-def lt (hi : Nat) (_ : hi > 0) : Gen Nat :=
+def lt (hi : Nat) (_ : hi > 0) : PGen Nat :=
   choose 0 (hi - 1) (by simp)
 
 open Lean PrettyPrinter Delaborator SubExpr in
 
-@[app_delab Palamedes.Gen.choose]
+@[app_delab Palamedes.PGen.choose]
 def delabChoose : Delab := do
   let e ← getExpr
-  guard <| e.isAppOfArity ``Palamedes.Gen.choose 3
+  guard <| e.isAppOfArity ``Palamedes.PGen.choose 3
   let litBounds : Bool := Id.run do
     let some lo := natLit? (e.getArg! 0) | return false
     let some hi := natLit? (e.getArg! 1) | return false
@@ -59,7 +59,7 @@ def delabChoose : Delab := do
   guard <| litBounds || auxProof
   let loStx ← withNaryArg 0 delab
   let hiStx ← withNaryArg 1 delab
-  let fn := mkIdent (← unresolveNameGlobal ``Palamedes.Gen.choose)
+  let fn := mkIdent (← unresolveNameGlobal ``Palamedes.PGen.choose)
   `($fn $loStx $hiStx)
 
 @[simp]
@@ -264,6 +264,6 @@ def total_lt : total (lt lo h) := total_choose
 
 end Total
 
-end Gen
+end PGen
 
 end Palamedes

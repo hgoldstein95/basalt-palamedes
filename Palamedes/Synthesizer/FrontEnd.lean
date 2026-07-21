@@ -1,4 +1,4 @@
-import Palamedes.Gen
+import Palamedes.PGen
 import Palamedes.CorrectGen
 import Palamedes.Optimizer
 import Palamedes.Synthesizer.CGeneratorSearch
@@ -16,7 +16,7 @@ register_option palamedes.debug : Bool := {
 }
 
 /--
-Pull the raw `Gen` out of a synthesized `CorrectGen` term by rewriting with the `extract` simp
+Pull the raw `PGen` out of a synthesized `CorrectGen` term by rewriting with the `extract` simp
 set, which holds one `.val` equation per synthesis combinator. Unlike delta-reduction via
 `withReducible (reduce ·)`, this unfolds exactly the combinator wrappers and nothing else, so
 the combinators don't need to be `@[reducible]`.
@@ -41,7 +41,7 @@ def extractGen (e : Expr) : MetaM (Expr × Expr) := do
 elab "optimize_gen " t:term : tactic =>
   withMainContext do
     let m ← mkFreshExprMVar (some (.sort 0))
-    let gen ← elabTerm t (some (.app (.const ``Palamedes.Gen []) m))
+    let gen ← elabTerm t (some (.app (.const ``Palamedes.PGen []) m))
     let (gen', _) ← extractGen gen
     let (gen'', _) ← Palamedes.optimizeGen gen'
     let gen''' ← withReducible (reduce gen'')
@@ -83,10 +83,10 @@ discarded. They compose to `support gen' = P`, which is what `supportProof` carr
 structure SynthesisResult where
   /-- The optimized generator. -/
   gen : Expr
-  /-- A proof of `Palamedes.Gen.support gen = P`, i.e. soundness and completeness against the
+  /-- A proof of `Palamedes.PGen.support gen = P`, i.e. soundness and completeness against the
   target predicate. -/
   supportProof : Expr
-  /-- A `Palamedes.Gen.total gen` witness, when the totality stage ran and succeeded. Since `total`
+  /-- A `Palamedes.PGen.total gen` witness, when the totality stage ran and succeeded. Since `total`
   is `Type`-valued this *is* the failure-free generator, not merely evidence that one exists —
   `.val.run` is a Basalt-shaped generator.
 
@@ -111,15 +111,15 @@ def runSynthesisPipeline (α pred : Expr) (checkTotal verbose : Bool) :
     catch e =>
       throwError m!"Failed during generator synthesis.\n{e.toMessageData}"
 
-  -- 2. Extract the raw `Gen`, keeping the rewrite that justifies it.
+  -- 2. Extract the raw `PGen`, keeping the rewrite that justifies it.
   -- Build the `Subtype` projections with the predicate given *explicitly*. `mkAppM ``Subtype.val`
   -- would have to see `CorrectGen P` as `Subtype ?p` to solve for `?p`, and `CorrectGen` is
   -- `@[implicit_reducible]` rather than `@[reducible]`, so `?p`
   -- can survive unassigned into the emitted proof. That is invisible until the kernel rejects the
   -- declaration for having metavariables, so name the argument rather than let it be inferred.
-  let genTy := mkApp (Expr.const ``Palamedes.Gen []) α
+  let genTy := mkApp (Expr.const ``Palamedes.PGen []) α
   let subtypePred ← withLocalDeclD `g genTy fun g => do
-    let body ← mkEq (← mkAppM ``Palamedes.Gen.support #[g]) pred
+    let body ← mkEq (← mkAppM ``Palamedes.PGen.support #[g]) pred
     mkLambdaFVars #[g] body
   let cgenVal ← mkAppOptM ``Subtype.val #[genTy, subtypePred, cgen]
   let cgenProp ← mkAppOptM ``Subtype.property #[genTy, subtypePred, cgen]
@@ -142,12 +142,12 @@ def runSynthesisPipeline (α pred : Expr) (checkTotal verbose : Bool) :
   --   support gen   = support cgen.val (extraction, flipped, under `support`)
   --   support cgen.val = pred          (the `CorrectGen` subtype's own property)
   let supportProof ← do
-    let supportFn := mkApp (Expr.const ``Palamedes.Gen.support []) α
+    let supportFn := mkApp (Expr.const ``Palamedes.PGen.support []) α
     let viaExtract ← mkEqSymm (← mkCongrArg supportFn extractProof)
     let chained ← mkEqTrans (← mkEqSymm optProof) (← mkEqTrans viaExtract cgenProp)
     -- `reduce` above produced a defeq but not syntactically equal term, so pin the statement to
     -- the generator actually being returned rather than the pre-reduction one.
-    let stmt ← mkEq (← mkAppM ``Palamedes.Gen.support #[gen'']) pred
+    let stmt ← mkEq (← mkAppM ``Palamedes.PGen.support #[gen'']) pred
     -- Validate with `isDefEq` rather than `Meta.check`, matching `derive_tuning`'s `tuned_support`
     -- template. A full `check` re-typechecks simp's own proof term, and since Lean 4.33 compares
     -- types at `implicit` transparency, it rejects proofs whose predicate mentions
@@ -169,7 +169,7 @@ def runSynthesisPipeline (α pred : Expr) (checkTotal verbose : Bool) :
   if checkTotal then
     try
       totalWitness? ← solveGoalWithTactic?
-        (← mkAppM ``Palamedes.Gen.total #[gen''])
+        (← mkAppM ``Palamedes.PGen.total #[gen''])
         (← `(tactic| totality))
     catch e =>
       -- Never a statement about the generator: rethrow rather than record. `catch _` here would
@@ -182,7 +182,7 @@ def runSynthesisPipeline (α pred : Expr) (checkTotal verbose : Bool) :
 /-- What the *declared return type* says the generator should be. Whether a generator filters is a
 fact about its type, visible at every use site. -/
 inductive Target where
-  /-- `Palamedes.Gen α` — the synthesis-internal carrier. Total only; a filtering generator has to be
+  /-- `Palamedes.PGen α` — the synthesis-internal carrier. Total only; a filtering generator has to be
   declared in the Basalt shape, because `totalize`'s result is Basalt-shaped and `Fail` must not
   escape Palamedes. -/
   | palamedes (α : Expr)
@@ -219,7 +219,7 @@ expected one. So the goal proposes `τ`, and only if `P` does not fit `τ → Pr
 first attempt and wins. -/
 def classifyGoal (goalTy : Expr) (t : Lean.Term) : TermElabM (Target × Expr) := do
   match goalTy with
-  | .app (.const ``Palamedes.Gen []) τ =>
+  | .app (.const ``Palamedes.PGen []) τ =>
     let some p ← elabPredAt? t τ
       | throwError "generator_search: the predicate must have type{indentExpr τ} → Prop"
     return (.palamedes τ, p)
@@ -233,10 +233,10 @@ def classifyGoal (goalTy : Expr) (t : Lean.Term) : TermElabM (Target × Expr) :=
     unless ← isDefEq (← inferType carrier) typeType do
       throwError "generator_search: the goal's type constructor{indentExpr carrier}\n\
         must have type `Type → Type`, but has{indentExpr (← inferType carrier)}"
-    let some _ ← synthInstance? (← mkAppM ``_root_.Gen #[carrier])
+    let some _ ← synthInstance? (← mkAppM ``Gen #[carrier])
       | throwError "generator_search: the goal's type constructor{indentExpr carrier}\n\
           is not a Basalt generator monad (no `Gen` instance), and the goal is not \
-          `Palamedes.Gen α`"
+          `Palamedes.PGen α`"
     match τ with
     | .app (.const ``Option [_]) β =>
       -- Filtering reading first (see the docstring). Elaboration is too permissive to decide the
@@ -254,7 +254,7 @@ def classifyGoal (goalTy : Expr) (t : Lean.Term) : TermElabM (Target × Expr) :=
       return (.basalt carrier τ, p)
   | _ =>
     throwError "generator_search: the goal must be `G α`, `G (Option α)` for a Basalt \
-      `[Gen G]`, or `Palamedes.Gen α`, got{indentExpr goalTy}"
+      `[Gen G]`, or `Palamedes.PGen α`, got{indentExpr goalTy}"
 
 /-- Turn a totality witness back into generator code.
 
@@ -269,12 +269,12 @@ projections. Deliberately *not* a full `Meta.reduce`: that would also unfold Bas
 and `oneOf` into `frequencyAux`/`choose`, destroying exactly the structure we want to keep. -/
 def extractWitness (e : Expr) : MetaM Expr := do
   let basis : Array Name := #[
-    ``Palamedes.Gen.Total.total_pure, ``Palamedes.Gen.Total.total_bind,
-    ``Palamedes.Gen.Total.total_pick, ``Palamedes.Gen.Total.total_oneOf,
-    ``Palamedes.Gen.Total.total_frequency, ``Palamedes.Gen.Total.total_map,
-    ``Palamedes.Gen.Total.total_dite,
-    ``Palamedes.Gen.Total.totalList_nil, ``Palamedes.Gen.Total.totalList_cons,
-    ``Palamedes.Gen.Total.totalWeighted_nil, ``Palamedes.Gen.Total.totalWeighted_cons,
+    ``Palamedes.PGen.Total.total_pure, ``Palamedes.PGen.Total.total_bind,
+    ``Palamedes.PGen.Total.total_pick, ``Palamedes.PGen.Total.total_oneOf,
+    ``Palamedes.PGen.Total.total_frequency, ``Palamedes.PGen.Total.total_map,
+    ``Palamedes.PGen.Total.total_dite,
+    ``Palamedes.PGen.Total.totalList_nil, ``Palamedes.PGen.Total.totalList_cons,
+    ``Palamedes.PGen.Total.totalWeighted_nil, ``Palamedes.PGen.Total.totalWeighted_cons,
     ``Palamedes.TGen.pure, ``Palamedes.TGen.bind, ``Palamedes.TGen.pick,
     ``Palamedes.TGen.frequency, ``Palamedes.TGen.map, ``Palamedes.TGen.toGen]
   let names := basis ++ Palamedes.totalLemmas (← getEnv)
@@ -313,7 +313,7 @@ Two signals, because neither alone is enough:
   `@[total]` lemma also just leaves goals. That is the common registry gap, and it is
   indistinguishable from a filter by control flow alone.
 
-So check the term: `Gen.assume` is the only thing a generator can fail at, and the optimizer floats
+So check the term: `PGen.assume` is the only thing a generator can fail at, and the optimizer floats
 every *satisfiable* one out. No `assume` anywhere means "it filters" is not a claim the evidence
 supports, whatever the tactic did.
 
@@ -324,7 +324,7 @@ def diagnoseTotality (res : SynthesisResult) : TotalityDiagnosis :=
   match res.totalityFailure? with
   | some err => .gap (some err)
   | none =>
-    if (res.gen.find? (·.isConstOf ``Palamedes.Gen.assume)).isSome then .filters else .gap none
+    if (res.gen.find? (·.isConstOf ``Palamedes.PGen.assume)).isSome then .filters else .gap none
 
 /-- The shared explanation for a reconstruction gap: what it is, and what not to do about it. -/
 def gapMessage (err? : Option MessageData) : MessageData :=
@@ -332,7 +332,7 @@ def gapMessage (err? : Option MessageData) : MessageData :=
     | some err => m!"Totality reconstruction errored rather than simply not applying. The \
         underlying error was:{indentD err}"
     | none => m!"Totality reconstruction left goals unclosed, but the generator contains no \
-        `Gen.assume` — so there is nothing in it that can fail, and the usual cause is a datatype \
+        `PGen.assume` — so there is nothing in it that can fail, and the usual cause is a datatype \
         with no `@[total]` lemma registered."
   m!"{cause}\n\nThis is a gap in the reconstruction basis, **not** evidence that the generator \
     filters. Declaring it at `G (Option _)` would compile — `totalize` accepts any generator — but \
@@ -350,7 +350,7 @@ def packageFor (target : Target) (res : SynthesisResult) (report : MessageData �
     if res.totalWitness?.isNone then
       match diagnoseTotality res with
       | .filters =>
-        report m!"this generator filters: a `Gen.assume` survived optimization, so it can fail when \
+        report m!"this generator filters: a `PGen.assume` survived optimization, so it can fail when \
           sampled. Declare it as `[Gen G] → G (Option _)` to reflect that in the type."
       | .gap err? =>
         report m!"could not reconstruct a totality witness.\n\n{gapMessage err?}"
@@ -359,7 +359,7 @@ def packageFor (target : Target) (res : SynthesisResult) (report : MessageData �
     let some w := res.totalWitness?
       | match diagnoseTotality res with
         | .filters =>
-          throwError "generator_search: this generator filters — a `Gen.assume` survived \
+          throwError "generator_search: this generator filters — a `PGen.assume` survived \
             optimization — so it cannot be emitted at{indentExpr (mkApp G α)}, which is `Fail`-free \
             by construction.\n\nDeclare it as `G (Option _)` instead, so the type reflects that it \
             can fail."
@@ -380,7 +380,7 @@ def packageFor (target : Target) (res : SynthesisResult) (report : MessageData �
           established that the generator can actually fail, and `totalize` accepts it either \
           way. If the gap below is fixed and the generator turns out to be total, declare it at \
           `{← ppExpr (mkApp G α)}` instead.\n\n{gapMessage err?}"
-    mkAppOptM ``Palamedes.Gen.totalize #[some α, some res.gen, some G, none]
+    mkAppOptM ``Palamedes.PGen.totalize #[some α, some res.gen, some G, none]
 
 def generatorSearchElab
     (stx : Syntax)
@@ -404,19 +404,19 @@ def generatorSearchElab
     let common := s!"-- generator_search ({← ppExpr mpred})
   let cg : CorrectGen ({← ppExpr mpred}) := by
     cgenerator_search
-  let g : Palamedes.Gen ({← ppExpr α}) := by
+  let g : Palamedes.PGen ({← ppExpr α}) := by
     optimize_gen cg.val"
     let tail ← match target with
       | .palamedes _ => pure "
-  let _ : Palamedes.Gen.total g := by
+  let _ : Palamedes.PGen.total g := by
     totality
   exact g"
       | .basalt _ _ => pure "
-  let w : Palamedes.Gen.total g := by
+  let w : Palamedes.PGen.total g := by
     totality
   exact w.val.run"
       | .basaltOption _ _ => pure "
-  exact Palamedes.Gen.totalize g"
+  exact Palamedes.PGen.totalize g"
     TryThis.addSuggestion stx (common ++ tail)
 
   let prettyPred ←
@@ -453,7 +453,7 @@ decidable `α → Bool`, including a recursive one over any `derive_palamedes`d 
 ```lean
 def genEq2 [Gen G] : G Nat := by generator_search (· = 2)              -- total
 def genRBT [Gen G] : G (Option (Tree Nat)) := by generator_search isRBT -- filtering
-def genEq2' : Palamedes.Gen Nat := by generator_search (· = 2)          -- synthesis-internal carrier
+def genEq2' : Palamedes.PGen Nat := by generator_search (· = 2)          -- synthesis-internal carrier
 ```
 
 Whether a generator can fail is a fact about its type, visible at every use site:
@@ -465,9 +465,9 @@ Whether a generator can fail is a fact about its type, visible at every use site
 | fails | `G α` | **error** — declare `G (Option α)` |
 | succeeds | `G (Option α)` | warning — it never fails, `G α` will do |
 
-Row 3 is an *error* rather than the warning it is for a `Palamedes.Gen α` goal, and that asymmetry is
+Row 3 is an *error* rather than the warning it is for a `Palamedes.PGen α` goal, and that asymmetry is
 forced: `G α` is `Fail`-free by construction, so there is simply no term to emit. For the internal
-`Palamedes.Gen α` carrier there is one — it just filters — so that case warns and proceeds.
+`Palamedes.PGen α` carrier there is one — it just filters — so that case warns and proceeds.
 
 A synthesized generator ships uniform, which diverges for a static- or growing-seed generator like
 `genWellTyped`. To weight it, run `derive_tuning` on it and sample `<gen>.tuned θ` at a `Tuning`

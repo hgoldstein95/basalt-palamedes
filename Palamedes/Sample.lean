@@ -1,4 +1,4 @@
-import Palamedes.Gen
+import Palamedes.PGen
 import Palamedes.Failure
 import Basalt.PlausibleGen
 import Plausible
@@ -6,9 +6,9 @@ import Plausible
 /-!
 # Executable sampling for Palamedes generators
 
-A `Palamedes.Gen α` is a thin wrapper around a polymorphic Basalt generator that may also fail
+A `Palamedes.PGen α` is a thin wrapper around a polymorphic Basalt generator that may also fail
 (`∀ {G} [Gen G] [Fail G], G α` — the `Fail` is what distinguishes it from `TGen`). We sample by
-interpreting it through the **explicit `Option` layer** (`Gen.totalize`, `Palamedes/Failure.lean`):
+interpreting it through the **explicit `Option` layer** (`PGen.totalize`, `Palamedes/Failure.lean`):
 `totalize g` at `Plausible.Gen` is a `Plausible.Gen (Option α)` in which a failed `assume` is an
 ordinary `none` value. This is the *same* failure the `SPMF`/`massSome` semantics reasons about — one
 uniform failure story (`Fail (OptionT G) := pure none`) across proofs and sampling — rather than a
@@ -43,7 +43,7 @@ It is a *measured* fix, not a proved one; nothing yet certifies a.s. termination
 
 namespace Palamedes
 
-open _root_.Palamedes.Gen
+open Palamedes.PGen
 
 /-- Surface a `none` draw as a `GenError` so `Gen.runUntil` can retry it.
 
@@ -59,25 +59,25 @@ def ofOption (g : Plausible.Gen (Option α)) : Plausible.Gen α := do
 /-- Interpret `g` at Plausible's `Gen` monad through the explicit `Option` layer: a failed `assume`
   becomes a `none` value (matching the `massSome` semantics), which we surface as a `GenError` at
   this boundary only so that `Gen.runUntil` can retry it. -/
-def toPlausible (g : Gen α) : Plausible.Gen α :=
+def toPlausible (g : PGen α) : Plausible.Gen α :=
   ofOption (totalize g)
 
 /-- Draw a single value from `g`, **retrying on failure** up to `maxAttempts` times (a global
   restart via Plausible's `Gen.runUntil`). A filtering generator whose `assume` fails is redrawn
   rather than failing; only if all `maxAttempts` draws fail does this throw "out of attempts". -/
-def sample (g : Gen α) (size : Nat := 100) (maxAttempts : Nat := 1000) : IO α :=
+def sample (g : PGen α) (size : Nat := 100) (maxAttempts : Nat := 1000) : IO α :=
   Plausible.Gen.runUntil (some maxAttempts) (toPlausible g) size
 
 /-- Like `sample`, but returns `none` when all `maxAttempts` draws fail rather than throwing. The
   `some`/`none` rate over many draws is an empirical acceptance rate (`massSome`). -/
-def sample? (g : Gen α) (size : Nat := 100) (maxAttempts : Nat := 1000) : IO (Option α) := do
+def sample? (g : PGen α) (size : Nat := 100) (maxAttempts : Nat := 1000) : IO (Option α) := do
   try
     return some (← sample g size maxAttempts)
   catch _ =>
     return none
 
 /-- Draw `n` values from `g`, each with retry. -/
-def sampleN (n : Nat) (g : Gen α) (size : Nat := 100) (maxAttempts : Nat := 1000) : IO (List α) :=
+def sampleN (n : Nat) (g : PGen α) (size : Nat := 100) (maxAttempts : Nat := 1000) : IO (List α) :=
   (List.replicate n ()).mapM (fun _ => sample g size maxAttempts)
 
 /-! ### Sampling a filtering generator

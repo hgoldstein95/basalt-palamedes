@@ -1,6 +1,6 @@
 import Palamedes.Synthesizer
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
-def genZeroOrInRange (lo hi : Nat) : Gen Nat := by
+def genZeroOrInRange (lo hi : Nat) : PGen Nat := by
   generator_search fun n => n = 0 ∨ (lo ≤ n ∧ n ≤ hi)

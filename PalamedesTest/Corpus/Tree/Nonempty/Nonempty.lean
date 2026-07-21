@@ -1,6 +1,6 @@
 import Palamedes.Synthesizer
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace Nonempty
 
@@ -9,7 +9,7 @@ def isNonempty : Palamedes.Tree α → Bool
   | .leaf => false
   | .node l _ r => true && isNonempty l && isNonempty r
 
-def genNonempty : Gen (Palamedes.Tree Nat) := by
+def genNonempty : PGen (Palamedes.Tree Nat) := by
   generator_search (fun t => isNonempty t = true)
 
 end Nonempty

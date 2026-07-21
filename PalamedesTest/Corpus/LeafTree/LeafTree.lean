@@ -9,7 +9,7 @@ registry), so `generator_search` synthesizes correct-by-construction generators 
 **zero edits** to any `Palamedes/` module.
 -/
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace LeafTreeDemo
 
@@ -25,14 +25,14 @@ def isAllTwos : LeafTree Nat → Bool
   | .tip x => x == 2
   | .branch l r => isAllTwos l && isAllTwos r
 
-def genAllTwos : Gen (LeafTree Nat) := by
+def genAllTwos : PGen (LeafTree Nat) := by
   generator_search (fun t => isAllTwos t)
 
 @[simp]
 def isAllTwosFold (t : LeafTree Nat) : Bool :=
   LeafTree.fold (fun x => x == 2) (fun bl br => bl && br) t
 
-def genAllTwosFold : Gen (LeafTree Nat) := by
+def genAllTwosFold : PGen (LeafTree Nat) := by
   generator_search (fun t => isAllTwosFold t = true)
 
 -- Complete of depth exactly `d`: a `σ → Bool` function-carrier fold with state threading.
@@ -56,7 +56,7 @@ info: Try this:
       (PUnit.unit, d)
 -/
 #guard_msgs in
-def genCompleteFold (d : Nat) : Gen (LeafTree Nat) := by
+def genCompleteFold (d : Nat) : PGen (LeafTree Nat) := by
   generator_search? (fun t => isCompleteFold t d = true)
 
 end LeafTreeDemo

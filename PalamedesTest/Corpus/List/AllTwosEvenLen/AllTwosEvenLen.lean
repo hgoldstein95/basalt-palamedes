@@ -1,6 +1,6 @@
 import Palamedes.Synthesizer
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace AllTwosEvenLen
 
@@ -18,7 +18,7 @@ def isEvenLen : List α → Bool
 def isAllTwosEvenLen (xs : List Nat) : Bool :=
   isAllTwos xs && isEvenLen xs
 
-def genAllTwosEvenLen : Gen (List Nat) := by
+def genAllTwosEvenLen : PGen (List Nat) := by
   generator_search (fun xs => isAllTwosEvenLen xs = true)
 
 end AllTwosEvenLen

@@ -13,22 +13,22 @@ falls through to `split`, which *does* close the goal — while leaving the cast
 surfaces two modules away, as extraction residue rather than as a tactic error.
 -/
 
-open Palamedes Palamedes.Gen
+open Palamedes Palamedes.PGen
 
-/-- error: total_cases: goal is not `Gen.total _` -/
+/-- error: total_cases: goal is not `PGen.total _` -/
 #guard_msgs in
 example : True := by total_cases
 
 /-- error: total_cases: the generator is not a `match` application -/
 #guard_msgs in
-example : Palamedes.Gen.total (Palamedes.Gen.pure (2 : Nat)) := by total_cases
+example : Palamedes.PGen.total (Palamedes.PGen.pure (2 : Nat)) := by total_cases
 
 -- A `match`, but on a closed term rather than a bound variable: there is no hypothesis to case on,
 -- so the tactic declines rather than casing something that is not a variable.
 /-- error: total_cases: no discriminant is a local hypothesis to case on -/
 #guard_msgs in
-example : Palamedes.Gen.total
+example : Palamedes.PGen.total
     (match (2 : Nat) with
-      | 0 => Palamedes.Gen.pure 0
-      | _ + 1 => Palamedes.Gen.pure 1) := by
+      | 0 => Palamedes.PGen.pure 0
+      | _ + 1 => Palamedes.PGen.pure 1) := by
   total_cases

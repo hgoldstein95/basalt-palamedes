@@ -1,6 +1,6 @@
 import Palamedes.Synthesizer
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace BSTFold
 
@@ -13,7 +13,7 @@ def isBSTFold (lo hi : Nat) (t : Palamedes.Tree Nat) : Bool :=
           | (sl, sr) => (decide (sl ≤ x) && decide (x ≤ sr)) && bl (sl, x - 1) && br (x + 1, sr))
         t (lo, hi)
 
-def genBSTFold (lo hi : Nat) : Gen (Palamedes.Tree Nat) := by
+def genBSTFold (lo hi : Nat) : PGen (Palamedes.Tree Nat) := by
   generator_search (fun t  => isBSTFold lo hi t = true)
 
 end BSTFold

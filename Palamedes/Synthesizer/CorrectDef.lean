@@ -29,8 +29,8 @@ depends on the declared shape — the same dispatch the tactic does:
 * `f [Gen G] : G α` — `f.sound_complete : IsSoundAndComplete f P`, in **Basalt's** vocabulary, about
   `f` at `SPMF`. This is the case the exercise exists for: a Basalt-shaped generator carrying a
   named law.
-* `f : Palamedes.Gen α` — `f.sound_complete : f.support = P`, at the synthesis-internal carrier;
-  `f.total : Gen.total f` when the generator is assume-free (`total` is `Type`-valued, so it *is*
+* `f : Palamedes.PGen α` — `f.sound_complete : f.support = P`, at the synthesis-internal carrier;
+  `f.total : PGen.total f` when the generator is assume-free (`total` is `Type`-valued, so it *is*
   the failure-free generator — `f.total.val.run` is a Basalt-shaped `∀ {G} [Gen G], G α`); and
   `f.correct : CorrectGen P`, the bundled view, whose `.val` is definitionally `f`.
 * `f [Gen G] : G (Option α)` — `f.sound_complete : IsSomeSoundAndComplete f P`, the filtering
@@ -80,7 +80,7 @@ private def applyAt (declName : Name) (xs : Array Expr) (G? : Option Expr) :
   let some G := G? | return (mkAppN (mkConst declName) xs, xs)
   unless G.isFVar do return (mkAppN (mkConst declName) xs, xs)
   let spmf := Lean.mkConst ``SPMF [Level.zero]
-  let inst ← synthInstance (← mkAppM ``_root_.Gen #[spmf])
+  let inst ← synthInstance (← mkAppM ``Gen #[spmf])
   let mut args := #[]
   let mut keep := #[]
   for x in xs do
@@ -88,7 +88,7 @@ private def applyAt (declName : Name) (xs : Array Expr) (G? : Option Expr) :
     let t ← whnf (← inferType x)
     if x == G then
       args := args.push spmf
-    else if t.isAppOfArity ``_root_.Gen 1 && t.appArg! == G then
+    else if t.isAppOfArity ``Gen 1 && t.appArg! == G then
       args := args.push inst
     else
       args := args.push x
@@ -150,7 +150,7 @@ def elabCorrectDef : CommandElab := fun stx => do
       match target with
       | .palamedes _ =>
         let (declC, keep) ← applyAt declName xs none
-        let stmt ← mkEq (← mkAppM ``Palamedes.Gen.support #[declC]) predE
+        let stmt ← mkEq (← mkAppM ``Palamedes.PGen.support #[declC]) predE
         emitLaw (declName ++ `sound_complete) keep stmt supportProof
       | .basalt G _ =>
         let some w := totalWitness?
@@ -172,7 +172,7 @@ def elabCorrectDef : CommandElab := fun stx => do
         -- `simp` over the combinator twins. That is a fact about this particular generator, not the
         -- global `∀ g, someSupport g = g.support`, which is unprovable.
         let bridgeGoal ← mkEq (← mkAppM ``Palamedes.someSupport #[resGen])
-          (← mkAppM ``Palamedes.Gen.support #[resGen])
+          (← mkAppM ``Palamedes.PGen.support #[resGen])
         let bridge ←
           try
             solveGoalWithTactic bridgeGoal (← `(tactic| simp))
@@ -187,13 +187,13 @@ def elabCorrectDef : CommandElab := fun stx => do
         emitLaw (declName ++ `sound_complete) keep stmt proof
       emitted := emitted.push "sound_complete"
 
-      -- `f.total` only applies to the synthesis-internal carrier: `Gen.total` is a statement about a
-      -- `Palamedes.Gen`, and a Basalt-shaped generator has no `Fail` to be free of — its totality is
+      -- `f.total` only applies to the synthesis-internal carrier: `PGen.total` is a statement about a
+      -- `Palamedes.PGen`, and a Basalt-shaped generator has no `Fail` to be free of — its totality is
       -- already the content of its type.
       match target, totalWitness? with
       | .palamedes _, some w =>
         let (declC, keep) ← applyAt declName xs none
-        let stmt ← mkAppM ``Palamedes.Gen.total #[declC]
+        let stmt ← mkAppM ``Palamedes.PGen.total #[declC]
         unless ← isDefEq (← inferType w) stmt do
           throwError "correct def: the totality witness does not match{indentExpr stmt}"
         let stmt ← instantiateMVars stmt
@@ -209,16 +209,16 @@ def elabCorrectDef : CommandElab := fun stx => do
       | _, _ => pure ()
 
       -- `f.correct : CorrectGen P` — the bundled view, for feeding `f` back into synthesis where a
-      -- `CorrectGen` is what the rules consume. Only for the `Palamedes.Gen` shape, where `.val` is
+      -- `CorrectGen` is what the rules consume. Only for the `Palamedes.PGen` shape, where `.val` is
       -- *literally* `f` and the view is free. A Basalt-shaped `f` has no `CorrectGen` over it —
-      -- `CorrectGen` is a subtype of `Palamedes.Gen`, so the bundle would be over the internal
+      -- `CorrectGen` is a subtype of `Palamedes.PGen`, so the bundle would be over the internal
       -- carrier rather than over `f`, reintroducing exactly the wrapper this shape exists to avoid.
       match target with
       | .palamedes α =>
         let (declC, keep) ← applyAt declName xs none
-        let genTyE ← mkAppM ``Palamedes.Gen #[α]
+        let genTyE ← mkAppM ``Palamedes.PGen #[α]
         let prop ← withLocalDeclD `g genTyE fun g => do
-          mkLambdaFVars #[g] (← mkEq (← mkAppM ``Palamedes.Gen.support #[g]) predE)
+          mkLambdaFVars #[g] (← mkEq (← mkAppM ``Palamedes.PGen.support #[g]) predE)
         let stmt ← mkAppM ``Palamedes.CorrectGen #[predE]
         let value ← mkAppOptM ``Subtype.mk #[some genTyE, some prop, some declC, some supportProof]
         unless ← isDefEq (← inferType value) stmt do
@@ -233,14 +233,14 @@ def elabCorrectDef : CommandElab := fun stx => do
         emitted := emitted.push "correct"
       | _ => pure ()
 
-      -- `f.gen : Palamedes.Gen α`, the carrier the Basalt shape is projected from, with its
+      -- `f.gen : Palamedes.PGen α`, the carrier the Basalt shape is projected from, with its
       -- carrier-level `support = P`. `derive_tuning f` rewrites this rather than `f` itself, since
-      -- the tuning layer keys on `Gen.oneOf` and cannot chain `support` at an abstract `G`.
+      -- the tuning layer keys on `PGen.oneOf` and cannot chain `support` at an abstract `G`.
       match target with
       | .basalt G _ | .basaltOption G _ =>
         let (_, keep) ← applyAt declName xs (some G)
         let compName := declName ++ `gen
-        let stmt ← instantiateMVars (← mkForallFVars keep (← mkAppM ``Palamedes.Gen #[α]))
+        let stmt ← instantiateMVars (← mkForallFVars keep (← mkAppM ``Palamedes.PGen #[α]))
         let value ← instantiateMVars (← mkLambdaFVars keep resGen)
         if value.hasExprMVar || stmt.hasExprMVar then
           throwError "correct def: `gen` still has metavariables after instantiation"
@@ -248,7 +248,7 @@ def elabCorrectDef : CommandElab := fun stx => do
           name := compName, levelParams := [], type := stmt, value
           hints := .abbrev, safety := .safe }
         let compC := mkAppN (mkConst compName) keep
-        let lawStmt ← mkEq (← mkAppM ``Palamedes.Gen.support #[compC]) predE
+        let lawStmt ← mkEq (← mkAppM ``Palamedes.PGen.support #[compC]) predE
         emitLaw (compName ++ `sound_complete) keep lawStmt supportProof
         emitted := emitted.push "gen"
       | _ => pure ()

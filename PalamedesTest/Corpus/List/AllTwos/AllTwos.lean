@@ -1,6 +1,6 @@
 import Palamedes.Synthesizer
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace AllTwos
 
@@ -9,7 +9,7 @@ def isAllTwos : List Nat → Bool
   | [] => true
   | x :: xs => x = 2 && isAllTwos xs
 
-def genAllTwos : Gen (List Nat) := by
+def genAllTwos : PGen (List Nat) := by
   generator_search (fun xs => isAllTwos xs)
 
 end AllTwos

@@ -14,11 +14,11 @@ an unexpected outcome.
 The retrying assertions are statistically safe, not razor-thin: the lowest acceptance rate exercised
 here is `genAVL 4` at ~8% per draw (measured), so 1000 attempts fail with
 probability below 10⁻³⁰. Deep filtering regimes (`genRBT 3+`, `genAVL 5+`) have vanishing acceptance
-and are deliberately *not* asserted; the out-of-attempts path is pinned with `Gen.empty`, which fails
+and are deliberately *not* asserted; the out-of-attempts path is pinned with `PGen.empty`, which fails
 deterministically.
 -/
 
-open Palamedes Palamedes.Gen
+open Palamedes Palamedes.PGen
 
 /- `genAVL 3` never fails (measured 100% acceptance): a draw must succeed. -/
 #eval show IO Unit from do
@@ -40,18 +40,18 @@ support. -/
   unless (RBT.isRBT t 2 0 10) do
     throw <| IO.userError s!"genRBT 2 produced a non-RBT tree"
 
-/- The out-of-attempts path, deterministically: `Gen.empty` fails every draw, so `sample?` reports
+/- The out-of-attempts path, deterministically: `PGen.empty` fails every draw, so `sample?` reports
 `none` instead of hanging or crashing the build. -/
 #eval show IO Unit from do
-  match ← Palamedes.sample? (Gen.empty : Gen Nat) (maxAttempts := 10) with
+  match ← Palamedes.sample? (PGen.empty : PGen Nat) (maxAttempts := 10) with
   | none => pure ()
-  | some n => throw <| IO.userError s!"sample? Gen.empty produced {n}"
+  | some n => throw <| IO.userError s!"sample? PGen.empty produced {n}"
 
 /- The throwing variant `sample` reports exhaustion as an error rather than returning. -/
 #eval show IO Unit from do
-  match ← (Palamedes.sample (Gen.empty : Gen Nat) (maxAttempts := 10)).toBaseIO with
+  match ← (Palamedes.sample (PGen.empty : PGen Nat) (maxAttempts := 10)).toBaseIO with
   | .error _ => pure ()
-  | .ok n => throw <| IO.userError s!"sample Gen.empty produced {n}"
+  | .ok n => throw <| IO.userError s!"sample PGen.empty produced {n}"
 
 /-! ## The `samplePartial` family
 

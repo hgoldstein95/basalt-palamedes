@@ -1,6 +1,6 @@
 import Palamedes.Synthesizer
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace GoodStack
 
@@ -27,10 +27,10 @@ info: Try this:
         let tv ←
           if p.2 = 0 then pure StackF.mty
             else
-              Gen.oneOf
+              PGen.oneOf
                 [do
                   let a ←
-                    Gen.oneOf
+                    PGen.oneOf
                         [do
                           let a ← arbLabel
                           pure (Atom.atm 0 a), do
@@ -38,7 +38,7 @@ info: Try this:
                           pure (Atom.atm 1 a)]
                   pure (StackF.cons a PUnit.unit), do
                   let a ←
-                    Gen.oneOf
+                    PGen.oneOf
                         [do
                           let a ← arbLabel
                           pure (Atom.atm 0 a), do
@@ -52,7 +52,7 @@ info: Try this:
       (PUnit.unit, n)
 -/
 #guard_msgs in
-def genGoodStack (n : Nat) : Gen Stack := by
+def genGoodStack (n : Nat) : PGen Stack := by
   generator_search? (fun s => isGoodStack s n = true)
 
 end GoodStack

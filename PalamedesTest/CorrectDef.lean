@@ -13,7 +13,7 @@ The synthesizer's proofs survive into the environment. Every law below is **kern
 from one that merely elaborated.
 -/
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 @[simp]
 def isAllTwos : List Nat → Bool
@@ -22,7 +22,7 @@ def isAllTwos : List Nat → Bool
 
 /-- info: correct def genAllTwos: emitted (generator), sound_complete, total, correct -/
 #guard_msgs in
-correct def genAllTwos : Palamedes.Gen (List Nat) := by generator_search (fun xs => isAllTwos xs)
+correct def genAllTwos : Palamedes.PGen (List Nat) := by generator_search (fun xs => isAllTwos xs)
 
 -- The law is stated against the emitted *constant*, so it is a fact about `genAllTwos` rather than
 -- about a copy of its body.
@@ -53,7 +53,7 @@ example (P : List Nat → Prop) (hP : (fun xs => isAllTwos xs = true) = P) :
 example : genAllTwos.correct.val = genAllTwos := rfl
 
 -- Totality is data, so the Basalt-shaped generator is a projection out of the law.
-def genAllTwosBasalt [_root_.Gen G] : G (List Nat) := genAllTwos.total.val.run
+def genAllTwosBasalt [Gen G] : G (List Nat) := genAllTwos.total.val.run
 
 -- `Palamedes/Laws.lean`'s other bridge: a `support = P` law at the internal carrier converts to
 -- Basalt's vocabulary on demand. `correct def` does not emit this form — the declared shape is
@@ -70,10 +70,10 @@ over in the emitted law.
 
 /-- info: correct def genBasalt: emitted (generator), sound_complete, gen -/
 #guard_msgs in
-correct def genBasalt [_root_.Gen G] : G (List Nat) := by generator_search (fun xs => isAllTwos xs)
+correct def genBasalt [Gen G] : G (List Nat) := by generator_search (fun xs => isAllTwos xs)
 
 -- Nothing wraps it: this is the same `∀ {G} [Gen G], G α` a hand-written Basalt generator has.
-/-- info: @genBasalt : {G : Type → Type} → [_root_.Gen G] → G (List ℕ) -/
+/-- info: @genBasalt : {G : Type → Type} → [Gen G] → G (List ℕ) -/
 #guard_msgs in
 #check @genBasalt
 
@@ -91,7 +91,7 @@ correct def genBasalt [_root_.Gen G] : G (List Nat) := by generator_search (fun 
 -- Value binders are *kept*, and the law quantifies over them.
 /-- info: correct def genParam: emitted (generator), sound_complete, total, correct -/
 #guard_msgs in
-correct def genParam (_n : Nat) : Palamedes.Gen (List Nat) := by
+correct def genParam (_n : Nat) : Palamedes.PGen (List Nat) := by
   generator_search (fun xs => isAllTwos xs)
 
 /-- info: genParam.sound_complete : ∀ (_n : ℕ), (genParam _n).support = fun xs => isAllTwos xs = true -/
@@ -101,10 +101,10 @@ correct def genParam (_n : Nat) : Palamedes.Gen (List Nat) := by
 -- The filtering shape takes binders too, and it now carries a law of its own.
 /-- info: correct def genRange: emitted (generator), sound_complete, gen -/
 #guard_msgs in
-correct def genRange (lo hi : Nat) [_root_.Gen G] : G (Option Nat) := by
+correct def genRange (lo hi : Nat) [Gen G] : G (Option Nat) := by
   generator_search (fun n => lo ≤ n ∧ n ≤ hi)
 
-/-- info: @genRange : {G : Type → Type} → ℕ → ℕ → [_root_.Gen G] → G (Option ℕ) -/
+/-- info: @genRange : {G : Type → Type} → ℕ → ℕ → [Gen G] → G (Option ℕ) -/
 #guard_msgs in
 #check @genRange
 
@@ -136,7 +136,7 @@ run_cmd do
 -- the kernel rejects a declaration containing metavariables, so the failure is loud.
 /-- info: correct def genBetween: emitted (generator), sound_complete, total, correct -/
 #guard_msgs in
-correct def genBetween : Palamedes.Gen Nat := by generator_search (fun n => 3 ≤ n ∧ n ≤ 7)
+correct def genBetween : Palamedes.PGen Nat := by generator_search (fun n => 3 ≤ n ∧ n ≤ 7)
 
 /-- info: genBetween.sound_complete : genBetween.support = fun n => 3 ≤ n ∧ n ≤ 7 -/
 #guard_msgs in

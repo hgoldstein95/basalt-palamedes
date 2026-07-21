@@ -1,4 +1,4 @@
-import Palamedes.Gen
+import Palamedes.PGen
 import Palamedes.Support
 import Palamedes.OptimizeCongr
 import Palamedes.UnfoldStrategy
@@ -7,7 +7,7 @@ open Lean Elab Command Term Meta
 
 namespace Palamedes
 
-open _root_.Palamedes.Gen
+open Palamedes.PGen
 
 /-!
 # Correct-by-Construction Optimizer
@@ -40,7 +40,7 @@ none of them. Each case mirrors the lift lemma that would fire:
 * `dite`/`ite` — descend the branches (their proof binders never enter `crossed`).
 * `indexed` — opaque barrier: a guard inside the fueled fixpoint is re-asserted per unfolding and
   cannot be hoisted.
-* `ret`, or any non-`Gen` head — nothing to lift. -/
+* `ret`, or any non-`PGen` head — nothing to lift. -/
 partial def assumeReachesHead (e : Expr) (crossed : Array FVarId) : MetaM Bool := do
   match_expr ← withReducible (reduce e) with
   | assume _ b g =>
@@ -198,7 +198,7 @@ private partial def listLitElems? (e : Expr) : Option (List Expr) :=
 returning the head `x`, the tail expression `xs`, its elements, and the nonemptiness proof `h`. -/
 private def oneOfLit? (e : Expr) : Option (Expr × Expr × List Expr × Expr) :=
   match e.getAppFnArgs with
-  | (``Gen.oneOf, #[_, gs, h]) =>
+  | (``PGen.oneOf, #[_, gs, h]) =>
     match gs.getAppFnArgs with
     | (``List.cons, #[_, x, xs]) => do
       let elems ← listLitElems? xs
@@ -219,7 +219,7 @@ sides remain definitionally equal (`++` on literals reduces), which is all downs
 composition needs. -/
 private def flattenPick? (e : Expr) : MetaM (Option (Expr × Expr)) := do
   match_expr e with
-  | Gen.pick _ x y => do
+  | PGen.pick _ x y => do
     let (elems, proof) ←
       match oneOfLit? x, oneOfLit? y with
       | none, none => do
@@ -234,7 +234,7 @@ private def flattenPick? (e : Expr) : MetaM (Option (Expr × Expr)) := do
     let tl ← mkListLit (← inferType x) elems.tail
     let gs ← mkAppM ``List.cons #[elems.head!, tl]
     let hne ← mkAppM ``List.cons_ne_nil #[elems.head!, tl]
-    let e' ← mkAppM ``Gen.oneOf #[gs, hne]
+    let e' ← mkAppM ``PGen.oneOf #[gs, hne]
     return some (e', proof)
   | _ => return none
 
@@ -363,14 +363,14 @@ partial def branchHoles (holes : Std.HashMap Name Nat) (e : Expr) : MetaM Nat :=
   | assume _ _ f => underBinder f
   | dite _ _ _ t f => return max (← underBinder t) (← underBinder f)
   | ite _ _ _ t f => return max (← branchHoles holes t) (← branchHoles holes f)
-  | Gen.pick _ x y => return max (← branchHoles holes x) (← branchHoles holes y)
-  | Gen.oneOf _ gs _ =>
+  | PGen.pick _ x y => return max (← branchHoles holes x) (← branchHoles holes y)
+  | PGen.oneOf _ gs _ =>
     let some elems := listLitElems? gs | return 0
     elems.foldlM (init := 0) fun acc g => return max acc (← branchHoles holes g)
   -- Children are descended into before the head rewrite, so an inner choice is already a `frequency`
   -- by the time the outer one is scored. Omitting this case scores it 0 holes — the unsafe direction,
   -- since a decay policy grows a 0-hole branch's weight fastest, which on a recursive branch is wrong.
-  | Gen.frequency _ gs _ =>
+  | PGen.frequency _ gs _ =>
     let some elems := listLitElems? gs | return 0
     elems.foldlM (init := 0) fun acc p => do
       match p.getAppFnArgs with
@@ -397,7 +397,7 @@ private def mkAllPosTuning (α θ : Expr) (pairs : List (Expr × Expr)) (idxs : 
   match pairs, idxs with
   | [], _ => mkAppM ``allPos_nil #[α]
   | (w, g) :: ps, i :: is =>
-    let tl ← mkListLit (← mkAppM ``Prod #[mkConst ``Nat, ← mkAppM ``Gen #[α]])
+    let tl ← mkListLit (← mkAppM ``Prod #[mkConst ``Nat, ← mkAppM ``PGen #[α]])
       (← ps.mapM fun (w, g) => mkAppM ``Prod.mk #[w, g])
     let hw ← mkTunedWeightPos θ i depth
     mkAppM ``allPos_cons #[α, w, g, tl, hw, ← mkAllPosTuning α θ ps is depth]
@@ -410,7 +410,7 @@ offsets run innermost-first — consistent because the one pass both assigns and
 private def installTuning? (θ : Expr) (st : IO.Ref TuningState) (declName : Name)
     (depth? : Option (Expr × Name)) (e : Expr) : MetaM (Option (Expr × Expr)) := do
   match_expr e with
-  | Gen.oneOf α gs h => do
+  | PGen.oneOf α gs h => do
     let some elems := listLitElems? gs | return none
     if elems.isEmpty then return none
     -- depth expr (or `0` outside a recursion) and per-branch recursive-child counts
@@ -428,13 +428,13 @@ private def installTuning? (θ : Expr) (st : IO.Ref TuningState) (declName : Nam
     let ws ← idxs.mapM (mkTunedWeight θ · depth)
     let pairs := ws.zip elems
     let pairExprs ← pairs.mapM fun (w, g) => mkAppM ``Prod.mk #[w, g]
-    let prodTy ← mkAppM ``Prod #[mkConst ``Nat, ← mkAppM ``Gen #[α]]
+    let prodTy ← mkAppM ``Prod #[mkConst ``Nat, ← mkAppM ``PGen #[α]]
     let gs' ← mkListLit prodTy pairExprs
     -- the `frequency` side-goal `0 < Σ wⱼ(d)`, from the first weight's positivity alone
     let hw0 ← mkTunedWeightPos θ offset depth
     let tl ← mkListLit prodTy pairExprs.tail!
     let h' ← mkAppM ``sum_fst_pos_cons #[α, ws.head!, elems.head!, tl, hw0]
-    let e' ← mkAppM ``Gen.frequency #[gs', h']
+    let e' ← mkAppM ``PGen.frequency #[gs', h']
     let hpos ← mkAllPosTuning α θ pairs idxs depth
     let hsnd ← mkEqRefl gs
     let proof ← mkAppM ``support_oneOf_reweight #[α, gs, gs', hsnd, hpos, h, h']
@@ -458,13 +458,13 @@ inductive OptPass | main | flatten (distribute : Bool)
 /-! ## Proof-carrying traversal -/
 
 /-- `support e`. -/
-private def mkSupport (e : Expr) : MetaM Expr := mkAppM ``Gen.support #[e]
+private def mkSupport (e : Expr) : MetaM Expr := mkAppM ``PGen.support #[e]
 
 /-- `rfl : support e = support e`. -/
 private def mkSupportRefl (e : Expr) : MetaM Expr := do mkEqRefl (← mkSupport e)
 
 /-- `fun xs => rfl : ∀ xs, support (f xs) = support (f xs)`, for an unchanged (possibly
-multi-argument) binder `f` whose codomain is a `Gen`. -/
+multi-argument) binder `f` whose codomain is a `PGen`. -/
 private def mkBinderRefl (f : Expr) : MetaM Expr := do
   forallTelescope (← inferType f) fun xs _ => do
     mkLambdaFVars xs (← mkSupportRefl (f.beta xs))
@@ -508,7 +508,7 @@ less-well-tuned, never blown up, and support is preserved either way. Requires a
 private def distributeChoiceDite? (depth : Option (Expr × Name)) (e : Expr) :
     MetaM (Option (Expr × Expr)) := do
   let some (_, typeName) := depth | return none
-  let_expr Gen.pick _ x y := e | return none
+  let_expr PGen.pick _ x y := e | return none
   let holes ← baseCtorHoles (typeName.appendAfter "F")
   -- `dite P inst (fun h => mkT h) (fun h => mkF h)`, preserving the original decidability instance.
   let mkDite (P inst : Expr) (mkT mkF : Expr → MetaM Expr) : MetaM Expr := do
@@ -580,18 +580,18 @@ private def chainProofs (ps : Array (Option Expr)) : MetaM (Option Expr) :=
     | some a, none => pure (some a)
     | some a, some b => some <$> mkEqTrans a b
 
-/-- Does `e` contain a `Gen` — directly, under binders, or in a `List`/`Prod`? Used by the guard in
+/-- Does `e` contain a `PGen` — directly, under binders, or in a `List`/`Prod`? Used by the guard in
 `optimizeChildren` to tell "nothing to descend into" from "silently skipped a child".
 
 The `List`/`Prod` cases change no answer today (`oneOf`/`frequency` are the only list-carrying heads,
 and the guard exempts them by name). They are there so the *next* such combinator trips the guard
-instead of slipping past a check that saw `List` at the head and concluded "no `Gen` here". -/
+instead of slipping past a check that saw `List` at the head and concluded "no `PGen` here". -/
 private partial def isGenValued (e : Expr) : MetaM Bool := do
   forallTelescopeReducing (← inferType e) fun _ body => go body
 where
   go (ty : Expr) : MetaM Bool := do
     match ty.getAppFn.constName? with
-    | some ``Gen => return true
+    | some ``PGen => return true
     | some ``List => return (← ty.getAppArgs[0]?.mapM go).getD false
     | some ``Prod => ty.getAppArgs.anyM go
     | _ => return false
@@ -632,7 +632,7 @@ Without this, `optimizeChildren` skipped every `oneOf`, so nothing nested inside
 was ever visited — which is why `installTuning` could not reach a choice under a choice. -/
 private partial def optimizeOneOfChildren? (pass : OptPass) (table : Array CongrRule) (depth : Depth)
     (e : Expr) : MetaM (Option OptResult) := do
-  let_expr Gen.oneOf α gs h := e | return none
+  let_expr PGen.oneOf α gs h := e | return none
   -- The flatten pass builds every branch list with `mkListLit`, so a non-literal one would mean
   -- silently skipping a choice's branches. Throw rather than assert it cannot happen.
   let some elems := listLitElems? gs
@@ -642,7 +642,7 @@ private partial def optimizeOneOfChildren? (pass : OptPass) (table : Array Congr
   let rs ← elems.mapM (optimizeReduced pass table depth)
   unless rs.any (·.proof?.isSome) do return none
   let elems' := rs.map (·.expr)
-  let genα ← mkAppM ``Gen #[α]
+  let genα ← mkAppM ``PGen #[α]
   let gs' ← mkListLit genα elems'
   -- `gs'` is a literal cons, so its nonemptiness is exactly `List.cons_ne_nil`.
   let h' ← mkAppOptM ``List.cons_ne_nil #[genα, elems'.head!, ← mkListLit genα elems'.tail!]
@@ -657,9 +657,9 @@ private partial def optimizeOneOfChildren? (pass : OptPass) (table : Array Congr
       | none   => mkEqRefl (← mkSupport g)
     hgMap ← mkCongr (← mkCongrArg consFn pg) hgMap
   let hg ← mkExpectedTypeHint hgMap
-    (← mkEq (← mkAppM ``List.map #[← mkAppOptM ``Gen.support #[α], gs])
-            (← mkAppM ``List.map #[← mkAppOptM ``Gen.support #[α], gs']))
-  let e' ← mkAppOptM ``Gen.oneOf #[α, gs', h']
+    (← mkEq (← mkAppM ``List.map #[← mkAppOptM ``PGen.support #[α], gs])
+            (← mkAppM ``List.map #[← mkAppOptM ``PGen.support #[α], gs']))
+  let e' ← mkAppOptM ``PGen.oneOf #[α, gs', h']
   let proof ← mkAppOptM ``support_oneOf_congr #[α, gs, gs', hg, h, h']
   return some { expr := e', proof? := some proof }
 
@@ -674,7 +674,7 @@ Without this, a hand-written `frequency` in a reducible position was silently sk
 nested inside one was ever visited. -/
 private partial def optimizeFrequencyChildren? (pass : OptPass) (table : Array CongrRule)
     (depth : Depth) (e : Expr) : MetaM (Option OptResult) := do
-  let_expr Gen.frequency α gs h := e | return none
+  let_expr PGen.frequency α gs h := e | return none
   -- As in `optimizeOneOfChildren?`: a non-literal list would mean silently skipping the branches.
   let some elems := listLitElems? gs
     | throwError "optimizer: `frequency` with a non-literal branch list; cannot descend into\
@@ -687,7 +687,7 @@ private partial def optimizeFrequencyChildren? (pass : OptPass) (table : Array C
         cannot descend into{indentExpr p}"
   let rs ← pairs.mapM fun (_, g) => optimizeReduced pass table depth g
   unless rs.any (·.proof?.isSome) do return none
-  let genα ← mkAppM ``Gen #[α]
+  let genα ← mkAppM ``PGen #[α]
   let prodTy ← mkAppM ``Prod #[mkConst ``Nat, genα]
   let pairs' ← (pairs.zip rs).mapM fun ((w, _), r) => mkAppM ``Prod.mk #[w, r.expr]
   let gs' ← mkListLit prodTy pairs'
@@ -717,18 +717,18 @@ private partial def optimizeFrequencyChildren? (pass : OptPass) (table : Array C
     mkLambdaFVars #[p] (← mkAppM ``Prod.mk #[fst, snd])
   let hg ← mkExpectedTypeHint hgMap
     (← mkEq (← mkAppM ``List.map #[mapFn, gs]) (← mkAppM ``List.map #[mapFn, gs']))
-  let e' ← mkAppOptM ``Gen.frequency #[α, gs', h']
+  let e' ← mkAppOptM ``PGen.frequency #[α, gs', h']
   let proof ← mkAppOptM ``support_frequency_congr #[α, gs, gs', hg, h, h']
   return some { expr := e', proof? := some proof }
 
 /-- Optimize the children of `e` and reassemble, proving the result has the same `support` via the
 `@[gen_congr]` lemma registered for `e`'s head constant. No head rewrite is attempted here. This
-single generic case subsumes every `Gen` constructor and recursion-scheme combinator — except
+single generic case subsumes every `PGen` constructor and recursion-scheme combinator — except
 `oneOf`/`frequency`, whose dependent side-condition proofs it cannot rebuild (see
 `optimizeOneOfChildren?` / `optimizeFrequencyChildren?`).
 
 If `e`'s head has no registered congruence lemma, skipping is correct *only* when there is nothing
-to descend into; if `e` carries a `Gen`-valued argument we would silently drop an optimization (and
+to descend into; if `e` carries a `PGen`-valued argument we would silently drop an optimization (and
 potentially mask synthesis residue), so we fail loudly instead — the fix is to tag that head's
 support-congruence lemma `@[gen_congr]`. -/
 private partial def optimizeChildren (pass : OptPass) (table : Array CongrRule) (depth : Depth)
@@ -741,7 +741,7 @@ private partial def optimizeChildren (pass : OptPass) (table : Array CongrRule) 
   let entering := (unfoldNameMap (← getEnv))[head]?
   let some (_, congrName, diff) := table.find? (·.1 == head)
     | do
-        -- Compiler-generated eliminators (matchers, recursors) carry Gen-valued arms but are
+        -- Compiler-generated eliminators (matchers, recursors) carry PGen-valued arms but are
         -- not descended into structurally; don't flag them.
         let isRec := match (← getEnv).find? head with
           | some (.recInfo _) => true
@@ -753,11 +753,11 @@ private partial def optimizeChildren (pass : OptPass) (table : Array CongrRule) 
         -- than decline on a shape they cannot descend into, so "reached here" really does mean
         -- "nothing to rewrite". Do not widen this exemption to a third combinator without giving
         -- it a descent first.
-        let listCarrier := head == ``Gen.oneOf || head == ``Gen.frequency
-        -- For any *other* combinator, a Gen-valued argument with no congruence lemma means we would
+        let listCarrier := head == ``PGen.oneOf || head == ``PGen.frequency
+        -- For any *other* combinator, a PGen-valued argument with no congruence lemma means we would
         -- silently drop an optimization (and could mask synthesis residue): fail loudly instead.
         if !auxiliary && !listCarrier && (← e.getAppArgs.anyM isGenValued) then
-          throwError "optimizer: `{head}` has a Gen-valued argument but no `@[gen_congr]` \
+          throwError "optimizer: `{head}` has a PGen-valued argument but no `@[gen_congr]` \
             congruence lemma to descend through it; tag its support-congruence lemma `@[gen_congr]`"
         return { expr := e, proof? := none }
   let args := e.getAppArgs
@@ -774,8 +774,8 @@ private partial def optimizeChildren (pass : OptPass) (table : Array CongrRule) 
   let node' := mkAppN e.getAppFn newArgs
   return { expr := node', proof? := some (← mkCongrProof congrName e node' hyps) }
 
-/-- Optimize a child argument: under any leading binders (`f : dom₁ → … → Gen _`) when it is a
-function, or directly when it is a plain `Gen`. Returns the rebuilt argument and, when something
+/-- Optimize a child argument: under any leading binders (`f : dom₁ → … → PGen _`) when it is a
+function, or directly when it is a plain `PGen`. Returns the rebuilt argument and, when something
 changed, a proof `∀ xs, support (arg xs) = support (arg' xs)`.
 
 `entering` is set when this argument is a registered unfold's step, in which case its binder 0 is
@@ -821,7 +821,7 @@ private partial def tryHeadRewrite (pass : OptPass) (depth : Depth) (e : Expr) :
 
 end
 
-/-- Optimize a raw `Gen` term, returning the optimized term together with a proof that its
+/-- Optimize a raw `PGen` term, returning the optimized term together with a proof that its
 `support` equals that of the input. Runs the `.main` (assume-floating / monad-law) pass to a fixed
 point first, then the `.flatten` pass, which collapses the `pick` chains the main pass leaves (and
 may have extended, via bind-distribution) into single uniform `oneOf` nodes.

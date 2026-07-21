@@ -1,4 +1,4 @@
-import Palamedes.Gen
+import Palamedes.PGen
 
 /-!
 # Statistics for Palamedes generators
@@ -25,9 +25,9 @@ namespace Palamedes
 
 /-- Computable failure for the statistics interpretation: a terminating failed draw, counted
     separately from fuel exhaustion. -/
-instance : Fail GenStats.StatGen := ⟨throw (.failure "Gen.empty")⟩
+instance : Fail GenStats.StatGen := ⟨throw (.failure "PGen.empty")⟩
 
 /-- Interpret `g` at the statistics monad, for use with `#genstats`. -/
-def toStatGen (g : Gen α) : GenStats.StatGen α := g.run
+def toStatGen (g : PGen α) : GenStats.StatGen α := g.run
 
 end Palamedes

@@ -34,7 +34,7 @@ namespace Palamedes
 /-! ## Failure-free combinators
 
 The `TGen` mirror of the core generator algebra. Each is the obvious failure-free term, and each
-coerces (`TGen.toGen`) to the corresponding `Gen` combinator definitionally — that is what makes the
+coerces (`TGen.toGen`) to the corresponding `PGen` combinator definitionally — that is what makes the
 totality witnesses below close by `rfl`. -/
 
 namespace TGen
@@ -52,14 +52,14 @@ def frequency (gs : List (Nat × TGen α)) (h : 0 < (gs.map Prod.fst).sum := by 
     _root_.frequency (gs.map fun p => (p.1, fun _ => p.2.run))
       (by simpa [List.map_map, Function.comp_def] using h)⟩
 
-/-- `Gen`'s `Functor.map` is the `Monad` default (`bind` then `pure`), so the witness must mirror that
+/-- `PGen`'s `Functor.map` is the `Monad` default (`bind` then `pure`), so the witness must mirror that
 shape rather than `G`'s native `<$>` to coerce definitionally. -/
 protected def map (f : α → β) (x : TGen α) : TGen β :=
   ⟨fun {_G} _ => x.run >>= fun a => Pure.pure (f a)⟩
 
 /-! ### Mirror equations
 
-Each `TGen` combinator coerces to its `Gen` twin. These used to be inlined as `by ext; rfl` inside
+Each `TGen` combinator coerces to its `PGen` twin. These used to be inlined as `by ext; rfl` inside
 every totality lemma; with `total` carrying data the witness and the equation are built separately,
 so the equations are stated once here and the lemmas below cite them. -/
 
@@ -69,21 +69,21 @@ so the equations are stated once here and the lemmas below cite them. -/
     (TGen.bind x f).toGen = x.toGen >>= fun a => (f a).toGen := by ext; rfl
 
 @[simp] theorem toGen_pick (x y : TGen α) :
-    (TGen.pick x y).toGen = Gen.pick x.toGen y.toGen := by ext; rfl
+    (TGen.pick x y).toGen = PGen.pick x.toGen y.toGen := by ext; rfl
 
 @[simp] theorem toGen_map (f : α → β) (x : TGen α) :
     (TGen.map f x).toGen = f <$> x.toGen := by ext; rfl
 
 @[simp] theorem toGen_frequency (gs : List (Nat × TGen α)) (h) :
     (TGen.frequency gs h).toGen
-      = Gen.frequency (gs.map fun p => (p.1, p.2.toGen))
+      = PGen.frequency (gs.map fun p => (p.1, p.2.toGen))
           (by simpa [List.map_map, Function.comp_def] using h) := by
   ext
-  simp only [TGen.toGen, TGen.frequency, Gen.frequency, List.map_map, Function.comp_def]
+  simp only [TGen.toGen, TGen.frequency, PGen.frequency, List.map_map, Function.comp_def]
 
 end TGen
 
-namespace Gen
+namespace PGen
 
 /-- A generator is `total` when it factors through the failure-free interface `TGen`: a failure-free
 witness together with a proof that its coercion is `g`. Equivalently, `g` is definable without
@@ -91,17 +91,17 @@ witness together with a proof that its coercion is `g`. Equivalently, `g` is def
 
 This is *data*, not a proposition — see the module docstring. `.val` is the witness the synthesizer
 emits from; `.property` is what carries a support fact across to it. -/
-def total (g : Gen α) : Type 1 := {t : TGen α // t.toGen = g}
+def total (g : PGen α) : Type 1 := {t : TGen α // t.toGen = g}
 
-def totalList (gs : List (Gen α)) : Type 1 := {ts : List (TGen α) // ts.map TGen.toGen = gs}
+def totalList (gs : List (PGen α)) : Type 1 := {ts : List (TGen α) // ts.map TGen.toGen = gs}
 
-def totalWeighted (gs : List (Nat × Gen α)) : Type 1 :=
+def totalWeighted (gs : List (Nat × PGen α)) : Type 1 :=
   {ts : List (Nat × TGen α) // ts.map (fun p => (p.1, p.2.toGen)) = gs}
 
 /-- `frequency` is determined by its branch list: its side condition is a `Prop`, so two calls with
 the same list are equal whatever proofs they carry. Needed because `rw`ing the branch list directly
 cannot build a motive — the side-condition argument's *type* mentions the list. -/
-theorem frequency_congr {gs gs' : List (Nat × Gen α)} (hg : gs = gs') {h h'} :
+theorem frequency_congr {gs gs' : List (Nat × PGen α)} (hg : gs = gs') {h h'} :
     frequency gs h = frequency gs' h' := by
   subst hg; rfl
 
@@ -137,17 +137,17 @@ def total_pick
     total (pick x y) :=
   ⟨TGen.pick hx.val hy.val, by rw [TGen.toGen_pick, hx.property, hy.property]⟩
 
-def totalList_nil : totalList ([] : List (Gen α)) := ⟨[], rfl⟩
+def totalList_nil : totalList ([] : List (PGen α)) := ⟨[], rfl⟩
 
-def totalList_cons {x : Gen α} {gs : List (Gen α)}
+def totalList_cons {x : PGen α} {gs : List (PGen α)}
     (hx : total x)
     (hgs : totalList gs) :
     totalList (x :: gs) :=
   ⟨hx.val :: hgs.val, by rw [List.map_cons, hx.property, hgs.property]⟩
 
-def totalWeighted_nil : totalWeighted ([] : List (Nat × Gen α)) := ⟨[], rfl⟩
+def totalWeighted_nil : totalWeighted ([] : List (Nat × PGen α)) := ⟨[], rfl⟩
 
-def totalWeighted_cons {w : Nat} {g : Gen α} {gs : List (Nat × Gen α)}
+def totalWeighted_cons {w : Nat} {g : PGen α} {gs : List (Nat × PGen α)}
     (hg : total g)
     (hgs : totalWeighted gs) :
     totalWeighted ((w, g) :: gs) :=
@@ -158,21 +158,21 @@ def totalWeighted_cons {w : Nat} {g : Gen α} {gs : List (Nat × Gen α)}
 /-- The weights of the witness list match those of `gs`, since `toGen` only touches the generator
 component. This is the side condition `TGen.frequency` needs, and it has to be available *before* the
 proof component so that the witness itself can be built. -/
-theorem totalWeighted_fst {gs : List (Nat × Gen α)} (hgs : totalWeighted gs) :
+theorem totalWeighted_fst {gs : List (Nat × PGen α)} (hgs : totalWeighted gs) :
     hgs.val.map Prod.fst = gs.map Prod.fst := by
   -- `conv_rhs`, not a bare `rw`: `hgs`'s own type mentions `gs`, so rewriting it everywhere makes
   -- the motive ill-typed.
   conv_rhs => rw [← hgs.property]
   simp [List.map_map, Function.comp_def]
 
-def total_frequency {gs : List (Nat × Gen α)} {h}
+def total_frequency {gs : List (Nat × PGen α)} {h}
     (hgs : totalWeighted gs) :
     total (frequency gs h) :=
   ⟨TGen.frequency hgs.val (by rw [totalWeighted_fst hgs]; exact h), by
     rw [TGen.toGen_frequency]
     exact frequency_congr hgs.property⟩
 
-def total_oneOf {gs : List (Gen α)} {h}
+def total_oneOf {gs : List (PGen α)} {h}
     (hgs : totalList gs) :
     total (oneOf gs h) :=
   total_frequency (gs := gs.map fun g => (1, g))
@@ -186,8 +186,8 @@ def total_map
   ⟨TGen.map f hx.val, by rw [TGen.toGen_map, hx.property]⟩
 
 def total_dite
-    {g₁ : b = true → Gen α}
-    {g₂ : ¬ (b = true) → Gen α}
+    {g₁ : b = true → PGen α}
+    {g₂ : ¬ (b = true) → PGen α}
     (h₁ : (h : b = true) → total (g₁ h))
     (h₂ : (h : ¬(b = true)) → total (g₂ h))
     : total (if h : b then g₁ h else g₂ h) :=
@@ -212,25 +212,25 @@ witnesses as direct `⟨_, _⟩` buys. -/
 
 @[twitness] theorem val_pure (a : α) : (total_pure a).val = TGen.pure a := rfl
 
-@[twitness] theorem val_bind {x : Gen α} {f : α → Gen β}
+@[twitness] theorem val_bind {x : PGen α} {f : α → PGen β}
     (hx : total x) (hf : ∀ a, total (f a)) :
     (total_bind hx hf).val = TGen.bind hx.val (fun a => (hf a).val) := rfl
 
-@[twitness] theorem val_pick {x y : Gen α} (hx : total x) (hy : total y) :
+@[twitness] theorem val_pick {x y : PGen α} (hx : total x) (hy : total y) :
     (total_pick hx hy).val = TGen.pick hx.val hy.val := rfl
 
-@[twitness] theorem val_map {x : Gen α} {f : α → β} (hx : total x) :
+@[twitness] theorem val_map {x : PGen α} {f : α → β} (hx : total x) :
     (total_map (f := f) hx).val = TGen.map f hx.val := rfl
 
 @[twitness] theorem val_listNil : (totalList_nil (α := α)).val = [] := rfl
 
-@[twitness] theorem val_listCons {x : Gen α} {gs : List (Gen α)}
+@[twitness] theorem val_listCons {x : PGen α} {gs : List (PGen α)}
     (hx : total x) (hgs : totalList gs) :
     (totalList_cons hx hgs).val = hx.val :: hgs.val := rfl
 
 @[twitness] theorem val_weightedNil : (totalWeighted_nil (α := α)).val = [] := rfl
 
-@[twitness] theorem val_weightedCons {w : Nat} {g : Gen α} {gs : List (Nat × Gen α)}
+@[twitness] theorem val_weightedCons {w : Nat} {g : PGen α} {gs : List (Nat × PGen α)}
     (hg : total g) (hgs : totalWeighted gs) :
     (totalWeighted_cons (w := w) hg hgs).val = (w, hg.val) :: hgs.val := rfl
 
@@ -241,11 +241,11 @@ attribute [twitness] List.map_cons List.map_nil
 /-- `Eq.rec` transports a `total g₁` to a `total g₂`, but the witness itself is a `TGen α` either
 way, so `.val` is invariant under the transport. The `totality` tactic's `split` step introduces
 these casts around each match arm; without this the projection stops there. -/
-@[twitness] theorem val_eqRec {g₁ g₂ : Gen α} (h : g₁ = g₂) (t : total g₁) :
+@[twitness] theorem val_eqRec {g₁ g₂ : PGen α} (h : g₁ = g₂) (t : total g₁) :
     (h ▸ t).val = t.val := by cases h; rfl
 
 end Total
 
-end Gen
+end PGen
 
 end Palamedes

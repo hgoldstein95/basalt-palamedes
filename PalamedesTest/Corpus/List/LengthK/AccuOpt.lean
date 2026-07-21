@@ -1,6 +1,6 @@
 import Palamedes.Synthesizer
 
-open Palamedes Palamedes.Gen Palamedes.Gen.CorrectGen
+open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace LengthKAccuOpt
 
@@ -13,7 +13,7 @@ def lengthAccuOpt (xs : List α) : Option Nat :=
     xs
     ()
 
-def genLengthKAccuOpt {k : Nat} : Gen (List Nat) := by
+def genLengthKAccuOpt {k : Nat} : PGen (List Nat) := by
   generator_search (fun xs => lengthAccuOpt xs = some k)
 
 end LengthKAccuOpt
