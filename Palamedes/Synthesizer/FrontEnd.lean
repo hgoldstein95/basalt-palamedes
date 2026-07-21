@@ -285,12 +285,12 @@ def extractWitness (e : Expr) : MetaM Expr := do
     ``Palamedes.TGen.pure, ``Palamedes.TGen.bind, ``Palamedes.TGen.pick,
     ``Palamedes.TGen.frequency, ``Palamedes.TGen.map, ``Palamedes.TGen.toGen]
   let names := basis ++ Palamedes.totalLemmas (← getEnv)
-  -- Start from the `twitness` set (the `.val`/`.run` equations, including the one that pushes `.val`
+  -- Start from the `totality_witness` set (the `.val`/`.run` equations, including the one that pushes `.val`
   -- through the `Eq.rec` the totality tactic's `split` leaves around each match arm), then add the
   -- constructors to delta-unfold. `List.map_cons`/`_nil` are needed so the branch lists of a
   -- `frequency` actually compute — otherwise `.run` stays stuck under a `List.map` lambda.
-  let some twExt ← getSimpExtension? `twitness
-    | throwError "simp extension `twitness` not found"
+  let some twExt ← getSimpExtension? `totality_witness
+    | throwError "simp extension `totality_witness` not found"
   let mut thms ← twExt.getTheorems
   for n in names do
     thms ← thms.addDeclToUnfold n
@@ -406,7 +406,7 @@ def generatorSearchElab
     -- The pipeline, spelled out as the tactics a reader could run by hand. The tail differs per
     -- declared shape, because `packageFor` emits a different term for each: the carrier directly,
     -- the `TGen` witness projected, or `totalize`. A single template would be type-incorrect for
-    -- two of the three. What this does *not* show is `extractWitness`'s `twitness` normalization,
+    -- two of the three. What this does *not* show is `extractWitness`'s `totality_witness` normalization,
     -- which only makes the projected term readable — the pasted version is defeq, just denser.
     let common := s!"-- generator_search ({← ppExpr mpred})
   let cg : CorrectGen ({← ppExpr mpred}) := by

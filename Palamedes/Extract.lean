@@ -19,4 +19,4 @@ generator itself. Exactly analogous to `extract`, which pulls a `PGen` out of a 
 Every one holds by `rfl`, which is precisely what the data-first shape of the `total_*` defs buys:
 tactics in the data path would leave an `Eq.rec` that blocks the projection.
 -/
-register_simp_attr twitness
+register_simp_attr totality_witness

@@ -217,38 +217,38 @@ congruence — see `List.total_unfold`. -/
 the emitted definition reads as a generator. All hold by `rfl` — that is exactly what writing the
 witnesses as direct `⟨_, _⟩` buys. -/
 
-@[twitness] theorem val_pure (a : α) : (total_pure a).val = TGen.pure a := rfl
+@[totality_witness] theorem val_pure (a : α) : (total_pure a).val = TGen.pure a := rfl
 
-@[twitness] theorem val_bind {x : PGen α} {f : α → PGen β}
+@[totality_witness] theorem val_bind {x : PGen α} {f : α → PGen β}
     (hx : total x) (hf : ∀ a, total (f a)) :
     (total_bind hx hf).val = TGen.bind hx.val (fun a => (hf a).val) := rfl
 
-@[twitness] theorem val_pick {x y : PGen α} (hx : total x) (hy : total y) :
+@[totality_witness] theorem val_pick {x y : PGen α} (hx : total x) (hy : total y) :
     (total_pick hx hy).val = TGen.pick hx.val hy.val := rfl
 
-@[twitness] theorem val_map {x : PGen α} {f : α → β} (hx : total x) :
+@[totality_witness] theorem val_map {x : PGen α} {f : α → β} (hx : total x) :
     (total_map (f := f) hx).val = TGen.map f hx.val := rfl
 
-@[twitness] theorem val_listNil : (totalList_nil (α := α)).val = [] := rfl
+@[totality_witness] theorem val_listNil : (totalList_nil (α := α)).val = [] := rfl
 
-@[twitness] theorem val_listCons {x : PGen α} {gs : List (PGen α)}
+@[totality_witness] theorem val_listCons {x : PGen α} {gs : List (PGen α)}
     (hx : total x) (hgs : totalList gs) :
     (totalList_cons hx hgs).val = hx.val :: hgs.val := rfl
 
-@[twitness] theorem val_weightedNil : (totalWeighted_nil (α := α)).val = [] := rfl
+@[totality_witness] theorem val_weightedNil : (totalWeighted_nil (α := α)).val = [] := rfl
 
-@[twitness] theorem val_weightedCons {w : Nat} {g : PGen α} {gs : List (Nat × PGen α)}
+@[totality_witness] theorem val_weightedCons {w : Nat} {g : PGen α} {gs : List (Nat × PGen α)}
     (hg : total g) (hgs : totalWeighted gs) :
     (totalWeighted_cons (w := w) hg hgs).val = (w, hg.val) :: hgs.val := rfl
 
 -- `TGen.frequency`'s body maps over its branch list, so the list has to compute before the
 -- per-branch `.run` can project.
-attribute [twitness] List.map_cons List.map_nil
+attribute [totality_witness] List.map_cons List.map_nil
 
 /-- `Eq.rec` transports a `total g₁` to a `total g₂`, but the witness itself is a `TGen α` either
 way, so `.val` is invariant under the transport. The `totality` tactic's `split` step introduces
 these casts around each match arm; without this the projection stops there. -/
-@[twitness] theorem val_eqRec {g₁ g₂ : PGen α} (h : g₁ = g₂) (t : total g₁) :
+@[totality_witness] theorem val_eqRec {g₁ g₂ : PGen α} (h : g₁ = g₂) (t : total g₁) :
     (h ▸ t).val = t.val := by cases h; rfl
 
 end Total

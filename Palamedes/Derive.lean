@@ -505,12 +505,12 @@ def genUnfoldFamily (ctx : Ctx) : CommandElabM Unit := do
         ($f : Nat → $β → Palamedes.PGen $baseβ) ($b : $β) ($d₀ : Nat)
         ($G : Type → Type) [Gen $G] [Palamedes.Fail $G] :
         ($unfoldRef $f $b $d₀).run (G := $G) = $goRef (fun $d $x => ($f $d $x).run) $d₀ $b := rfl))
-  -- The `TGen` twin of `run_unfold`. Tagged `@[twitness]` rather than `@[simp]`: this is what lets
+  -- The `TGen` twin of `run_unfold`. Tagged `@[totality_witness]` rather than `@[simp]`: this is what lets
   -- the emitted generator's recursion unfold from the totality witness back to `unfoldGo`, so a
   -- synthesized generator reads as a generator rather than as a proof term. No `Fail` constraint —
   -- that is the whole point of `TGen`.
   addCmd (← `(command|
-    @[twitness] theorem $(ctx.declId "trun_unfold"):ident $uBinders:bracketedBinder*
+    @[totality_witness] theorem $(ctx.declId "trun_unfold"):ident $uBinders:bracketedBinder*
         ($f : Nat → $β → Palamedes.TGen $baseβ) ($b : $β) ($d₀ : Nat)
         ($G : Type → Type) [Gen $G] :
         ($tgenRef $f $b $d₀).run (G := $G) = $goRef (fun $d $x => ($f $d $x).run) $d₀ $b := rfl))
