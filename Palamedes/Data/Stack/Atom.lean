@@ -12,6 +12,13 @@ import Palamedes.RuleSets
 import Palamedes.CaseSplit
 import Palamedes.Data.Nat
 
+/-!
+# `Label` and `Atom` primitives
+
+The IFC stack machine's atoms (adapted from QuickChick's ifc-basic example): `arbLabel`, its
+support/totality facts, and the synthesis rules `s_arbLabel`, `s_caseLabel`, and `s_arbAtom`.
+-/
+
 section TypeDef
 /- adapted from https://github.com/QuickChick/QuickChick/tree/master/examples/ifc-basic -/
 

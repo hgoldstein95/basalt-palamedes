@@ -8,6 +8,15 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 import Palamedes.Synthesizer
 import Palamedes.DeriveTuning
 
+/-!
+# Corpus: well-typed STLC terms
+
+Synthesizes `genWellTyped : PGen Term` from `isWellTyped`, the existential well-typedness
+predicate over `getType`; a growing-seed generator, so `derive_tuning` and a decaying schedule are
+required for a.s. termination. Runs near a raised `maxHeartbeats`; distribution pinned by
+`Optimizer/Schedule.lean`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace WellTyped

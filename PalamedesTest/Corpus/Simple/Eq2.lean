@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: `= 2`
+
+Synthesizes `genEq2 : PGen Nat` for the trivial predicate `(· = 2)`. Pins the emitted term
+(`pure 2`) under `#guard_msgs`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 /--

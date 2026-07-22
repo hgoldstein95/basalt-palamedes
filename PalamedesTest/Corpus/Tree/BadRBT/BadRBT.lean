@@ -8,6 +8,14 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 import Palamedes.Synthesizer
 import Palamedes.Data.Color
 
+/-!
+# Corpus: red-black tree without the BST condition
+
+Synthesizes `genBadRBT : PGen (Palamedes.Tree (Color × Nat))` from `isBadRBT`, which conjoins
+`isRR` (no red-red violation) and `isBH` (equal black height) but omits the BST ordering
+condition; runs near a raised `maxHeartbeats`/`maxRecDepth`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace BadRBT

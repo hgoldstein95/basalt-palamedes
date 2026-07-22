@@ -12,6 +12,14 @@ import Palamedes.SomeSupport
 import Batteries.Data.List.Lemmas
 import Mathlib.Data.List.Basic
 
+/-!
+# Drawing from a list
+
+`elements xs h` draws uniformly from a nonempty list — how a variable is picked from an STLC
+context. With its support/`someSupport` facts, the synthesis rule `s_elements_partial`, and its
+totality witness.
+-/
+
 namespace Palamedes
 
 open Palamedes.PGen

@@ -8,6 +8,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 import Palamedes.Derive
 import Palamedes.CaseSplit
 
+/-!
+# The STLC `Ty` datatype layer
+
+STLC types, `derive_palamedes`d, plus a hand-tuned `arbTy` on top of the derived layer with its
+case-analysis synthesis rules (`s_arbTy`, `s_caseTy`) and totality facts.
+-/
+
 section TypeDef
 
 inductive Ty : Type where

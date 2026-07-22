@@ -7,6 +7,14 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: increasing by one (fold)
+
+Synthesizes `genIncreasingByOneFold : PGen (List Nat)` for `isIncreasingByOneFold`, the
+fold-spelled twin of `isIncreasingByOne` via `List.fold`, exercising a different search path than
+the structurally recursive sibling.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace IncreasingByOneListFold

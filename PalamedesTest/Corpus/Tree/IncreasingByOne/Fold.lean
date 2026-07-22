@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: root-to-leaf labels increasing by one, fold-spelled
+
+Synthesizes `genIncreasingByOneFold : PGen (Palamedes.Tree Nat)` from `isIncreasingByOneFold`, the
+fold-spelled twin of `isIncreasingByOne`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace IncreasingByOneTreeFold

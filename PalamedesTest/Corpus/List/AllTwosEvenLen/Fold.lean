@@ -7,6 +7,14 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: all-twos and even length (fold)
+
+Synthesizes `genAllTwosEvenLenFold : PGen (List Nat)` for `isAllTwosEvenLenFold`, the fold-spelled
+twin of `isAllTwosEvenLen` via `List.fold`, exercising a different search path than the
+structurally recursive sibling.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace AllTwosEvenLenFold

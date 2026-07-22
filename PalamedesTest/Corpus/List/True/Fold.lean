@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: vacuous list predicate (fold)
+
+Synthesizes `genTrueFold : PGen (List Nat)` for `isTrueFold`, the fold-spelled twin of `isTrue` via
+`List.fold`, exercising a different search path than the structurally recursive sibling.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace TrueFold

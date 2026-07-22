@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: all-evens list (structural)
+
+Synthesizes `genAllEvens : PGen (List Nat)` for `isAllEvens`, defined by structural recursion on
+the list.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace AllEvens

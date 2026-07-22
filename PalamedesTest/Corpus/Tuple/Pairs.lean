@@ -7,6 +7,15 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: pairs
+
+Synthesizes `PGen (Nat × Nat)` generators for predicates over pairs: a fixed first component
+(`genFstIsTwo`), both fixed (`genFixedPair`), one component depending on the other (`genSuccPair`,
+`genOffByOne`), and equality of the two (`genDiagonal`). `genSuccPair` pins the emitted term under
+`#guard_msgs`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 def genFstIsTwo : PGen (Nat × Nat) := by

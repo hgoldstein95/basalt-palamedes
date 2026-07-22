@@ -8,6 +8,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 import Palamedes.Synthesizer
 import Palamedes.Sample
 
+/-!
+# Corpus: red-black tree without the BST condition, fold-spelled
+
+Synthesizes `genRBTFold : PGen (Palamedes.Tree (Color × Nat))` from `isRBTFold`, the fold-spelled
+twin of `isBadRBT`; runs near a raised `maxHeartbeats`/`maxRecDepth`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace BadRBTFold

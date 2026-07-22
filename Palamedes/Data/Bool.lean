@@ -12,6 +12,13 @@ import Palamedes.RuleSets
 import Palamedes.CaseSplit
 import Palamedes.SomeSupport
 
+/-!
+# `Bool` primitives
+
+`arbBool`, its support/`someSupport`/totality facts, and the synthesis rules `s_arbBool` and
+`s_caseBool`.
+-/
+
 namespace Palamedes
 
 open Palamedes.PGen

@@ -7,6 +7,14 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: all-twos list (fold)
+
+Synthesizes `genAllTwosFold : PGen (List Nat)` for `isAllTwosFold`, the fold-spelled twin of
+`isAllTwos` via `List.fold`, exercising a different search path than the structurally recursive
+sibling.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace AllTwosFold

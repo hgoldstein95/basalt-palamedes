@@ -51,8 +51,7 @@ coverage map. The ones worth knowing about:
   under `#guard_msgs` — respectively, that the optimizer's flatten pass really does produce a
   *uniform* choice, and that depth schedules really do make a recursive generator terminate.
 
-`PalamedesExamples/` is teaching material with no assertions; `PalamedesExperiments/` holds
-exploratory spikes and is excluded from the default build.
+`PalamedesExperiments/` holds exploratory spikes and is excluded from the default build.
 
 ## Usage
 

@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: well-typed STLC terms, fold-spelled
+
+Synthesizes `genWellTypedFold : PGen Term` from `isWellTypedFold`, the fold-spelled twin of
+`isWellTyped`; runs near a raised `maxHeartbeats`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 set_option maxHeartbeats 1000000

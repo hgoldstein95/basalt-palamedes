@@ -10,6 +10,12 @@ import Palamedes.CorrectGen
 import Palamedes.Optimizer
 import Palamedes.RuleSets
 
+/-!
+# Pair synthesis
+
+`s_arbTuple`, the rule that splits a predicate over `α × β` into componentwise generation.
+-/
+
 namespace Palamedes
 
 open Palamedes.PGen

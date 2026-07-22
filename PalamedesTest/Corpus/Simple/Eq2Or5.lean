@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: `= 2 ∨ = 5`
+
+Synthesizes `genEq2Or5 : PGen Nat` for `fun a => a = 2 ∨ a = 5`, a disjunctive predicate over two
+literal values.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 def genEq2Or5 : PGen Nat := by

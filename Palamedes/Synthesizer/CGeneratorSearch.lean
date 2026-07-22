@@ -23,6 +23,16 @@ import Palamedes.Data.Color
 import Palamedes.Data.Tuple
 import Palamedes.Util
 
+/-!
+# The synthesis search
+
+`cgenerator_search` (stage 1 of the pipeline) runs Aesop over the `synthesis` rule set to find an
+inhabitant of `CorrectGen P`. This file holds the normalization tactics the rules share, the
+registry-driven `normalize_and_apply_unfold` and case-split rules, and the deliberately *ordered*
+enumerated rules (see the `AesopRules` section). Most per-datatype rules are `@[aesop]`-tagged at
+their definition sites in `Data/` instead.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 section Guards

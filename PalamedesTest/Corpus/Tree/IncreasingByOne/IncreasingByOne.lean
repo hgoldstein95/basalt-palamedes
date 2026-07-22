@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: root-to-leaf labels increasing by one
+
+Synthesizes `genIncreasingByOne : PGen (Palamedes.Tree Nat)` from `isIncreasingByOne`, which holds
+when each node's label is one more than its parent's, starting from `0`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace IncreasingByOneTree

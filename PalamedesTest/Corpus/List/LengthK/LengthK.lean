@@ -7,6 +7,12 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: length k (structural)
+
+Synthesizes `genLengthK : PGen (List Nat)` for `List.length xs = k`, a symbolic target length.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace LengthK

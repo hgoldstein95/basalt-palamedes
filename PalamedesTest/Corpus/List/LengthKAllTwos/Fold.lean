@@ -7,6 +7,14 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: length k and all-twos (fold)
+
+Synthesizes `genLengthKAllTwosFold k : PGen (List Nat)` for `isLengthKAllTwosFold`, the
+fold-spelled twin of `isLengthKAllTwos` via `List.fold`, exercising a different search path than
+the structurally recursive sibling.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace LengthKAllTwosFold

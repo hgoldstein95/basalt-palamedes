@@ -7,6 +7,14 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: all-evens list (fold)
+
+Synthesizes `genAllEvensFold : PGen (List Nat)` for `isAllEvensFold`, the fold-spelled twin of
+`isAllEvens` via `List.fold`, exercising a different search path than the structurally recursive
+sibling.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace AllEvensFold

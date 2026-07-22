@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: length k and all-twos (structural)
+
+Synthesizes `genLengthKAllTwos k : PGen (List Nat)` for `isLengthKAllTwos`, the conjunction of a
+fixed length and `isAllTwos`.
+-/
+
 set_option maxHeartbeats 1000000
 
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen

@@ -7,6 +7,14 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: symbolic range (filtering)
+
+Synthesizes `genBetweenLoAndHi lo hi : G (Option Nat)` for `fun n => lo ≤ n ∧ n ≤ hi` with symbolic
+bounds, a filtering generator (Basalt-shaped `totalize` + `assume`). Pins the emitted term under
+`#guard_msgs`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 /--

@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: complete trees of a given depth, fold-spelled
+
+Synthesizes `genCompleteFold : PGen (Palamedes.Tree Nat)` from `isCompleteFold`, the fold-spelled
+twin of `isComplete`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace CompleteFold

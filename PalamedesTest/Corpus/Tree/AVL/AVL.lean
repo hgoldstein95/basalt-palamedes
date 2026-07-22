@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: AVL trees
+
+Synthesizes `genAVL : G (Option (Palamedes.Tree Nat))` from `isAVL`, which conjoins `isBST`
+(bounded-key BST shape) and `isBalanced` (height-bounded); a filtering generator.
+-/
+
 set_option maxHeartbeats 1000000
 
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen

@@ -8,7 +8,7 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 /-
 Aggregates the full example corpus. Compiling this module elaborates every example, each of which
 synthesizes a generator at elaboration time and *fails to compile* if synthesis fails — so this
-file is the de facto test suite. `PalamedesTest.ExtractionAudit` imports it to walk the corpus.
+file is the de facto test suite. `PalamedesTest/Extract.lean` imports it to walk the corpus.
 -/
 
 import PalamedesTest.Corpus.Simple.Eq2

@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: all-twos tree
+
+Synthesizes `genAllTwos : PGen (Palamedes.Tree Nat)` from the structurally recursive predicate
+`isAllTwos`, which holds when every node label is `2`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace AllTwosTree

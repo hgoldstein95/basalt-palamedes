@@ -8,13 +8,28 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 import Palamedes.PGen
 import Palamedes.Extract
 
+/-!
+# Correct generators
+
+`CorrectGen P` is a generator bundled with a proof that its support is exactly `P` — the object the
+deductive search constructs; synthesis is a proof search for an inhabitant. The `s_*` definitions
+here are the core combinators that search composes, each tagged `@[extract]` so the raw `PGen` can
+be projected back out afterwards.
+-/
+
 namespace Palamedes
 
 open Palamedes.PGen
 
 /-- A generator bundled with a proof that its `support` (via the `SPMF` interpretation) equals the
-target predicate `P`. This subtype is the object the deductive search actually constructs. -/
-@[implicit_reducible] def CorrectGen (P : α → Prop) := {g : PGen α // g.support = P}
+target predicate `P`.
+
+`CorrectGen` must be `implicit_reducible` so that the `extract` can apply to it correctly.  Since
+Lean 4.33, metavariable assignment compares types at `implicit` transparency — with a semireducible
+`CorrectGen` those rewrites silently stop firing (see `PalamedesTest/Extract.lean`).
+-/
+@[implicit_reducible]
+def CorrectGen (P : α → Prop) := {g : PGen α // g.support = P}
 
 namespace PGen
 
@@ -65,9 +80,8 @@ def duncurry
     ((a : α) → (b : β) → F (a, b)) → (p : α × β) → F p :=
   fun f p => f p.1 p.2
 
-/- Tactic-generated proof terms can wrap a `CorrectGen` in `id`, which blocks the `_val`
-rewrites (e.g. `(id (convert h g)).val`). `id` is reducible, but the `extract` simp set must
-remove it explicitly. -/
+/- Tactic-generated proof terms can wrap a `CorrectGen` in `id`, which blocks the `_val` rewrites
+(e.g. `(id (convert h g)).val`). -/
 attribute [extract] id_eq
 
 end CorrectGen

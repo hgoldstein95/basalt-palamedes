@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: non-empty trees, fold-spelled
+
+Synthesizes `genNonemptyFold : PGen (Palamedes.Tree Nat)` from `isNonemptyFold`, the fold-spelled
+twin of `isNonempty`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace NonemptyFold

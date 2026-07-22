@@ -10,19 +10,23 @@ import Palamedes.Support
 import Palamedes.OptimizeCongr
 import Palamedes.UnfoldStrategy
 
+/-!
+# Optimizer
+
+`optimizeGen` rewrites a raw synthesized `PGen`: it floats `assume`s up to the nearest choice
+point, discharges the satisfiable ones, and flattens `pick` trees into uniform `oneOf`s. Every
+rewrite composes a support-preservation proof through its twin `support_*` lemma, so the result
+carries `support <input> = support <output>`.  Also home to `buildTuned` and its `installTuning` pass,
+which reweight each `oneOf` to read a runtime `Tuning` — the `derive_tuning` command calls `buildTuned`
+to make a generator's weights addressable after the fact. The depth-decaying schedules that populate
+that `Tuning` live in `Palamedes.Schedule`.
+-/
+
 open Lean Elab Command Term Meta
 
 namespace Palamedes
 
 open Palamedes.PGen
-
-/-!
-# Correct-by-Construction Optimizer
-
-`optimizeGen` optimizes a generator, ideally with the goal of bubbling any `assume` statements up to
-the nearest choice point and removing unnecessary backtracking. The optimizer is
-correct-by-construction and builds a proof of correctness as it goes.
--/
 
 /-- A rewrite result: the rewritten expression `expr` and the twin `support_*` lemma that justifies
 it. The lemma's orientation (whether it is stated `support <original> = support expr` or the other
@@ -245,20 +249,12 @@ private def flattenPick? (e : Expr) : MetaM (Option (Expr × Expr)) := do
     return some (e', proof)
   | _ => return none
 
-/-! ## Depth-indexed weighting: `SchedulePolicy` and `installTuning`
+/-! ## Site collection and threaded state for `installTuning`
 
-A schedule is affine in the recursion depth, `wⱼ(d) = aⱼ + bⱼ · d`, so mean offspring can start above
-1 near the root and fall below 1 with depth. Decay is base-weight *growth*, never recursive-weight
-shrinkage: a weight of `0` would drop its branch from the support, so every weight stays `≥ 1` and a
-deep recursion becomes rarer, never impossible. -/
-
-/-- An affine weight schedule `d ↦ base + growth · d`. Invariant: `base ≥ 1`. The `(base, growth)`
-pair is exactly one entry of a Basalt `Tuning`; a `SchedulePolicy` produces these per branch and
-`SchedulePolicy.materialize` lays them out into a `Tuning`. -/
-structure Schedule where
-  base : Nat
-  growth : Nat
-  deriving Repr, Inhabited
+The `installTuning` pass rewrites each uniform `oneOf` to a `θ`-reading `frequency` and records its
+block layout. The affine weight schedules that populate `θ` (`Schedule` / `SchedulePolicy`) are pure
+`Tuning`-producing data and live in `Palamedes.Schedule`; here we only collect the sites and thread
+the offset state. -/
 
 /-- A `frequency` site collected by `installTuning`; the internal form of Basalt's `Site`. `offset` is
 the site's first index into the flat `Tuning.schedules` array. -/
@@ -275,66 +271,6 @@ structure TuningState where
   nextOffset : Nat := 0
   sites : Array TuningSiteInfo := #[]
   deriving Inhabited
-
-/-- How to weight a branch, as a function of how many recursive children it has.
-
-A policy is untrusted: it can only tune the distribution, never the support, since the
-support-preservation proof is composed regardless of what it proposes. -/
-structure SchedulePolicy where
-  weight : Nat → Schedule
-
-/-- A general, datatype-agnostic decay family, keyed only on whether a branch *closes* the recursion.
-
-Continuing branches (≥1 recursive child) are held at the constant `root`; closing branches (0
-children) grow as `1 + rate·d`. So at the root the recursion is favored `root : 1` — mean offspring
-starts supercritical when `root > 1` — and as depth grows the closing branches dominate and mean
-offspring falls to 0, forcing termination. Two knobs, both interpretable:
-
-* `root` — how bushy the top of the value is (the root branching bias);
-* `rate` — how fast the recursion is driven closed with depth.
-
-Unlike `SchedulePolicy.stlc` this makes no per-arity distinction, so it carries no tuning specific to
-any one datatype. The named points below (`gentle`/`moderate`/`steep`) are the ready-made choices. -/
-def SchedulePolicy.decayBy (root rate : Nat) : SchedulePolicy where
-  weight
-    | 0 => { base := 1, growth := rate }
-    | _ => { base := root, growth := 0 }
-
-/-- Slow decay: the recursion stays live several levels down, giving deeper and larger values. -/
-def SchedulePolicy.gentle : SchedulePolicy := .decayBy 3 4
-
-/-- A general-purpose middle decay rate: supercritical at the root, closed within a few levels. -/
-def SchedulePolicy.moderate : SchedulePolicy := .decayBy 3 12
-
-/-- Fast decay: the recursion closes almost immediately, giving shallow values that terminate hard. -/
-def SchedulePolicy.steep : SchedulePolicy := .decayBy 3 30
-
-/-- The STLC-tuned policy: a branch that closes the recursion grows fastest with depth, one with a
-single child grows more slowly, and a branch with two or more is held constant — decayed *relative
-to* the others, never toward zero.
-
-The coefficients are hand-tuned on `genWellTyped`, and its distribution is pinned in
-`ScheduleMeasurements.lean`; this is *not* a good general default (it encodes an arity preference
-specific to STLC's term type). Materialize it against a generator's sites with
-`SchedulePolicy.stlc.materialize gen.sites` and pass the result to `gen.tuned` (see `derive_tuning`).
-Eventually a drift solve should compute coefficients like these per site. -/
-def SchedulePolicy.stlc : SchedulePolicy where
-  weight
-    | 0 => { base := 1, growth := 30 }
-    | 1 => { base := 1, growth := 14 }
-    | _ => { base := 4, growth := 0 }
-
-/-- Lay a `SchedulePolicy` over a site table into a `Tuning`: each branch's `(base, growth)` is
-`policy.weight` of its recursive-child count (`Site.holes`), placed at flat index `offset + j`. Turns
-a coarse arity-keyed policy into the per-site `Tuning` a `.tuned` generator reads. -/
-def SchedulePolicy.materialize (policy : SchedulePolicy) (sites : Array Site) : Tuning := Id.run do
-  let total := sites.foldl (init := 0) fun acc s => max acc (s.offset + s.arity)
-  let mut arr : Array (Nat × Nat) := Array.replicate total (1, 0)
-  for s in sites do
-    for j in [0:s.arity] do
-      let sched := policy.weight (s.holes.getD j 0)
-      arr := arr.set! (s.offset + j) (sched.base, sched.growth)
-  return ⟨arr⟩
 
 /-- Recursive-field counts for each constructor of a base functor `XF`: a field is a hole when its
 type is the carrier (the last parameter of `XF`). -/

@@ -7,6 +7,12 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: unbounded range
+
+Synthesizes `genGt5 : PGen Nat` for `fun n => n > 5`, a one-sided range with no upper bound.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 def genGt5 : PGen Nat := by

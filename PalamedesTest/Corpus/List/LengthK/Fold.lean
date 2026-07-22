@@ -7,6 +7,14 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: length k (fold)
+
+Synthesizes `genLengthKFold : PGen (List Nat)` for `lengthFold`, the fold-spelled twin of
+`List.length` via `List.fold`, exercising a different search path than the structurally recursive
+sibling.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace LengthKFold

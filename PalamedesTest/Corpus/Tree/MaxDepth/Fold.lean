@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: trees bounded by a maximum depth, fold-spelled
+
+Synthesizes `genMaxDepthFold : PGen (Palamedes.Tree Nat)` from `isMaxDepthFold`, the fold-spelled
+twin of `isMaxDepth`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace MaxDepthFold

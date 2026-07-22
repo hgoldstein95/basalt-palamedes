@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: complete trees of a given depth
+
+Synthesizes `genComplete : PGen (Palamedes.Tree Nat)` from `isComplete`, which holds when every
+leaf sits at exactly depth `n`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace Complete

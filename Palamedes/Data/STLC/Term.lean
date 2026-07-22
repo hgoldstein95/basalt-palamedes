@@ -8,6 +8,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 import Palamedes.Derive
 import Palamedes.Data.STLC.Ty
 
+/-!
+# The STLC `Term` datatype layer
+
+STLC terms, `derive_palamedes`d, plus a hand-written fusion lemma (registered via
+`unfold_strategy_convert`) and a `ToString` instance.
+-/
+
 section TypeDef
 
 inductive Term : Type where

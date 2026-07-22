@@ -5,6 +5,7 @@ Authors: Harrison Goldstein
 -/
 
 import Palamedes.Optimizer
+import Palamedes.Schedule
 import Palamedes.Laws
 import Palamedes.Synthesizer.FrontEnd
 

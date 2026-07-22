@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: well-scoped STLC terms, fold-spelled
+
+Synthesizes `genWellScopedFold : PGen Term` from `isWellScopedFold`, the fold-spelled twin of
+`isWellScoped`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace WellScopedFold

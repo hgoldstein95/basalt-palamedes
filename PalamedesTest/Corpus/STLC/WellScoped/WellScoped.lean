@@ -7,6 +7,14 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: well-scoped STLC terms
+
+Synthesizes `genWellScoped : PGen Term` from `isWellScoped`, which holds when every `var` index is
+below the ambient binder count; exercises the `dite` distribution (`var`/`app` under the `unit`
+leaf's scope check). Pins the emitted term under `#guard_msgs`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace WellScoped

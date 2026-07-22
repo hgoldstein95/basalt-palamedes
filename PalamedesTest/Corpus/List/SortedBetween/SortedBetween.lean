@@ -7,6 +7,14 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: sorted between lo and hi (structural)
+
+Synthesizes `genSortedBetween lo hi : PGen (List Nat)` for `isSortedBetween`, a sorted-list
+predicate that threads the running lower bound as state. Pins the emitted term under
+`#guard_msgs`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace SortedBetween

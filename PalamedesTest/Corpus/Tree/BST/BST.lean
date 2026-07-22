@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: binary search trees
+
+Synthesizes `genBST : PGen (Palamedes.Tree Nat)` from `isBST`, the bounded-key BST predicate.
+Pins the emitted term under `#guard_msgs`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace BST

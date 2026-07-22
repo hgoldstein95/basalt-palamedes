@@ -8,6 +8,14 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 import Lean
 import Palamedes.Optimizer
 
+/-!
+# Optimizer rewrite regressions
+
+`#assert_optimizes!` checks that `optimizeGen` rewrites a given generator to the expected term
+(and that its support-preservation proof type-checks); the assertions below pin the individual
+rewrite rules.
+-/
+
 open Lean Elab Command Term Meta Palamedes Palamedes.PGen
 
 syntax (name := assertOptimizes) "#assert_optimizes! " term " goes_to " term : command

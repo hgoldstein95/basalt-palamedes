@@ -12,6 +12,15 @@ import Palamedes.RuleSets
 import Palamedes.CaseSplit
 import Palamedes.SomeSupport
 
+/-!
+# `Nat` primitives
+
+`arbNat` (geometric, a direct `partial_fixpoint`), the range generators `choose`/`gt`/`lt`/`mod2`,
+their support and totality facts, and the range synthesis rules (`s_between`,
+`s_between_partial`, `s_gt`, `s_lt_partial`, `s_mod2_partial`). Also `delabChoose`, which keeps
+`generator_search?` output for `choose` re-elaborable without printing its side-condition proof.
+-/
+
 namespace Palamedes
 
 open Palamedes.PGen

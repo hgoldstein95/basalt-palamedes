@@ -7,6 +7,12 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: vacuous list predicate (structural)
+
+Synthesizes `genTrue : PGen (List Nat)` for `isTrue`, a predicate that holds of every list.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace ConstTrue

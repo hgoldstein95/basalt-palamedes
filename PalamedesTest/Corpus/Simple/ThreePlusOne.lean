@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: existential
+
+Synthesizes `genThreePlusOne : PGen Nat` for `fun b => ∃ a, a = 3 ∧ b = a + 1`. Pins the emitted
+term (`pure 4`).
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 /--

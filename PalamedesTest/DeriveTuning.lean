@@ -15,7 +15,7 @@ import Palamedes.Data.List
 
 Guards the command's output on a small generator — the site table, the uniform defaults, the
 `SchedulePolicy → Tuning` round-trip, and that a tuned generator samples. The tuned *distribution* of
-a real generator is guarded separately in `ScheduleMeasurements.lean`.
+a real generator is guarded separately in `PalamedesTest/Optimizer/Schedule.lean`.
 -/
 
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen

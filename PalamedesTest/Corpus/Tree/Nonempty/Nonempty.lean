@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: non-empty trees
+
+Synthesizes `genNonempty : PGen (Palamedes.Tree Nat)` from `isNonempty`, which excludes only the
+`leaf` case.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace Nonempty

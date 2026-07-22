@@ -8,6 +8,14 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 import Palamedes.PGen
 import Palamedes.OptimizeCongr
 
+/-!
+# Support-preservation lemmas for the optimizer
+
+One `support_*` twin lemma per optimizer rewrite, plus the `@[gen_congr]` congruence lemmas its
+traversal descends through. `Optimizer.lean` cites these by name; a head rewrite without a twin
+here cannot be proof-carried.
+-/
+
 namespace Palamedes
 
 open Palamedes.PGen

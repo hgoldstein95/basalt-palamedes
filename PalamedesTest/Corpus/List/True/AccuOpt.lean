@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: vacuous list predicate (accuM/Option)
+
+Synthesizes `genTrueAccuOpt : PGen (List Nat)` for `isTrueAccuOpt`, the vacuous predicate spelled
+via the accumulating `List.accuM`/`Option` fold path.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace TrueAccuOpt

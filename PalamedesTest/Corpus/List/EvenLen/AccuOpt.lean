@@ -7,6 +7,14 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: even length (accuM/Option)
+
+Synthesizes `genEvenLenAccuOpt : PGen (List Nat)` for `isEvenLenAccuOpt`, spelled via
+`List.accuM`/`Option` fusion rather than structural recursion or `List.fold`. Pins the emitted term
+under `#guard_msgs`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace EvenLenAccuOpt

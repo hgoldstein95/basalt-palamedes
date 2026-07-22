@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: trees bounded by a maximum depth
+
+Synthesizes `genComplete : PGen (Palamedes.Tree Nat)` from `isMaxDepth`, which holds when every
+leaf is at depth at most `n`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace MaxDepth

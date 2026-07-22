@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: AVL trees, fold-spelled
+
+Synthesizes `genAVLFold : G (Option (Palamedes.Tree Nat))` from `isAVLFold`, the fold-spelled twin
+of `isAVL`; a filtering generator, run near a raised `maxHeartbeats`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace AVLFold

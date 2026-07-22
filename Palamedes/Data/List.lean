@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Derive
 
+/-!
+# The `List` datatype layer
+
+`derive_palamedes List`, plus the hand-written conditional-fold normal form `List.fold_accu_cond`
+(a search heuristic the derive command deliberately does not generate).
+-/
+
 derive_palamedes List
 
 section FoldConversions

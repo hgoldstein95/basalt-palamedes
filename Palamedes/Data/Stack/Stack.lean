@@ -8,6 +8,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 import Palamedes.Derive
 import Palamedes.Data.Stack.Atom
 
+/-!
+# The `Stack` datatype layer
+
+The IFC machine stack (adapted from QuickChick's ifc-basic example), `derive_palamedes`d, plus a
+`ToString` instance.
+-/
+
 section TypeDef
 /- adapted from https://github.com/QuickChick/QuickChick/tree/master/examples/ifc-basic -/
 

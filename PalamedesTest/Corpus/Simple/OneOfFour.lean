@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: one of four literals
+
+Synthesizes `genSmall : PGen Nat` for `fun a => a = 1 ∨ a = 2 ∨ a = 3 ∨ a = 4`. Pins the emitted
+term, a flattened uniform `PGen.oneOf` over the four literals.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 /--

@@ -7,6 +7,14 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: sorted between lo and hi (fold)
+
+Synthesizes `genSortedBetweenFold lo hi : PGen (List Nat)` for `isSortedBetweenFold`, the
+fold-spelled twin of `isSortedBetween` via `List.fold`, exercising a different search path than the
+structurally recursive sibling.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace SortedBetweenFold

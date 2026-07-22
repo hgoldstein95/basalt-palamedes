@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: length k (accuM/Option)
+
+Synthesizes `genLengthKAccuOpt : PGen (List Nat)` for `lengthAccuOpt`, the length predicate
+spelled via the accumulating `List.accuM`/`Option` fold path.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace LengthKAccuOpt

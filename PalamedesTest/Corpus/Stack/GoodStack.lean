@@ -7,6 +7,14 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: stacks of good atoms
+
+Synthesizes `genGoodStack : PGen Stack` from `isGoodStack`, which holds when every atom in a
+length-`n` stack passes `isGoodAtom`/`isGoodNat` (the 3-constructor `Stack` datatype). Pins the
+emitted term under `#guard_msgs`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace GoodStack

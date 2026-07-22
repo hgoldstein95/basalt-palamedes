@@ -12,6 +12,15 @@ import Palamedes.Synthesizer.CGeneratorSearch
 import Palamedes.Synthesizer.Totality
 import Palamedes.Failure
 
+/-!
+# The `generator_search` front-end
+
+The user-facing pipeline: search (`cgenerator_search`) → extract a raw `PGen` → optimize → rebuild
+a totality witness → package at the declared shape (`G α` from the `TGen` witness, `G (Option α)`
+via `totalize`, or the `Palamedes.PGen` carrier directly). `runSynthesisPipeline` is the shared
+core; the `correct def` command (`CorrectDef.lean`) drives it too.
+-/
+
 open Lean Tactic Elab Meta Tactic
 
 initialize

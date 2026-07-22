@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: binary search trees, fold-spelled
+
+Synthesizes `genBSTFold : PGen (Palamedes.Tree Nat)` from `isBSTFold`, the fold-spelled twin of
+`isBST`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace BSTFold

@@ -12,6 +12,13 @@ import Palamedes.RuleSets
 import Palamedes.CaseSplit
 import Palamedes.SomeSupport
 
+/-!
+# `Color` primitives
+
+The two-constructor `Color` type (red/black, for red-black trees), `arbColor`, its
+support/totality facts, and the synthesis rules `s_arbColor` and `s_caseColor`.
+-/
+
 section TypeDef
 
 inductive Color where

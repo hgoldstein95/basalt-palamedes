@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: stacks of good atoms, fold-spelled
+
+Synthesizes `genGoodStackFold : PGen Stack` from `isGoodStackFold`, the fold-spelled twin of
+`isGoodStack`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace GoodStackFold

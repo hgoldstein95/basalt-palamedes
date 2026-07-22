@@ -13,6 +13,14 @@ import Palamedes.Data.Tree
 import Palamedes.Data.Nat
 import Palamedes.Total
 
+/-!
+# The `totality` tactic
+
+Stage 4 of the pipeline: reconstruct a `TGen` (`Fail`-free) witness over a generator's combinator
+spine, via an ordered `first | …` cascade over the fixed combinator basis plus per-datatype leaves
+from the `@[total]` registry.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.Total
 
 /-- Case-split the discriminant of a `match` sitting inside a totality goal.

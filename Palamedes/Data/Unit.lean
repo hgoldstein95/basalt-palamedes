@@ -10,6 +10,12 @@ import Palamedes.CorrectGen
 import Palamedes.Total
 import Palamedes.RuleSets
 
+/-!
+# `Unit` primitives
+
+`arbUnit`, its synthesis rule `s_arbUnit`, and its totality fact.
+-/
+
 namespace Palamedes
 
 open Palamedes.PGen

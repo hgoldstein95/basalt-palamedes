@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: `2 = ·`
+
+Synthesizes `genEq2' : PGen Nat` for the predicate with the equality flipped (`2 = ·` instead of
+`· = 2`), checking the search handles either orientation.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 def genEq2' : PGen Nat := by

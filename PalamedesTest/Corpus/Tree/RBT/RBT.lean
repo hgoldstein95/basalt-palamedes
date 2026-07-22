@@ -8,6 +8,14 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 import Palamedes.Synthesizer
 import Palamedes.Data.Color
 
+/-!
+# Corpus: red-black trees
+
+Synthesizes `genRBT : G (Option (Palamedes.Tree (Color × Nat)))` from `isRBT`, which conjoins
+`isRR` (no red-red violation), `isBST` (bounded-key ordering), and `isBH` (equal black height); a
+filtering generator run near a raised `maxHeartbeats`/`maxRecDepth`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace RBT

@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: all-twos tree, fold-spelled
+
+Synthesizes `genAllTwosFold : PGen (Palamedes.Tree Nat)` from `isAllTwosFold`, the fold-spelled
+twin of `isAllTwos` written as an explicit `Tree.fold`.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace AllTwosTreeFold

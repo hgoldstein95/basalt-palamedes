@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: all-twos and even length (structural)
+
+Synthesizes `genAllTwosEvenLen : PGen (List Nat)` for `isAllTwosEvenLen`, the conjunction of
+`isAllTwos` and `isEvenLen`, each defined by structural recursion.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace AllTwosEvenLen

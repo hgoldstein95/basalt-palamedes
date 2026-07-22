@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: increasing by one (structural)
+
+Synthesizes `genIncreasingByOneRec : PGen (List Nat)` for `isIncreasingByOne`, defined by
+structural recursion over an accumulating `prev` argument.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace IncreasingByOneList

@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: even length (structural)
+
+Synthesizes `genEvenLen : PGen (List Nat)` for `isEvenLen`, defined by structural recursion that
+flips a boolean per element.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace EvenLen

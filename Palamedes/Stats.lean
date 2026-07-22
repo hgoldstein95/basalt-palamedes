@@ -23,8 +23,8 @@ The report separates a failing `assume` (a terminating `failed` draw, so `ok` is
 from `fuel-exhausted` (divergence) — a distinction the `SPMF` semantics cannot make, since both are
 bottom there.
 
-Output is seed-deterministic, so it works under `#guard_msgs`: see `PalamedesTest/Measurements.lean`
-and `PalamedesTest/ScheduleMeasurements.lean`.
+Output is seed-deterministic, so it works under `#guard_msgs`: see `PalamedesTest/Stats.lean`
+and `PalamedesTest/Optimizer/Schedule.lean`.
 -/
 
 namespace Palamedes

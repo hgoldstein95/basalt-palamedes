@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Derive
 
+/-!
+# The `Tree` datatype layer
+
+Palamedes' binary `Tree`, `derive_palamedes`d, plus the hand-written conditional-fold normal form
+`Tree.fold_accu_cond` and a `ToString` instance.
+-/
+
 -- Lean core (v4.32+) declares a deprecated `Tree` (alias for `BinaryTree`) at the root namespace, so
 -- Palamedes' own `Tree` lives under `namespace Palamedes` to avoid the clash.
 namespace Palamedes

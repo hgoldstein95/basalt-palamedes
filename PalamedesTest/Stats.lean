@@ -8,6 +8,14 @@ import Palamedes.Stats
 import PalamedesTest.Corpus.Simple.OneOfFour
 import PalamedesTest.Corpus.Tree.BST.Fold
 
+/-!
+# Distribution oracles for `#genstats`
+
+Pins `#genstats` reports under `#guard_msgs`: that the flatten pass yields a *uniform* choice
+(`genSmall` at ~25% per branch — a `pick` tree would show ½, ¼, ⅛, ⅛), `choose`'s uniform range,
+and a shrinking-seed recursive generator (`genBSTFold`).
+-/
+
 open Palamedes Palamedes.PGen
 
 /--

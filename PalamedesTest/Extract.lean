@@ -10,7 +10,7 @@ import PalamedesTest.GeneratorAPI
 /-!
 # Extraction audit
 
-Every example in `PalamedesTest/Examples/` synthesizes a generator at elaboration time, but a
+Every example in `PalamedesTest/Corpus/` synthesizes a generator at elaboration time, but a
 silent extraction failure does not break the build: if the `extract` simp set fails to
 strip the `CorrectGen` combinator wrappers, the generator is left unchanged, so the optimizer's
 support-preservation proof still holds trivially, and a `totality` failure is only a warning. The

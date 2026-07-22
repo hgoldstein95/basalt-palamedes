@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: fixed range
+
+Synthesizes `genBetween5And10 : PGen Nat` for `fun n => 5 ≤ n ∧ n ≤ 10`, a range with literal
+bounds.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 def genBetween5And10 : PGen Nat := by

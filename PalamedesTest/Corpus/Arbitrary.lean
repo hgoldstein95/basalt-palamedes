@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: unconstrained values
+
+Synthesizes `genUnit`, `genBool`, and `genNat` for the vacuous predicate `fun _ => True` at three
+different carrier types.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 def genUnit : PGen Unit := by

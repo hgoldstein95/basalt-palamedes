@@ -7,6 +7,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 
 import Palamedes.Synthesizer
 
+/-!
+# Corpus: all-twos list (structural)
+
+Synthesizes `genAllTwos : PGen (List Nat)` for `isAllTwos`, defined by structural recursion on the
+list.
+-/
+
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
 namespace AllTwos
