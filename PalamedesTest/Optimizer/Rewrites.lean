@@ -105,7 +105,7 @@ private axiom f : Nat → PGen Nat
   goes_to
   oneOf [pure 1, pure 2]
 
--- The optimizer descends into a `oneOf`'s branches (`optimizeOneOfChildren?`, a bespoke descent —
+-- The optimizer descends into a `oneOf`'s branches (`transformOneOfChildren?`, a bespoke descent —
 -- the `@[gen_congr]` table cannot rebuild a `oneOf`). `#assert_optimizes!` also type-checks the
 -- carried support proof, so a mis-built congruence term fails here rather than silently skewing a
 -- distribution.
@@ -121,7 +121,7 @@ private axiom f : Nat → PGen Nat
   goes_to
   oneOf [oneOf [(fun x => pure (x + 1)) 5, pure 2], pure 3]
 
--- The same for a hand-written `frequency` (`optimizeFrequencyChildren?`). Until this existed,
+-- The same for a hand-written `frequency` (`transformFrequencyChildren?`). Until this existed,
 -- `frequency` was exempted from the descent guard by name: a `frequency` in a *reducible* position
 -- had its branches silently skipped, and the exemption's comment carried the gap as a known risk.
 -- Weights must survive the rebuild untouched — only the generators are optimized.

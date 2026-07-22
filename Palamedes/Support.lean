@@ -199,7 +199,7 @@ private theorem support_frequency_mem {α : Type} {gs gs' : List (Nat × PGen α
 
 /-- The `frequency` counterpart of `support_oneOf_congr`: rebuilding a `frequency` from optimized
 branches preserves its support, provided every branch keeps its weight. This is what makes
-`optimizeFrequencyChildren?` a real descent, so a hand-written `frequency` is visited rather than
+`transformFrequencyChildren?` a real descent, so a hand-written `frequency` is visited rather than
 silently skipped. -/
 theorem support_frequency_congr {α : Type} {gs gs' : List (Nat × PGen α)}
     (hg : gs.map (fun p => (p.1, support p.2)) = gs'.map (fun p => (p.1, support p.2)))
