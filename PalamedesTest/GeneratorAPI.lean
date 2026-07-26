@@ -30,7 +30,7 @@ a fact about the generator. See `diagnoseTotality` (`Synthesizer/FrontEnd.lean`)
 the bottom of this file.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 @[simp]
 def isAllTwos : List Nat → Bool
@@ -187,7 +187,6 @@ witnesses as arms nothing exercises. Deleting any of them puts a `._proof_i` ref
 term that is meant to be pasted. -/
 
 section Renderings
-open Palamedes.PGen
 
 -- Basalt's: the tactic is printed, because Basalt's autoParam is `by omega`, which cannot close the
 -- goal — omitting the argument here would print a term that does not re-elaborate.
@@ -195,7 +194,7 @@ def renderBasalt [Gen G] : G Nat := frequency [(1, fun _ => pure 1), (2, fun _ =
 
 /--
 info: def renderBasalt.{u_1} : {G : Type → Type u_1} → [Gen G] → G ℕ :=
-fun {G} [Gen G] => _root_.frequency [(1, fun x => pure 1), (2, fun x => pure 2)]
+fun {G} [Gen G] => frequency [(1, fun x => pure 1), (2, fun x => pure 2)]
 -/
 #guard_msgs in
 #print renderBasalt

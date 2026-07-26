@@ -13,7 +13,7 @@ import Palamedes.Synthesizer
 Synthesizes `genTrue : G (List Nat)` for `isTrue`, a predicate that holds of every list.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace ConstTrue
 

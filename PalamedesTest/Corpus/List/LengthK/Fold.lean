@@ -15,7 +15,7 @@ Synthesizes `genLengthKFold : G (List Nat)` for `lengthFold`, the fold-spelled t
 sibling.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace LengthKFold
 

@@ -14,7 +14,7 @@ Synthesizes `genCompleteFold : G (Palamedes.Tree Nat)` from `isCompleteFold`, th
 twin of `isComplete`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace CompleteFold
 

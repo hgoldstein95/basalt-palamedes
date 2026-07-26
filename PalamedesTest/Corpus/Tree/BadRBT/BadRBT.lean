@@ -16,7 +16,7 @@ Synthesizes `genBadRBT : G (Palamedes.Tree (Color × Nat))` from `isBadRBT`, whi
 condition; runs near a raised `maxHeartbeats`/`maxRecDepth`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace BadRBT
 

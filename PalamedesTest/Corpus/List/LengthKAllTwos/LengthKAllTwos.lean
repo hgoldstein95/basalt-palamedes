@@ -16,7 +16,7 @@ fixed length and `isAllTwos`.
 
 set_option maxHeartbeats 1000000
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace LengthKAllTwos
 

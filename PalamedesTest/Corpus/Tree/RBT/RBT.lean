@@ -16,7 +16,7 @@ Synthesizes `genRBT : G (Option (Palamedes.Tree (Color × Nat)))` from `isRBT`, 
 filtering generator run near a raised `maxHeartbeats`/`maxRecDepth`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace RBT
 

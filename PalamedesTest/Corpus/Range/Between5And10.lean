@@ -14,7 +14,7 @@ Synthesizes `genBetween5And10 : G Nat` for `fun n => 5 ≤ n ∧ n ≤ 10`, a ra
 bounds.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 def genBetween5And10 [Gen G] : G Nat := by
   generator_search (fun n => 5 ≤ n ∧ n ≤ 10)

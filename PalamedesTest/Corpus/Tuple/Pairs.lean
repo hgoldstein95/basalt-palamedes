@@ -16,7 +16,7 @@ Synthesizes `G (Nat × Nat)` generators for predicates over pairs: a fixed first
 `#guard_msgs`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 def genFstIsTwo [Gen G] : G (Nat × Nat) := by
   generator_search (fun p => p.fst = 2)

@@ -443,11 +443,8 @@ projections. Deliberately *not* a full `Meta.reduce`: that would also unfold Bas
 and `oneOf` into `frequencyAux`/`choose`, destroying exactly the structure we want to keep. -/
 def extractWitness (e : Expr) : MetaM Expr := do
   -- The witness constructors are exactly the `@[total]` registry — the generic basis included, since
-  -- it is registered the same way — so this list holds only the `TGen` combinators they build with.
-  let basis : Array Name := #[
-    ``Palamedes.TGen.pure, ``Palamedes.TGen.bind, ``Palamedes.TGen.pick,
-    ``Palamedes.TGen.frequency, ``Palamedes.TGen.map, ``Palamedes.TGen.toGen]
-  let names := basis ++ Palamedes.totalLemmas (← getEnv)
+  -- it is registered the same way — so the rest is the `TGen` combinators they build with.
+  let names := Palamedes.tgenBasis ++ Palamedes.totalLemmas (← getEnv)
   -- Start from the `totality_witness` set (the `.val`/`.run` equations, including the one that pushes `.val`
   -- through the `Eq.rec` the totality tactic's `split` leaves around each match arm), then add the
   -- constructors to delta-unfold. `List.map_cons`/`_nil` are needed so the branch lists of a

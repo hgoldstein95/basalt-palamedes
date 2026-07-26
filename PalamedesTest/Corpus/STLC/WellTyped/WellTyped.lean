@@ -17,7 +17,7 @@ required for a.s. termination. Runs near a raised `maxHeartbeats`; distribution 
 `Optimizer/Schedule.lean`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace WellTyped
 

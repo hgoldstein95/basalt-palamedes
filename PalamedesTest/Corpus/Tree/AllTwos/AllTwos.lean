@@ -14,7 +14,7 @@ Synthesizes `genAllTwos : G (Palamedes.Tree Nat)` from the structurally recursiv
 `isAllTwos`, which holds when every node label is `2`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace AllTwosTree
 

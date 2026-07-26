@@ -14,7 +14,7 @@ Synthesizes `genGoodStackFold : G Stack` from `isGoodStackFold`, the fold-spelle
 `isGoodStack`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace GoodStackFold
 

@@ -25,7 +25,7 @@ layer that `Palamedes/Data/` currently writes by hand:
 * `X.fold` with per-constructor `@[simp]` equations (proved by `rfl`);
 * `X.accuM` — the state-threading monadic fold — with per-constructor `@[simp]` equations;
 * `X.unfoldGo` (a `partial_fixpoint` over Basalt's CCPO), `X.unfold`, the failure-free
-  `TGen.X.unfold`, and `X.run_unfold`;
+  `TGen.X.unfold`, and the projection equations `X.run_unfold`, `X.trun_unfold`, `X.toGen_unfold`;
 * `X.unfold_support` and the support characterization `X.support_unfold` (proved by a
   generated structural induction mirroring the hand-written proofs in `Data/`);
 * `@[gen_congr] X.support_unfold_congr`;
@@ -514,6 +514,17 @@ def genUnfoldFamily (ctx : Ctx) : CommandElabM Unit := do
         ($f : Nat → $β → Palamedes.TGen $baseβ) ($b : $β) ($d₀ : Nat)
         ($G : Type → Type) [Gen $G] :
         ($tgenRef $f $b $d₀).run (G := $G) = $goRef (fun $d $x => ($f $d $x).run) $d₀ $b := rfl))
+  -- The derived layer's mirror equation, in the sense `Total.lean`'s `TGen.toGen_*` are: coercing a
+  -- failure-free unfold is unfolding its coerced step. It is what lets a generator *defined* at
+  -- `TGen` — the direction any assume-free generator should be spelled in, so that its totality
+  -- witness is the definition rather than a re-spelling of it — still be reasoned about with the
+  -- `PGen`-level `support_unfold` above. Not `@[simp]`: it is cited where a proof crosses the
+  -- coercion, and nowhere else.
+  addCmd (← `(command|
+    theorem $(ctx.declId "toGen_unfold"):ident $uBinders:bracketedBinder*
+        ($f : Nat → $β → Palamedes.TGen $baseβ) ($b : $β) ($d₀ : Nat) :
+        Palamedes.TGen.toGen ($tgenRef $f $b $d₀)
+          = $unfoldRef (fun $d $x => Palamedes.TGen.toGen ($f $d $x)) $b $d₀ := rfl))
 
 /-- `X.unfold_support P d b t`: the support characterization of an unfold, indexed by the depth the
 step is read at. `P` is a depth-indexed step support (`fun d x => support (f d x)`), and a child at

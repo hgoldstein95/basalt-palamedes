@@ -14,7 +14,7 @@ Synthesizes `genBST : G (Palamedes.Tree Nat)` from `isBST`, the bounded-key BST 
 Pins the emitted term under `#guard_msgs`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace BST
 
@@ -34,7 +34,7 @@ info: Try this:
       (fun d x => do
         let a ←
           if hb : decide (x.2.1 ≤ x.2.2) = true then
-              _root_.frequency
+              frequency
                 [(1, fun x => pure TreeF.leaf),
                   (1, fun x_1 => do
                     let a ← (TGen.choose x.2.1 x.2.2).run

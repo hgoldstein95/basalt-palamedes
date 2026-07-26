@@ -14,7 +14,7 @@ Synthesizes `genWellTypedFold : G Term` from `isWellTypedFold`, the fold-spelled
 `isWellTyped`; runs near a raised `maxHeartbeats`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 set_option maxHeartbeats 1000000
 

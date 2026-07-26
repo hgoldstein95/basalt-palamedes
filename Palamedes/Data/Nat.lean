@@ -35,26 +35,60 @@ def arbNatGo [Gen G] : G Nat :=
     (fun () => arbNatGo >>= fun n => pure (n + 1))
   partial_fixpoint
 
-def arbNat : PGen Nat := ⟨fun {_G} _ _ => arbNatGo⟩
+syntax "choose_bounds" : tactic
+macro_rules | `(tactic| choose_bounds) => `(tactic| first | simp | simp_all only [decide_eq_true_eq])
 
-/-- Failure-free witness for `arbNat`: the same fixpoint at the `Fail`-free interface. -/
-def TGen.arbNat : TGen Nat := ⟨fun {_G} _ => arbNatGo⟩
+end PGen
+
+/-! ## The primitives
+
+`arbNat` and `choose` are the two generators here that are neither built from the core algebra nor
+able to fail, so each is spelled once at the failure-free interface `TGen` and its `PGen` form is
+`TGen.toGen` of it. That direction is what makes `total_arbNat`/`total_choose` direct `⟨witness, rfl⟩`
+pairs: the witness a totality proof has to produce is the definition itself, not a
+separately-written mirror of it that a lemma then has to reconnect.
+
+Deliberately `Palamedes.TGen`, beside the type and the core algebra (`TGen.pure`, `TGen.bind`,
+`TGen.frequency`, … in `Total.lean`) — **not** `Palamedes.PGen.TGen`, which is where these two would
+land if written inside a `namespace PGen` block. Two namespaces both *printing* as `TGen` is
+confusing on its own, but the cost is concrete: it forces every file that reads emitted terms to
+`open Palamedes.PGen` in order to abbreviate `PGen.TGen.choose`, and that open shadows Basalt's
+root-level `frequency`, so the generator Palamedes emits prints as `_root_.frequency`. The same trap
+is one `namespace` line away in any `Data/` module that adds a primitive. -/
+
+namespace TGen
+
+/-- An arbitrary natural, geometrically distributed. -/
+def arbNat : TGen Nat := ⟨fun {_G} _ => arbNatGo⟩
+
+/-- A uniform draw from `[lo, hi]`, and what a Basalt-shaped generator emits for a range; see
+`delabTGenChoose`. -/
+def choose (lo hi : Nat) (h : lo ≤ hi := by choose_bounds) : TGen Nat :=
+  ⟨fun {_G} _ => RandomChoice.choose lo hi h >>= fun r => Pure.pure r.down.val⟩
+
+end TGen
+
+namespace PGen
+
+def arbNat : PGen Nat := TGen.arbNat.toGen
 
 @[simp]
 theorem run_arbNat (G : Type → Type) [Gen G] [Fail G] : arbNat.run (G := G) = arbNatGo := rfl
 
+def choose (lo hi : Nat) (h : lo ≤ hi := by choose_bounds) : PGen Nat := (TGen.choose lo hi h).toGen
+
+/-! ### Composites over them
+
+The three below are ordinary `PGen` definitions, and the `TGen`-first direction above is not meant to
+reach them. It earns its keep only where a totality witness has to be written by hand, since that is
+what a `PGen`-side primitive costs a second body for. These compose, so their witnesses come out of
+the `@[total]` registry — `total_gt` is `total_map total_arbNat` and `total_lt` is `total_choose` —
+and there is no second body either way. (`mod2` is reached only through the filtering
+`s_mod2_partial`, so it needs no totality rule at all.) -/
+
 def gt (lo : Nat) : PGen Nat := (lo + 1 + · ) <$> arbNat
 
 def mod2 (r : Nat) (_ : r < 2) : PGen Nat := (2 * · + r) <$> arbNat
-
-syntax "choose_bounds" : tactic
-macro_rules | `(tactic| choose_bounds) => `(tactic| first | simp | simp_all only [decide_eq_true_eq])
-
-def choose (lo hi : Nat) (h : lo ≤ hi := by choose_bounds) : PGen Nat :=
-  ⟨fun {_G} _ _ => RandomChoice.choose lo hi h >>= fun r => Pure.pure r.down.val⟩
-
-def TGen.choose (lo hi : Nat) (h : lo ≤ hi := by choose_bounds) : TGen Nat :=
-  ⟨fun {_G} _ => RandomChoice.choose lo hi h >>= fun r => Pure.pure r.down.val⟩
 
 def lt (hi : Nat) (_ : hi > 0) : PGen Nat :=
   choose 0 (hi - 1) (by simp)
@@ -94,8 +128,8 @@ unfolding it. Without this registration `genBST` at `[Gen G] : G _` prints
 `(TGen.choose lo hi (s_between_partial._proof_1 hb)).run` — a `._proof_1` reference in a term whose
 whole purpose is to be read and pasted. Exactly the reason `delabDroppingSideCondition` is
 registered on three constants rather than one; see `PGen.lean`. -/
-@[app_delab Palamedes.PGen.TGen.choose]
-def delabTGenChoose : Delab := delabChooseFor ``Palamedes.PGen.TGen.choose
+@[app_delab Palamedes.TGen.choose]
+def delabTGenChoose : Delab := delabChooseFor ``Palamedes.TGen.choose
 
 @[simp]
 theorem support_arbNat :
@@ -282,14 +316,14 @@ end CorrectGen
 
 namespace Total
 
-/-- `arbNat` is assume-free: its body uses only `pick`/`pure`/`bind`, so the same fixpoint at the
-failure-free interface (`TGen.arbNat`) is a witness. (Almost-sure termination is a strictly stronger,
+/-- `arbNat` is assume-free by construction: it *is* `TGen.arbNat` viewed as a `PGen`, so the witness
+is that generator and the equation is `rfl`. (Almost-sure termination is a strictly stronger,
 orthogonal fact; see the Basalt library.) -/
 @[total]
-def total_arbNat : total arbNat := ⟨TGen.arbNat, by ext; rfl⟩
+def total_arbNat : total arbNat := ⟨TGen.arbNat, rfl⟩
 
 @[total]
-def total_choose : total (choose lo hi h) := ⟨TGen.choose lo hi h, by ext; rfl⟩
+def total_choose : total (choose lo hi h) := ⟨TGen.choose lo hi h, rfl⟩
 
 @[total]
 def total_gt : total (gt lo) := total_map total_arbNat

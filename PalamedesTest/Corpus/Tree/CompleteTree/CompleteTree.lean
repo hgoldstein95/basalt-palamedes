@@ -14,7 +14,7 @@ Synthesizes `genComplete : G (Palamedes.Tree Nat)` from `isComplete`, which hold
 leaf sits at exactly depth `n`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace Complete
 

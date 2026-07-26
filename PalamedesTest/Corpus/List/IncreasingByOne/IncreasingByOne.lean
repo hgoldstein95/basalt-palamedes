@@ -14,7 +14,7 @@ Synthesizes `genIncreasingByOneRec : G (List Nat)` for `isIncreasingByOne`, defi
 structural recursion over an accumulating `prev` argument.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace IncreasingByOneList
 

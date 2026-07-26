@@ -15,7 +15,7 @@ below the ambient binder count; exercises the `dite` distribution (`var`/`app` u
 leaf's scope check). Pins the emitted term under `#guard_msgs`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace WellScoped
 
@@ -34,32 +34,20 @@ info: Try this:
       (fun d x => do
         let a ←
           if h : decide (x.2 > 0) = true then
-              _root_.frequency
+              frequency
                 [(1, fun x => pure TermF.unit),
                   (1, fun x_1 => do
-                    let a ← (TGen.choose 0 (x.2 - 1) (lt._proof_1 x.2)).run
+                    let a ← (TGen.choose 0 (x.2 - 1) (PGen.lt._proof_1 x.2)).run
                     pure (TermF.var a)),
                   (1, fun x => do
-                    let a ←
-                      Ty.unfoldGo
-                          (fun d x =>
-                            _root_.frequency
-                              [(2 + 3 * d, fun x => pure TyF.unit),
-                                (1, fun x => pure (TyF.arrow PUnit.unit PUnit.unit))])
-                          0 PUnit.unit
+                    let a ← TGen.arbTy.run
                     pure (TermF.abs a PUnit.unit)),
                   (1, fun x => pure (TermF.app PUnit.unit PUnit.unit))]
             else
-              _root_.frequency
+              frequency
                 [(1, fun x => pure TermF.unit),
                   (1, fun x => do
-                    let a ←
-                      Ty.unfoldGo
-                          (fun d x =>
-                            _root_.frequency
-                              [(2 + 3 * d, fun x => pure TyF.unit),
-                                (1, fun x => pure (TyF.arrow PUnit.unit PUnit.unit))])
-                          0 PUnit.unit
+                    let a ← TGen.arbTy.run
                     pure (TermF.abs a PUnit.unit)),
                   (1, fun x => pure (TermF.app PUnit.unit PUnit.unit))]
         match a with

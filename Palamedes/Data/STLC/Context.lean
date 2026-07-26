@@ -24,44 +24,58 @@ namespace Palamedes
 
 open Palamedes.PGen
 
-namespace PGen
+/-! ## The primitive
 
-def elements (xs : List α) (h : xs.length > 0) : PGen α :=
-  match xs with
-  | x :: xs =>
-    match hxs : xs with
-    | [] => pure x
-    | _ :: _ => pick (pure x) (elements xs (by rw [hxs]; simp))
+Drawing from a list cannot fail, so `elements` is spelled at the failure-free interface `TGen` and
+its `PGen` form is `TGen.toGen` of it. In `Palamedes.TGen` beside the core algebra, not
+`Palamedes.PGen.TGen`; see the section header in `Data/Nat.lean` for what the second spelling costs.
 
-/-- The failure-free twin, mirroring `elements` structurally — the same relationship `TGen.choose`
-and `TGen.arbNat` have to their `PGen` counterparts.
+The direction matters more here than for a non-recursive primitive. `elements` recurses on a list
+that is only known at runtime (an STLC context's `idxsOf`), so a witness assembled from
+`total_pure`/`total_pick` by structural recursion is a recursive *proof* term whose `.val` has
+nothing to project until the list is a literal — which it never is. `genWellTyped` would then carry
+`Subtype.val`, `PGen.total` and a `TGen.mk` into the emitted term where generator code belongs. With
+the recursion written once, at `TGen`, `.val` is a projection out of a direct `⟨_, rfl⟩` and lands on
+this constant. -/
 
-It exists because `total_elements`'s witness has to be a **generator**, and `elements` recurses on a
-list that is only known at runtime (an STLC context's `idxsOf`). Assembled instead from
-`total_pure`/`total_pick` by structural recursion, the witness is a recursive *proof* term, and
-`.val` has nothing to project until the list is a literal — which it never is. `genWellTyped` then
-carried `(total_elements …).val` into the emitted term, i.e. `Subtype.val`, `PGen.total` and a
-`TGen.mk` where generator code was supposed to be. With the recursion done once here, `.val` is a
-projection out of a direct `⟨_, _⟩` and lands on this constant. -/
-def TGen.elements (xs : List α) (h : xs.length > 0) : TGen α :=
+namespace TGen
+
+/-- Draw uniformly from a nonempty list. -/
+def elements (xs : List α) (h : xs.length > 0) : TGen α :=
   match xs with
   | x :: xs =>
     match hxs : xs with
     | [] => TGen.pure x
     | _ :: _ => TGen.pick (TGen.pure x) (TGen.elements xs (by rw [hxs]; simp))
 
+end TGen
+
+namespace PGen
+
+def elements (xs : List α) (h : xs.length > 0) : PGen α := (TGen.elements xs h).toGen
+
+/-! `elements`' defining equations, restated at `PGen`: the recursion computes at `TGen`, and these
+carry it across the coercion for the `support` proofs below. -/
+
+@[simp] theorem elements_singleton (x : α) (h) : elements [x] h = pure x := rfl
+
+@[simp] theorem elements_cons_cons (x y : α) (ys : List α) (h) :
+    elements (x :: y :: ys) h = pick (pure x) (elements (y :: ys) (by simp)) := by
+  show (TGen.pick (TGen.pure x) (TGen.elements (y :: ys) (by simp))).toGen = _
+  rw [TGen.toGen_pick, TGen.toGen_pure]
+  rfl
+
 @[simp]
 theorem support_elements
     {xs : List α} {v : α} {h : xs.length > 0} :
     v ∈ 〚elements xs h〛↔ v ∈ xs := by
   induction xs with
-  | nil => simp_all; contradiction
+  | nil => simp at h
   | cons x xs ih =>
     match hxs : xs with
-    | [] =>
-      simp_all [elements]
+    | [] => simp_all
     | _ :: _ =>
-      simp [elements] at ih ⊢
+      simp at ih ⊢
       simp_all
 
 @[simp]
@@ -72,10 +86,9 @@ theorem someSupport_elements
   | nil => simp at h
   | cons x xs ih =>
     match hxs : xs with
-    | [] =>
-      simp_all [elements]
+    | [] => simp_all
     | _ :: _ =>
-      simp [elements] at ih ⊢
+      simp at ih ⊢
       simp_all
 
 namespace CorrectGen
@@ -91,23 +104,11 @@ end CorrectGen
 
 namespace Total
 
-/-- The recursion, done once, in `Prop` — where it is erased. -/
-theorem toGen_elements : ∀ (xs : List α) (h : xs.length > 0),
-    (TGen.elements xs h).toGen = elements xs h
-  | [x], _ => TGen.toGen_pure x
-  | x :: y :: ys, _ => by
-    -- `show` rather than `simp only [elements]`: both sides' outer `match` reduces on a literal
-    -- `cons`, and stopping there is the point — unfolding the *inner* one too leaves two `match`es
-    -- to relate instead of a `pick` to descend into.
-    show (TGen.pick (TGen.pure x) (TGen.elements (y :: ys) (by simp))).toGen
-       = pick (pure x) (elements (y :: ys) (by simp))
-    rw [TGen.toGen_pick, TGen.toGen_pure, toGen_elements (y :: ys) (by simp)]
-
 /-- Direct `⟨witness, proof⟩` over `TGen.elements` — the same discipline `Total.lean` states for the
-combinator basis, and the reason `TGen.elements` exists. -/
+combinator basis. `elements` is that generator coerced, so the equation is `rfl`. -/
 @[total]
 def total_elements {xs : List α} {h : xs.length > 0} : PGen.total (elements xs h) :=
-  ⟨TGen.elements xs h, toGen_elements xs h⟩
+  ⟨TGen.elements xs h, rfl⟩
 
 end Total
 

@@ -97,8 +97,8 @@ def natLit? (e : Expr) : Option Nat :=
 
 /-- Is `w` positive for every value of the variables in it, by inspection?
 
-This is a rough heuristic, but it works well for expressions like `2 + 3 * d` which come up commonly
-in our automated tuning setup. -/
+This is a rough heuristic that captures literal affine expressions like `2 + 3 * d` as well as
+`Tuning.weight θ i d`. -/
 private partial def weightPos (w : Expr) : Bool :=
   match natLit? w with
   | some n => 0 < n
@@ -106,6 +106,7 @@ private partial def weightPos (w : Expr) : Bool :=
     match_expr w with
     | HAdd.hAdd _ _ _ _ x y => weightPos x || weightPos y
     | HMul.hMul _ _ _ _ x y => weightPos x && weightPos y
+    | Tuning.weight _ _ _ => true
     | _ => false
 
 /-- Does `l` have a branch whose weight is positive by inspection? -/

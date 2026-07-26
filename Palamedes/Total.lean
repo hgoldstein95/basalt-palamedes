@@ -34,6 +34,18 @@ Because `TGen` cannot mention `Fail`, every combinator that does not fail has a 
 the introduction lemmas below build those witnesses compositionally. The recursive case
 (`X.total_unfold`) lives with each datatype in `Palamedes/Data/`, because the witness is that
 datatype's own `unfold` re-instantiated at the failure-free interface.
+
+The combinator basis below is the one place where the two interfaces are both written out, and it
+has to be: a combinator's arguments are *generators*, so its `TGen` and `PGen` spellings genuinely
+differ in argument type and neither can be the image of the other. A datatype's **primitives** go
+the other way — defined once at `TGen`, with the `PGen` form as `TGen.toGen` of it (`TGen.arbNat`,
+`TGen.choose`, `TGen.elements`, …). Their `total_*` lemmas are then `⟨TGen.foo, rfl⟩`, with no
+second body to keep in agreement and no reconnecting lemma to forget.
+
+The dividing line is whether the witness has a compositional route, not whether the generator can
+fail. A *composite* over the primitives stays an ordinary `PGen` definition — `PGen.gt` is
+`(lo + 1 + ·) <$> arbNat`, and `total_gt` is `total_map total_arbNat` — because the registry already
+assembles its witness, so there is no second body to write in either direction.
 -/
 
 namespace Palamedes
@@ -89,6 +101,18 @@ so the equations are stated once here and the lemmas below cite them. -/
   simp only [TGen.toGen, TGen.frequency, PGen.frequency, List.map_map, Function.comp_def]
 
 end TGen
+
+/-- The `TGen` combinator basis: the failure-free mirror of the core generator algebra, as data.
+
+Two stages need the list rather than the definitions. `extractWitness` delta-unfolds exactly these
+to turn a totality witness back into generator code, and `PalamedesTest/Extract.lean` reads a
+survivor of that unfolding as evidence that extraction stopped early. Both must agree on what counts
+as basis, so neither enumerates it.
+
+A datatype's own primitive spelled at `TGen` — `TGen.arbNat`, `TGen.elements` — is deliberately not
+here. It is the generator the Basalt shape is projected from, not machinery to be unfolded away. -/
+def tgenBasis : Array Lean.Name :=
+  #[``TGen.pure, ``TGen.bind, ``TGen.pick, ``TGen.frequency, ``TGen.map, ``TGen.toGen]
 
 namespace PGen
 

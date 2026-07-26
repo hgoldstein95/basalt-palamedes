@@ -14,7 +14,7 @@ Synthesizes `genEvenLen : G (List Nat)` for `isEvenLen`, defined by structural r
 flips a boolean per element.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace EvenLen
 

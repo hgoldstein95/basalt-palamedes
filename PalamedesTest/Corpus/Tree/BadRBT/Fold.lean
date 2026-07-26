@@ -15,7 +15,7 @@ Synthesizes `genRBTFold : G (Palamedes.Tree (Color × Nat))` from `isRBTFold`, t
 twin of `isBadRBT`; runs near a raised `maxHeartbeats`/`maxRecDepth`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace BadRBTFold
 

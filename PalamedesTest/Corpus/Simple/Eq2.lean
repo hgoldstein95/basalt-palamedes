@@ -14,7 +14,7 @@ Synthesizes `genEq2 : G Nat` for the trivial predicate `(· = 2)`. Pins the emit
 (`pure 2`) under `#guard_msgs`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 /--
 info: Try this:

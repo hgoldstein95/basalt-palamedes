@@ -13,7 +13,7 @@ import Palamedes.Synthesizer
 Synthesizes `genGt5 : G Nat` for `fun n => n > 5`, a one-sided range with no upper bound.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 def genGt5 [Gen G] : G Nat := by
   generator_search fun n => n > 5

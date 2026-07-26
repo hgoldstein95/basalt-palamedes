@@ -14,7 +14,7 @@ Synthesizes `genNonemptyFold : G (Palamedes.Tree Nat)` from `isNonemptyFold`, th
 twin of `isNonempty`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace NonemptyFold
 

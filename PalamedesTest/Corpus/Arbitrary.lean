@@ -14,7 +14,7 @@ Synthesizes `genUnit`, `genBool`, and `genNat` for the vacuous predicate `fun _ 
 different carrier types.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 def genUnit [Gen G] : G Unit := by
   generator_search (fun (_ : Unit) => True)

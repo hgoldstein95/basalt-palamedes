@@ -14,7 +14,7 @@ Synthesizes `genTrueAccuOpt : G (List Nat)` for `isTrueAccuOpt`, the vacuous pre
 via the accumulating `List.accuM`/`Option` fold path.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace TrueAccuOpt
 

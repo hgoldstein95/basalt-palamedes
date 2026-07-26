@@ -14,7 +14,7 @@ Synthesizes `genZeroOrInRange lo hi : G Nat` for `fun n => n = 0 ∨ (lo ≤ n �
 disjunction of a literal and a symbolic range.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 def genZeroOrInRange (lo hi : Nat) [Gen G] : G Nat := by
   generator_search fun n => n = 0 ∨ (lo ≤ n ∧ n ≤ hi)

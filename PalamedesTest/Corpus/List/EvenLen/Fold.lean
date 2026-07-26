@@ -15,7 +15,7 @@ Synthesizes `genEvenLenFold : G (List Nat)` for `isEvenLenFold`, the fold-spelle
 sibling.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace EvenLenFold
 

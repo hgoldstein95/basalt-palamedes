@@ -14,7 +14,7 @@ Synthesizes `genEq2Or5' : G Nat` for `fun a => a = 2 ∨ a = 5 ∧ True`, checki
 through a redundant `∧ True` conjunct.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 def genEq2Or5' [Gen G] : G Nat := by
   generator_search (fun a => a = 2 ∨ a = 5 ∧ True)

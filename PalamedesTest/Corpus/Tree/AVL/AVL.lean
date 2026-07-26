@@ -16,7 +16,7 @@ Synthesizes `genAVL : G (Option (Palamedes.Tree Nat))` from `isAVL`, which conjo
 
 set_option maxHeartbeats 1000000
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace AVL
 

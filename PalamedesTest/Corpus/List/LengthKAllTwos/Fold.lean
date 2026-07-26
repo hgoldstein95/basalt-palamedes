@@ -15,7 +15,7 @@ fold-spelled twin of `isLengthKAllTwos` via `List.fold`, exercising a different 
 the structurally recursive sibling.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace LengthKAllTwosFold
 

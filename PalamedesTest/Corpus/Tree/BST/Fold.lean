@@ -14,7 +14,7 @@ Synthesizes `genBSTFold : G (Palamedes.Tree Nat)` from `isBSTFold`, the fold-spe
 `isBST`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace BSTFold
 

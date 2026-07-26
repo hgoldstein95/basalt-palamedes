@@ -14,7 +14,7 @@ Synthesizes `genNonempty : G (Palamedes.Tree Nat)` from `isNonempty`, which excl
 `leaf` case.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace Nonempty
 

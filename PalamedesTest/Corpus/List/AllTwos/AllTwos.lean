@@ -14,7 +14,7 @@ Synthesizes `genAllTwos : G (List Nat)` for `isAllTwos`, defined by structural r
 list.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace AllTwos
 

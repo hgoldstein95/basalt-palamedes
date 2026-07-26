@@ -14,7 +14,7 @@ Synthesizes `genMaxDepthFold : G (Palamedes.Tree Nat)` from `isMaxDepthFold`, th
 twin of `isMaxDepth`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace MaxDepthFold
 

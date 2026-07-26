@@ -14,7 +14,7 @@ Synthesizes `genAllEvens : G (List Nat)` for `isAllEvens`, defined by structural
 the list.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace AllEvens
 

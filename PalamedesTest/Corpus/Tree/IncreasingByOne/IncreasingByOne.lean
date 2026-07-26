@@ -14,7 +14,7 @@ Synthesizes `genIncreasingByOne : G (Palamedes.Tree Nat)` from `isIncreasingByOn
 when each node's label is one more than its parent's, starting from `0`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace IncreasingByOneTree
 

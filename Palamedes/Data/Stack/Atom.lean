@@ -36,21 +36,35 @@ namespace Palamedes
 
 open Palamedes.PGen
 
+/-! ## The primitive
+
+A label draw cannot fail, so it is spelled at the failure-free interface `TGen` and its `PGen` form
+is `TGen.toGen` of it; see the section header in `Data/Nat.lean` for why the twin belongs in
+`Palamedes.TGen` and not `Palamedes.PGen.TGen`. -/
+
+namespace TGen
+
+/-- An arbitrary security label, uniform over the two. -/
+def arbLabel : TGen Label := TGen.pick (TGen.pure .low) (TGen.pure .high)
+
+end TGen
+
 namespace PGen
 
+/-- `@[irreducible]` so the optimizer treats a label draw as an opaque primitive rather than
+descending into it and flattening the `pick` into the enclosing choice. -/
 @[irreducible]
-def arbLabel  : PGen Label :=
-  pick (pure .low) (pure .high)
+def arbLabel : PGen Label := TGen.arbLabel.toGen
 
 @[simp]
 theorem support_arbLabel : support arbLabel = fun _ => True := by
   funext v
-  cases v <;> simp_all [arbLabel]
+  cases v <;> simp_all [arbLabel, TGen.arbLabel]
 
 @[simp]
 theorem someSupport_arbLabel : someSupport arbLabel = fun _ => True := by
   funext v
-  cases v <;> simp_all [arbLabel]
+  cases v <;> simp_all [arbLabel, TGen.arbLabel]
 
 namespace CorrectGen
 
@@ -87,19 +101,16 @@ end CorrectGen
 
 namespace Total
 
-/-- Direct `⟨witness, proof⟩`, with the `unfold` confined to the proof — `total_arbBool` gets this
-for free by being a bare application, and this one cannot because `arbLabel` is `@[irreducible]`.
+/-- Direct `⟨witness, proof⟩`, with the `unfold` confined to the proof — `arbLabel` is
+`@[irreducible]`, so the goal has to be opened, and the only question is where.
 
-Written `by unfold arbLabel; exact total_pick …` the whole term is under an `Eq.mpr`, which lands in
-the **data** path, so `.val` stops projecting. At the `Palamedes.PGen` carrier that was invisible;
-at `[Gen G] : G _` the witness is the emitted generator, and `genGoodStack` printed each of its four
-`arbLabel`s as `(↑(id ⟨{ run := … }, id (Eq.refl …) ▸ Total.total_pick._proof_1 …⟩)).run` — the
-term quadrupled in size and carried `._proof_1` references into a pinned golden. -/
+Written `by unfold arbLabel; exact total_pick …` the whole term sits under an `Eq.mpr`, which lands
+in the **data** path, so `.val` stops projecting; the witness then reaches the environment as a
+proof term rather than as the generator it is supposed to be. Keeping the data a bare `TGen.arbLabel`
+is also what makes `genGoodStack` print each of its four label draws as one named generator instead
+of an inlined `pick`. -/
 @[total]
-def total_arbLabel : total arbLabel :=
-  ⟨TGen.pick (TGen.pure Label.low) (TGen.pure Label.high), by
-    unfold arbLabel
-    rw [TGen.toGen_pick, TGen.toGen_pure, TGen.toGen_pure]⟩
+def total_arbLabel : total arbLabel := ⟨TGen.arbLabel, by unfold arbLabel; rfl⟩
 
 end Total
 

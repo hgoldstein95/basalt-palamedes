@@ -15,7 +15,7 @@ length-`n` stack passes `isGoodAtom`/`isGoodNat` (the 3-constructor `Stack` data
 emitted term under `#guard_msgs`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace GoodStack
 
@@ -42,25 +42,25 @@ info: Try this:
         let a ←
           if x.2 = 0 then pure StackF.mty
             else
-              _root_.frequency
+              frequency
                 [(1, fun x => do
                     let a ←
-                      _root_.frequency
+                      frequency
                           [(1, fun x => do
-                              let a ← RandomChoice.pick (fun x => pure Label.low) fun x => pure Label.high
+                              let a ← TGen.arbLabel.run
                               pure (Atom.atm 0 a)),
                             (1, fun x => do
-                              let a ← RandomChoice.pick (fun x => pure Label.low) fun x => pure Label.high
+                              let a ← TGen.arbLabel.run
                               pure (Atom.atm 1 a))]
                     pure (StackF.cons a PUnit.unit)),
                   (1, fun x => do
                     let a ←
-                      _root_.frequency
+                      frequency
                           [(1, fun x => do
-                              let a ← RandomChoice.pick (fun x => pure Label.low) fun x => pure Label.high
+                              let a ← TGen.arbLabel.run
                               pure (Atom.atm 0 a)),
                             (1, fun x => do
-                              let a ← RandomChoice.pick (fun x => pure Label.low) fun x => pure Label.high
+                              let a ← TGen.arbLabel.run
                               pure (Atom.atm 1 a))]
                     pure (StackF.ret_cons a PUnit.unit))]
         match a with

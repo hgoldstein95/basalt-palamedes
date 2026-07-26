@@ -14,7 +14,7 @@ Synthesizes `genAllTwosEvenLen : G (List Nat)` for `isAllTwosEvenLen`, the conju
 `isAllTwos` and `isEvenLen`, each defined by structural recursion.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace AllTwosEvenLen
 

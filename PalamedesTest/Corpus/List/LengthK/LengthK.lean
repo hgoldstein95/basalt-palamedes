@@ -13,7 +13,7 @@ import Palamedes.Synthesizer
 Synthesizes `genLengthK : G (List Nat)` for `List.length xs = k`, a symbolic target length.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace LengthK
 

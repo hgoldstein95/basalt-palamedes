@@ -14,7 +14,7 @@ Synthesizes `genAVLFold : G (Option (Palamedes.Tree Nat))` from `isAVLFold`, the
 of `isAVL`; a filtering generator, run near a raised `maxHeartbeats`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace AVLFold
 

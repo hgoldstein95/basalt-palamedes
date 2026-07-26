@@ -17,12 +17,11 @@ shape that prints as Basalt's own `frequency`; `PalamedesTest/Stats.lean` pins t
 actually produces.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 /--
 info: Try this:
-  [apply] exact
-    _root_.frequency [(1, fun x => pure 1), (1, fun x => pure 2), (1, fun x => pure 3), (1, fun x => pure 4)]
+  [apply] exact frequency [(1, fun x => pure 1), (1, fun x => pure 2), (1, fun x => pure 3), (1, fun x => pure 4)]
 -/
 #guard_msgs in
 def genSmall [Gen G] : G Nat := by

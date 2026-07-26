@@ -14,7 +14,7 @@ Synthesizes `genEq2' : G Nat` for the predicate with the equality flipped (`2 = 
 `· = 2`), checking the search handles either orientation.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 def genEq2' [Gen G] : G Nat := by
   generator_search (2 = ·)

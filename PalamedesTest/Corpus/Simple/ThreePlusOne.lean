@@ -14,7 +14,7 @@ Synthesizes `genThreePlusOne : G Nat` for `fun b => ∃ a, a = 3 ∧ b = a + 1`.
 term (`pure 4`).
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 /--
 info: Try this:

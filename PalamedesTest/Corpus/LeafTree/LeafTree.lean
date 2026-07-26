@@ -16,7 +16,7 @@ registry), so `generator_search` synthesizes correct-by-construction generators 
 **zero edits** to any `Palamedes/` module.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace LeafTreeDemo
 

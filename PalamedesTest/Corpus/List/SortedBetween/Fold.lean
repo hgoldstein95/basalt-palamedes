@@ -15,7 +15,7 @@ fold-spelled twin of `isSortedBetween` via `List.fold`, exercising a different s
 structurally recursive sibling.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace SortedBetweenFold
 

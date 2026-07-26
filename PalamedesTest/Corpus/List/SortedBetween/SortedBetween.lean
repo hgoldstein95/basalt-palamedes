@@ -15,7 +15,7 @@ predicate that threads the running lower bound as state. Pins the emitted term u
 `#guard_msgs`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace SortedBetween
 
@@ -32,7 +32,7 @@ info: Try this:
       (fun d x => do
         let a ←
           if hb : decide (x.2.1 ≤ x.2.2) = true then
-              _root_.frequency
+              frequency
                 [(1, fun x => pure ListF.nil),
                   (1, fun x_1 => do
                     let a ← (TGen.choose x.2.1 x.2.2).run

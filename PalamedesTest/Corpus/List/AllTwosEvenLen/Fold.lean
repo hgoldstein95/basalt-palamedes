@@ -15,7 +15,7 @@ twin of `isAllTwosEvenLen` via `List.fold`, exercising a different search path t
 structurally recursive sibling.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace AllTwosEvenLenFold
 

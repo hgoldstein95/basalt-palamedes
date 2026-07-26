@@ -15,11 +15,11 @@ bounds, a filtering generator (Basalt-shaped `totalize` + `assume`). Pins the em
 `#guard_msgs`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 /--
 info: Try this:
-  [apply] exact totalize (assume (decide (lo ≤ hi)) fun h => choose lo hi)
+  [apply] exact PGen.totalize (PGen.assume (decide (lo ≤ hi)) fun h => PGen.choose lo hi)
 -/
 #guard_msgs in
 def genBetweenLoAndHi (lo hi : Nat) [Gen G] : G (Option Nat) := by

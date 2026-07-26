@@ -29,7 +29,7 @@ Two properties carry the design, and both are pinned below:
   nowhere.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 @[simp]
 def isAllTwos : List Nat → Bool
@@ -220,6 +220,35 @@ info: (genLawfulB (SchedulePolicy.moderate.materialize genLawfulB.sites)) — 30
 -/
 #guard_msgs in
 #genstats (draws := 30) (genLawfulB (SchedulePolicy.moderate.materialize genLawfulB.sites))
+
+/-! ## A tuned generator still prints as a generator
+
+The pin below is on the *emitted term*, and specifically on the `frequency` branch list appearing
+with no side-condition argument after it. `delabDroppingSideCondition` only drops that argument when
+it can see a positive weight by inspection, and a tuned generator's weights are `Tuning.weight θ i d`
+— opaque in `θ`, positive by `Tuning.weight_pos`. Teach the printer only the literal affine shape and
+this term regrows a ~25-line `Eq.trans`/`congrArg` tower over `TGen.frequency._proof_1`, which is the
+one printing hazard a tuning binder introduces and which no other pin in the corpus can see: the
+term-pinned corpus files are all untuned, and the tuned ones (`genWellTyped`) are pinned by
+`#genstats` instead. -/
+
+/--
+info: Try this:
+  [apply] exact
+    List.unfoldGo
+      (fun d x => do
+        let a ←
+          frequency
+              [(Tuning.weight θ 0 d, fun x => pure ListF.nil),
+                (Tuning.weight θ 1 d, fun x => pure (ListF.cons 2 PUnit.unit))]
+        match a with
+          | ListF.nil => pure ListF.nil
+          | ListF.cons a1 a2 => pure (ListF.cons a1 (a2, PUnit.unit)))
+      0 (PUnit.unit, PUnit.unit)
+-/
+#guard_msgs in
+def genPinnedB (θ : Tuning := .uniform) [Gen G] : G (List Nat) := by
+  generator_search? (fun xs => isAllTwos xs)
 
 /-! ## The filtering shape
 

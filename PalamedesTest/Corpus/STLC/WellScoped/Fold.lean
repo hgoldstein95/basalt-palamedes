@@ -14,7 +14,7 @@ Synthesizes `genWellScopedFold : G Term` from `isWellScopedFold`, the fold-spell
 `isWellScoped`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace WellScopedFold
 

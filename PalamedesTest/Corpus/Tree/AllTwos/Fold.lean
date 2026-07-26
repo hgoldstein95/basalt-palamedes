@@ -14,7 +14,7 @@ Synthesizes `genAllTwosFold : G (Palamedes.Tree Nat)` from `isAllTwosFold`, the 
 twin of `isAllTwos` written as an explicit `Tree.fold`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace AllTwosTreeFold
 

@@ -14,7 +14,7 @@ Synthesizes `genTrueFold : G (List Nat)` for `isTrueFold`, the fold-spelled twin
 `List.fold`, exercising a different search path than the structurally recursive sibling.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace TrueFold
 

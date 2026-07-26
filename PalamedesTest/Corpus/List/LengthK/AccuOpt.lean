@@ -14,7 +14,7 @@ Synthesizes `genLengthKAccuOpt : G (List Nat)` for `lengthAccuOpt`, the length p
 spelled via the accumulating `List.accuM`/`Option` fold path.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace LengthKAccuOpt
 

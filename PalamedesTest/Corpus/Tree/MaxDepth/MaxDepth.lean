@@ -14,7 +14,7 @@ Synthesizes `genComplete : G (Palamedes.Tree Nat)` from `isMaxDepth`, which hold
 leaf is at depth at most `n`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace MaxDepth
 

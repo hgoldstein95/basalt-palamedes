@@ -15,7 +15,7 @@ Synthesizes `genAllEvensFold : G (List Nat)` for `isAllEvensFold`, the fold-spel
 sibling.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace AllEvensFold
 

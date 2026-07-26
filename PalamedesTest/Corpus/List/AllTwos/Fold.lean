@@ -15,7 +15,7 @@ Synthesizes `genAllTwosFold : G (List Nat)` for `isAllTwosFold`, the fold-spelle
 sibling.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace AllTwosFold
 

@@ -14,7 +14,7 @@ Synthesizes `genIncreasingByOneFold : G (Palamedes.Tree Nat)` from `isIncreasing
 fold-spelled twin of `isIncreasingByOne`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace IncreasingByOneTreeFold
 

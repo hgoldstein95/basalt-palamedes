@@ -15,7 +15,7 @@ Synthesizes `genEvenLenAccuOpt : G (List Nat)` for `isEvenLenAccuOpt`, spelled v
 under `#guard_msgs`.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 namespace EvenLenAccuOpt
 
@@ -35,7 +35,7 @@ info: Try this:
       (fun d x => do
         let a ←
           if hb : x.1 = true then
-              _root_.frequency
+              frequency
                 [(1, fun x => pure ListF.nil),
                   (1, fun x => do
                     let a ← TGen.arbNat.run
