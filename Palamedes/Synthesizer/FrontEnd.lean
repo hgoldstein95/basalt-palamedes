@@ -75,19 +75,37 @@ def solveGoalWithTactic (goalType : Expr) (tactic : TSyntax `tactic) : TermElabM
     throwError "goals left unsolved: {unsolved}"
   instantiateMVars m
 
-/-- `solveGoalWithTactic`, but *running to completion and leaving goals* is reported as `none`
-rather than as an exception.
+/-- `solveGoalWithTactic`, but *running to completion and leaving goals* is reported as the leftover
+goals rather than as an exception.
 
 The distinction matters wherever an unclosed goal is itself a meaningful answer. Catching the
 exception instead would lump it together with the tactic *throwing* — a heartbeat blowout, a
 missing registry entry, an interrupt — which are not answers about the goal at all. Only the
-totality stage needs this today; see `runSynthesisPipeline`. -/
+totality stage needs this today; see `runSynthesisPipeline`, which reads the leftover goals to say
+*which* head it could not reconstruct. -/
 def solveGoalWithTactic? (goalType : Expr) (tactic : TSyntax `tactic) :
-    TermElabM (Option Expr) := do
+    TermElabM (Except (List MVarId) Expr) := do
   let m ← mkFreshExprMVar goalType
   let unsolved ← Tactic.run m.mvarId! (Tactic.evalTactic tactic)
-  if unsolved.length > 0 then return none
-  return some (← instantiateMVars m)
+  if unsolved.length > 0 then return .error unsolved
+  return .ok (← instantiateMVars m)
+
+/-- The head constants a totality goal is stuck on: those with no `@[total]` rule.
+
+This is the whole diagnostic payoff of keying the descent on the head. `totality` is
+`repeat' first | …`, which never fails, so previously an unclosed goal carried no information about
+*why* — `gapMessage` had to guess ("the usual cause is a datatype with no `@[total]` lemma"). A
+dispatch table can just be asked. -/
+def totalityGaps (goals : List MVarId) : MetaM (Array Name) := do
+  let table := Palamedes.totalTable (← getEnv)
+  let mut gaps := #[]
+  for g in goals do
+    if ← g.isAssigned then continue
+    let some key ← g.withContext do Palamedes.totalKey? (← instantiateMVars (← g.getType))
+      | continue
+    unless table.contains key || gaps.contains key.2 do
+      gaps := gaps.push key.2
+  return gaps
 
 /-- One run of the synthesis pipeline: search → extract → optimize → totality.
 
@@ -110,6 +128,9 @@ structure SynthesisResult where
   totalWitness? : Option Expr
   /-- Why there is no witness, when the reason was not "the generator filters". -/
   totalityFailure? : Option MessageData
+  /-- Heads the descent had no `@[total]` rule for, read off the goals it left. Empty when the
+  witness succeeded or when the tactic threw. -/
+  totalityGaps : Array Name := #[]
 
 /-- Run the shared pipeline against a predicate `pred : α → Prop`.
 
@@ -182,18 +203,21 @@ def runSynthesisPipeline (α pred : Expr) (checkTotal verbose : Bool) :
   -- `Option` their generator does not need (and `totalize` would accept, silently, forever).
   let mut totalWitness? : Option Expr := none
   let mut totalityFailure? : Option MessageData := none
+  let mut gaps : Array Name := #[]
   if checkTotal then
     try
-      totalWitness? ← solveGoalWithTactic?
-        (← mkAppM ``Palamedes.PGen.total #[gen''])
-        (← `(tactic| totality))
+      match ← solveGoalWithTactic?
+          (← mkAppM ``Palamedes.PGen.total #[gen''])
+          (← `(tactic| totality)) with
+      | .ok w => totalWitness? := some w
+      | .error unsolved => gaps ← totalityGaps unsolved
     catch e =>
       -- Never a statement about the generator: rethrow rather than record. `catch _` here would
       -- turn a Ctrl-C into "your generator filters".
       if e.isInterrupt || e.isMaxHeartbeat || e.isMaxRecDepth then throw e
       totalityFailure? := some e.toMessageData
 
-  return { gen := gen'', supportProof, totalWitness?, totalityFailure? }
+  return { gen := gen'', supportProof, totalWitness?, totalityFailure?, totalityGaps := gaps }
 
 /-- What the *declared return type* says the generator should be. Whether a generator filters is a
 fact about its type, visible at every use site. -/
@@ -284,13 +308,9 @@ Delta-unfolds exactly the witness constructors (the fixed combinator basis plus 
 projections. Deliberately *not* a full `Meta.reduce`: that would also unfold Basalt's `frequency`
 and `oneOf` into `frequencyAux`/`choose`, destroying exactly the structure we want to keep. -/
 def extractWitness (e : Expr) : MetaM Expr := do
+  -- The witness constructors are exactly the `@[total]` registry — the generic basis included, since
+  -- it is registered the same way — so this list holds only the `TGen` combinators they build with.
   let basis : Array Name := #[
-    ``Palamedes.PGen.Total.total_pure, ``Palamedes.PGen.Total.total_bind,
-    ``Palamedes.PGen.Total.total_pick, ``Palamedes.PGen.Total.total_oneOf,
-    ``Palamedes.PGen.Total.total_frequency, ``Palamedes.PGen.Total.total_map,
-    ``Palamedes.PGen.Total.total_dite,
-    ``Palamedes.PGen.Total.totalList_nil, ``Palamedes.PGen.Total.totalList_cons,
-    ``Palamedes.PGen.Total.totalWeighted_nil, ``Palamedes.PGen.Total.totalWeighted_cons,
     ``Palamedes.TGen.pure, ``Palamedes.TGen.bind, ``Palamedes.TGen.pick,
     ``Palamedes.TGen.frequency, ``Palamedes.TGen.map, ``Palamedes.TGen.toGen]
   let names := basis ++ Palamedes.totalLemmas (← getEnv)

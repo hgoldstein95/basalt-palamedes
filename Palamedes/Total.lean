@@ -115,8 +115,14 @@ theorem frequency_congr {gs gs' : List (Nat × PGen α)} (hg : gs = gs') {h h'} 
 namespace Total
 
 /-! These are `def`s rather than `theorem`s, and carry no `@[simp]`: `total` is `Type`-valued, so
-they build witnesses rather than prove propositions. The `totality` tactic drives them with `apply`,
-which is unaffected. They must stay **computable** — the witness they assemble is what stage 2 emits
+they build witnesses rather than prove propositions.
+
+Each is `@[total]`, exactly like a per-datatype leaf: the generic combinator basis has no privileged
+status in the descent, and `Synthesizer/Totality.lean` names none of them. The tag both registers
+the rule and fixes the head it reconstructs, so `total_oneOf` and `total_frequency` can no longer
+race however they are ordered here.
+
+They must stay **computable** — the witness they assemble is what stage 2 emits
 as the generator's definition, so a `Classical.choice` anywhere here would make the emitted
 generator noncomputable. That is the direct reason `total_bind` no longer uses `choose`.
 
@@ -127,9 +133,11 @@ generator cannot be reduced back to generator code and lands in the environment 
 (`total_bind (total_oneOf …) …`) instead of as a readable generator. `PalamedesTest/Extract.lean`
 audits for exactly that. Keep the data direct. -/
 
+@[total]
 def total_pure (a : α) : total (pure a) :=
   ⟨TGen.pure a, by ext; rfl⟩
 
+@[total]
 def total_bind
     (hx : total x)
     (hf : ∀ a, total (f a)) :
@@ -138,22 +146,27 @@ def total_bind
     rw [TGen.toGen_bind, hx.property]
     exact congrArg _ (funext fun a => (hf a).property)⟩
 
+@[total]
 def total_pick
     (hx : total x)
     (hy : total y) :
     total (pick x y) :=
   ⟨TGen.pick hx.val hy.val, by rw [TGen.toGen_pick, hx.property, hy.property]⟩
 
+@[total]
 def totalList_nil : totalList ([] : List (PGen α)) := ⟨[], rfl⟩
 
+@[total]
 def totalList_cons {x : PGen α} {gs : List (PGen α)}
     (hx : total x)
     (hgs : totalList gs) :
     totalList (x :: gs) :=
   ⟨hx.val :: hgs.val, by rw [List.map_cons, hx.property, hgs.property]⟩
 
+@[total]
 def totalWeighted_nil : totalWeighted ([] : List (Nat × PGen α)) := ⟨[], rfl⟩
 
+@[total]
 def totalWeighted_cons {w : Nat} {g : PGen α} {gs : List (Nat × PGen α)}
     (hg : total g)
     (hgs : totalWeighted gs) :
@@ -172,6 +185,7 @@ theorem totalWeighted_fst {gs : List (Nat × PGen α)} (hgs : totalWeighted gs) 
   conv_rhs => rw [← hgs.property]
   simp [List.map_map, Function.comp_def]
 
+@[total]
 def total_frequency {gs : List (Nat × PGen α)} {h}
     (hgs : totalWeighted gs) :
     total (frequency gs h) :=
@@ -179,6 +193,7 @@ def total_frequency {gs : List (Nat × PGen α)} {h}
     rw [TGen.toGen_frequency]
     exact frequency_congr hgs.property⟩
 
+@[total]
 def total_oneOf {gs : List (PGen α)} {h}
     (hgs : totalList gs) :
     total (oneOf gs h) :=
@@ -187,11 +202,13 @@ def total_oneOf {gs : List (PGen α)} {h}
       conv_rhs => rw [← hgs.property]
       simp [List.map_map, Function.comp_def]⟩
 
+@[total]
 def total_map
     (hx : total x) :
     total (f <$> x) :=
   ⟨TGen.map f hx.val, by rw [TGen.toGen_map, hx.property]⟩
 
+@[total]
 def total_dite
     {g₁ : b = true → PGen α}
     {g₂ : ¬ (b = true) → PGen α}

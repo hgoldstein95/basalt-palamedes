@@ -17,13 +17,63 @@ import Palamedes.Total
 # The `totality` tactic
 
 Stage 4 of the pipeline: reconstruct a `TGen` (`Fail`-free) witness over a generator's combinator
-spine, via an ordered `first | …` cascade over the fixed combinator basis plus per-datatype leaves
-from the `@[total]` registry.
+spine, by descending it and dispatching each node on its head constant to the `@[total]` rule that
+reconstructs that head.
+
+**This file names no lemmas.** The generic combinator basis (`Palamedes/Total.lean`) and the
+per-datatype leaves (`Palamedes/Data/`, plus everything `derive_palamedes` emits) are registered the
+same way, so adding either needs no edit here.
 -/
 
 open Palamedes Palamedes.PGen Palamedes.PGen.Total
 
+/-- How many definitions deep to look for a head the registry knows. See `total_apply`. -/
+private def unfoldBudget : Nat := 8
+
+/-- Reconstruct one node: dispatch the goal's head constant to its `@[total]` rule and `apply` it.
+
+`apply` rather than a hand-built application, deliberately. The rule's structural arguments, its
+implicit and instance arguments, and its universe levels all have to be solved against the goal, and
+`apply` is Lean's solver for exactly that — a descent that built the application itself would be
+re-implementing unification. What dispatch replaces is not `apply` but the `first | …` *search* that
+used to decide which lemma to hand it.
+
+**A head with no rule is unfolded and looked up again**, because a totality goal need not be stated
+about a spine: `PGen.total genAllTwos` names a generator that *contains* one. Unfolding is safe here
+in a way that unfolding up front would not be, and the difference is the whole reason dispatch can
+be exact: a constant is only ever peeled when the registry has *no* rule for it, so a combinator in
+the basis is never unfolded, and `PGen.oneOf` in particular cannot collapse into the
+`PGen.frequency` it is defined as. Only the reachable-but-unregistered case pays, and it pays a
+bounded `unfoldBudget` before giving up — `PGen.assume` is the one that reaches it in practice, and
+giving up there is the intended "this generator filters" outcome. -/
+elab "total_apply" : tactic => open Lean Elab Tactic Meta in do
+  let goal ← getMainGoal
+  goal.withContext do
+    let table := Palamedes.totalTable (← getEnv)
+    let mut ty ← instantiateMVars (← goal.getType)
+    let mut decl? : Option Name := none
+    for _ in [0:unfoldBudget] do
+      let some key ← Palamedes.totalKey? ty
+        | throwError "total_apply: the goal is not a totality goal about a term with a head \
+            constant{indentExpr ty}"
+      if let some d := table[key]? then
+        decl? := some d
+        break
+      let some unfolded ← unfoldDefinition? ty.appArg!.headBeta
+        | throwError "total_apply: no `@[total]` rule reconstructs `{key.2}`, and it does not unfold"
+      let args := ty.getAppArgs
+      ty := mkAppN ty.getAppFn (args.set! (args.size - 1) unfolded)
+    let some decl := decl?
+      | throwError "total_apply: no `@[total]` rule reconstructs the head of{indentExpr ty}\n\
+          (gave up after unfolding {unfoldBudget} definitions deep)"
+    -- Against the *original* goal, not the unfolded one: `apply` unifies up to delta anyway, so
+    -- unfolding was only ever a way to find the rule, never a change to what is being proved.
+    replaceMainGoal (← goal.apply (← mkConstWithFreshMVarLevels decl))
+
 /-- Case-split the discriminant of a `match` sitting inside a totality goal.
+
+The fallback for a `match` whose base functor has no `X.total_cases` — `derive_palamedes` emits one
+per datatype, so in practice this is reached only by a hand-written match.
 
 `split` would also close these goals, but it emits a `splitter` application carrying an `Eq.rec` cast
 per arm — and since `total` is `Type`-valued, that cast lands in the **data** path of the witness. It
@@ -46,43 +96,34 @@ elab "total_cases" : tactic => open Lean Elab Tactic Meta in do
 
 /-- Prove `PGen.total g` by reconstructing a `TGen` (`Fail`-free) witness over `g`'s combinator spine.
 
-Each `total_*` lemma maps one `PGen` combinator to its `TGen` twin and closes by `ext; rfl`, so the
-`apply` cascade is the structural reconstruction. `optimizeGen` has already eliminated every
-satisfiable `assume`, so an `assume` reaching this tactic denotes a genuine filter and reconstruction
-fails (the generator is partial; declare it at `G (Option α)`, which is what makes
-`generator_search` emit it via `totalize` instead).
+Each `@[total]` rule maps one `PGen` head to its `TGen` twin, so descending the spine and dispatching
+on the head *is* the structural reconstruction. `optimizeGen` has already eliminated every
+satisfiable `assume`, so an `assume` reaching this tactic denotes a genuine filter: nothing
+reconstructs `PGen.assume`, the dispatch finds no rule, and the goal is left open (which is what
+makes `generator_search` emit the generator via `totalize` instead).
 
-Two things about the cascade below are not obvious:
+Dispatch is a lookup on the goal's head, not a search, and that is what keeps the four arms below
+from interacting:
 
-* **The combinator basis is ordered.** `total_oneOf` must precede `total_frequency`: `oneOf` is
-  definitionally a `frequency`, so the latter would capture the goal and leave a stuck
-  `totalWeighted (List.map …)`. That is why the basis is hard-coded here rather than registered.
-* **The per-datatype rules are not**, so they come from the `@[total]` registry, and a new datatype
-  needs no edit to this file. Their goal shapes are pairwise disjoint, so at most one can ever apply.
+* `total_apply` is a *function* of the goal. Two rules can never race for one node — `@[total]`
+  rejects a second rule claiming a head already claimed — so this file has no ordering to get
+  right. `total_oneOf` before `total_frequency`, which used to be load-bearing and undocumentable
+  anywhere but here, is now just two different heads.
+* `total_cases` fires only where dispatch found nothing *and* the node is a `match`, and `split`
+  only where even that did not apply. Both leave a cast in the witness, so a datatype reaching them
+  fails the extraction audit rather than silently emitting a proof term.
+* `simp` last, single-pass so it cannot loop on the recursive `unfold` equations.
 
-`total_cases`/`simp` at the end handle recursion: an `unfold` step is wrapped in a constructor
-`match`, and `(casesOn a …).toGen = casesOn a (…toGen)` is not definitional — it needs `cases a`. -/
+`repeat'` never fails, so a goal none of the four can step is simply left open — see
+`diagnoseTotality`, which is what tells a genuine filter apart from a missing registration. -/
 elab "totality" : tactic => open Lean Elab Tactic in do
-  let leaves ← (Palamedes.totalLemmas (← getEnv)).mapM fun n =>
-    `(tactic| apply $(mkIdent (`_root_ ++ n)):term)
   evalTactic (← `(tactic|
     repeat'
       first
+        -- Parenthesized: bare `intro` accepts match-style patterns, so it swallows the next `|` and
+        -- the quotation fails to parse with "expected '=>'".
         | (intro)
-        | apply total_pure
-        | apply total_bind
-        | apply total_pick
-        | apply total_oneOf
-        | apply total_frequency
-        | apply totalList_cons
-        | apply totalList_nil
-        | apply totalWeighted_cons
-        | apply totalWeighted_nil
-        | apply total_map
-        | apply total_dite
-        $[| $leaves:tactic]*
+        | total_apply
         | total_cases
-        -- `split` stays as a last resort. It leaves a cast in the witness, so a datatype that falls
-        -- through to it fails the extraction audit rather than silently emitting a proof term.
         | split
         | simp (config := {singlePass := true})))
