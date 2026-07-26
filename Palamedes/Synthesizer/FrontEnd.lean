@@ -430,6 +430,29 @@ def classifyGoal (goalTy : Expr) (t : Lean.Term) : TermElabM (Target × Expr) :=
     throwError "generator_search: the goal must be `G α`, `G (Option α)` for a Basalt \
       `[Gen G]`, or `Palamedes.PGen α`, got{indentExpr goalTy}"
 
+/-- Drop the proof transports that are the identity.
+
+A floated `assume` reaches this stage as a `dite` whose branches bind its guard, and rewriting
+*underneath* those branches means going through Lean's `dite` congruence, which transports the bound
+proof into each arm. The transport is emitted whether or not the guard itself was rewritten; when it
+was not, the equation it transports along is `rfl` and the wrapper denotes nothing. Nothing
+downstream removes it — `simp` never revisits proof subterms, and `Meta.reduce` skips proofs — so
+every side-condition proof in the emitted generator ends up wrapped in an `Eq.mpr_prop (Eq.refl …)`.
+
+The cost is not only noise. A primitive's side-condition delaborator (`delabChoose`,
+`delabElements`) drops the proof only when `isAuxProofOverLocals` can see that it is applied to a
+local hypothesis — the guard. Wrapped, the guard is no longer an argument by inspection, so the
+proof prints in full and the emitted term stops being pasteable. `genWellTyped`'s `elements` draws
+are where that shows, because they are the ones whose data argument is computed rather than a
+binder.
+
+Replacing `Eq.mpr_prop h₁ h₂` by `h₂` is type-correct exactly when the two `Prop`s are defeq, which
+is what is checked; proof irrelevance does the rest. -/
+private def dropIdentityTransports (e : Expr) : MetaM Expr :=
+  Meta.transform e (post := fun e => do
+    let_expr Eq.mpr_prop p q _ h := e | return .continue
+    if ← withNewMCtxDepth (isDefEq p q) then return .continue h else return .continue)
+
 /-- Turn a totality witness back into generator code.
 
 The Basalt-shaped emission is `witness.val.run`. Left as-is that is a *proof term* — a tree of
@@ -459,7 +482,7 @@ def extractWitness (e : Expr) : MetaM Expr := do
     (simpTheorems := #[thms])
     (congrTheorems := ← getSimpCongrTheorems)
   let (r, _) ← simp e ctx
-  return r.expr
+  dropIdentityTransports r.expr
 
 /-- Why the totality stage produced no witness, as far as the evidence actually supports. -/
 inductive TotalityDiagnosis where
