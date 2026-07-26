@@ -10,7 +10,7 @@ import Palamedes.SomeSupport
 /-!
 # Bridging Palamedes' `support` to Basalt's law vocabulary
 
-`correct def` emits laws in **Basalt's** names, not Palamedes'. The pipeline proves
+`@[correct]` emits laws in **Basalt's** names, not Palamedes'. The pipeline proves
 `Palamedes.PGen.support g = P`; Basalt states soundness-and-completeness as
 `IsSoundAndComplete (g : SPMF α) P`, i.e. `∀ a, a ∈ SPMF.support g ↔ P a`. These two lemmas are the
 whole of the conversion, and they exist so the command can `mkAppM` them rather than assemble the

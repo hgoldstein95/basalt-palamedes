@@ -26,7 +26,7 @@ measurable tuning objective. Deep filtering regimes (`genRBT` at height ≥ 3, `
 
 Retry recovers from *failure*, not *divergence*: `total` means assume-free, not almost-sure
 termination, and a total but non-a.s.-terminating generator can still hang when sampled.
-`derive_tuning` plus a depth-decaying `Tuning` is the practical (measured, not proved) fix — see
+A `Tuning` binder plus a depth-decaying schedule is the practical (measured, not proved) fix — see
 `PalamedesTest/Optimizer/Schedule.lean`.
 -/
 

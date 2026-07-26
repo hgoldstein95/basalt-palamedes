@@ -80,7 +80,7 @@ says it can fail. Same three behaviours as the `sample` family above, one layer 
   | .ok n => throw <| IO.userError s!"samplePartial (pure none) produced {n}"
 
 /- `samplePartialN` draws exactly `n`, retrying each independently. `genRangeB`-style filtering is
-covered in `DeriveTuning`; here the point is the count and that every element cleared the filter. -/
+covered in `Tuning`; here the point is the count and that every element cleared the filter. -/
 #eval show IO Unit from do
   let ts ← Palamedes.samplePartialN 3 (RBT.genRBT 2 0 10)
   unless ts.length = 3 do

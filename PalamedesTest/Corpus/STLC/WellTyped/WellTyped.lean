@@ -6,13 +6,13 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 -/
 
 import Palamedes.Synthesizer
-import Palamedes.DeriveTuning
+import Palamedes.Tuning
 
 /-!
 # Corpus: well-typed STLC terms
 
 Synthesizes `genWellTyped : PGen Term` from `isWellTyped`, the existential well-typedness
-predicate over `getType`; a growing-seed generator, so `derive_tuning` and a decaying schedule are
+predicate over `getType`; a growing-seed generator, so a `Tuning` binder and a decaying schedule are
 required for a.s. termination. Runs near a raised `maxHeartbeats`; distribution pinned by
 `Optimizer/Schedule.lean`.
 -/
@@ -46,17 +46,12 @@ def isWellTyped (Γ : List Ty) (t : Term) : Prop :=
 
 attribute [local simp] Ty.as_or Ty.deforest_eq in
 /-- The well-typed-term generator: `app` invents its argument type and recurses on `σ → τ` for a
-freshly generated `σ`, so the seed *grows*. Synthesized uniform it is supercritical and diverges when
-sampled directly; the usable generator is `genWellTyped.tuned (SchedulePolicy.stlc.materialize
-genWellTyped.sites)`, whose depth-decaying weights force closure. -/
-def genWellTyped (Γ : List Ty) : PGen Term := by
+freshly generated `σ`, so the seed *grows*. At the default `.uniform` weighting it is supercritical
+and diverges when sampled directly; the usable generator is
+`genWellTyped Γ (SchedulePolicy.stlc.materialize genWellTyped.sites)`, whose depth-decaying weights
+force closure. The `θ` binder is what makes that call possible — without one the generator would
+ship uniform and there would be nothing to weight. -/
+def genWellTyped (Γ : List Ty) (θ : Tuning := .uniform) : PGen Term := by
   generator_search (fun t => isWellTyped Γ t)
-
-/--
-info: derive_tuning WellTyped.genWellTyped: emitted tuned, defaults, sites, tuned_defaults, tuned_support
-  (no `tuned_sound_complete`: WellTyped.genWellTyped has no `sound_complete` to carry across — declare it with `correct def` to get one)
--/
-#guard_msgs in
-derive_tuning genWellTyped
 
 end WellTyped

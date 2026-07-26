@@ -42,7 +42,17 @@ def isBalanced (t : Palamedes.Tree Nat) (height : Nat) : Bool :=
 def isAVL (height lo hi : Nat) (t : Palamedes.Tree Nat) : Bool :=
   isBalanced t height && isBST t (lo, hi)
 
-def genAVL (height lo hi : Nat) [Gen G] : G (Option (Palamedes.Tree Nat)) := by
+-- Tagged `@[correct]` as the regression for the `someSupport` bridge over a **filtering,
+-- recursive** generator — the combination that used to leave the bridge with an unsolved goal.
+-- Nothing else in the corpus covers it: the other filtering generators carrying laws are
+-- non-recursive, and the recursive ones are total.
+/-- info: @[correct] AVL.genAVL: emitted sound_complete -/
+#guard_msgs in
+@[correct] def genAVL (height lo hi : Nat) [Gen G] : G (Option (Palamedes.Tree Nat)) := by
   generator_search (fun t => isAVL height lo hi t = true)
+
+/-- info: 'AVL.genAVL.sound_complete' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms genAVL.sound_complete
 
 end AVL

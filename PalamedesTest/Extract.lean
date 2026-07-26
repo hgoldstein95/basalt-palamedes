@@ -63,14 +63,15 @@ run_cmd liftTermElabM do
   for i in [0:env.header.moduleData.size] do
     let modName := env.header.moduleNames[i]!
     -- `GeneratorAPI` alongside the corpus: it holds the canonical Basalt-shaped generators, which
-    -- is the default emission shape and therefore the one most in need of auditing. `CorrectDef`
-    -- and `DeriveTuning` because their commands emit through raw `addDecl` — no def elaborator, so
-    -- none of the `._proof_i` abstraction the exemption above assumes, and a distinct emission path
-    -- whose residue the corpus cannot witness.
+    -- is the default emission shape and therefore the one most in need of auditing. `Correct` and
+    -- `Tuning` because `@[correct]` emits through raw `addDecl` — no def elaborator, so none of the
+    -- `._proof_i` abstraction the exemption above assumes, and a distinct emission path whose
+    -- residue the corpus cannot witness. (The *generator* is an ordinary `def` now that synthesis
+    -- is a tactic throughout; it is the emitted laws and companions that take the raw path.)
     unless (`PalamedesTest.Corpus).isPrefixOf modName
         || modName == `PalamedesTest.GeneratorAPI
-        || modName == `PalamedesTest.CorrectDef
-        || modName == `PalamedesTest.DeriveTuning do continue
+        || modName == `PalamedesTest.Correct
+        || modName == `PalamedesTest.Tuning do continue
     for n in env.header.moduleData[i]!.constNames do
       let some ci := env.find? n | continue
       let some val := ci.value? | continue
@@ -90,9 +91,9 @@ run_cmd liftTermElabM do
         return hd.isFVar && args.any (· == hd)
       unless isGen do continue
       total := total + 1
-      -- Scan the **data** path only. Proof subterms are compiler-erased and legitimately carry
-      -- witness plumbing (a `frequency` side condition built by the `totality` cascade mentions
-      -- `totalWeighted_cons` and casts); flagging those would make every raw-`addDecl` emission a
+      -- Scan the **data** path only. Proof subterms are compiler-erased and legitimately sit in
+      -- argument positions of a generator (`frequency`'s positivity side condition, `choose`'s
+      -- bounds); flagging those would make every raw-`addDecl` emission a
       -- false positive. The def elaborator hides them behind exempt `._proof_i` names; raw
       -- `addDecl` keeps them inline, so the erasure has to be structural rather than name-based.
       let cleaned ← Meta.transform val (pre := fun e => do

@@ -17,8 +17,8 @@ weight stays `≥ 1` and a deep recursion becomes rarer, never impossible.
 
 Schedules are pure `Tuning`-producing data — `SchedulePolicy.materialize` lays a policy over a site
 table into a Basalt `Tuning`. The `installTuning` optimizer pass that *reads* such a `Tuning` at each
-`frequency` site lives in `Palamedes.Optimizer`, and `derive_tuning` drives it; nothing here depends
-on the optimizer.
+`frequency` site lives in `Palamedes.Tuning`, and the synthesis pipeline drives it; nothing here
+depends on the optimizer.
 -/
 
 namespace Palamedes
@@ -71,7 +71,8 @@ to* the others, never toward zero.
 The coefficients are hand-tuned on `genWellTyped`, and its distribution is pinned in
 `PalamedesTest/Optimizer/Schedule.lean`; this is *not* a good general default (it encodes an arity preference
 specific to STLC's term type). Materialize it against a generator's sites with
-`SchedulePolicy.stlc.materialize gen.sites` and pass the result to `gen.tuned` (see `derive_tuning`).
+`SchedulePolicy.stlc.materialize gen.sites` and pass the result to the generator's own `Tuning`
+binder (see `Palamedes.Tuning`).
 Eventually a drift solve should compute coefficients like these per site. -/
 def SchedulePolicy.stlc : SchedulePolicy where
   weight
@@ -81,7 +82,7 @@ def SchedulePolicy.stlc : SchedulePolicy where
 
 /-- Lay a `SchedulePolicy` over a site table into a `Tuning`: each branch's `(base, growth)` is
 `policy.weight` of its recursive-child count (`Site.holes`), placed at flat index `offset + j`. Turns
-a coarse arity-keyed policy into the per-site `Tuning` a `.tuned` generator reads. -/
+a coarse arity-keyed policy into the per-site `Tuning` a tuned generator reads. -/
 def SchedulePolicy.materialize (policy : SchedulePolicy) (sites : Array Site) : Tuning := Id.run do
   let total := sites.foldl (init := 0) fun acc s => max acc (s.offset + s.arity)
   let mut arr : Array (Nat × Nat) := Array.replicate total (1, 0)

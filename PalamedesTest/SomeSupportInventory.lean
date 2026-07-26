@@ -10,10 +10,10 @@ import Palamedes
 # `someSupport` twin inventory
 
 Every hand-written primitive pays a standing tax: its `support_X` characterization needs a
-`someSupport_X` twin, or the first *filtering* `correct def` whose generator uses the primitive
+`someSupport_X` twin, or the first *filtering* `@[correct]` whose generator uses the primitive
 fails at the law bridge (`CorrectDef` discharges `someSupport g = P` by simp over the twins). The
 tax is per-primitive and easy to forget precisely because nothing consumes the twin until a
-filtering generator happens to reach it — the gap is silent until someone else's `correct def`
+filtering generator happens to reach it — the gap is silent until someone else's `@[correct]`
 breaks.
 
 This module makes the gap loud instead: it walks every `support_*` lemma in `Palamedes/Data/` and
@@ -45,7 +45,7 @@ run_cmd liftTermElabM do
       total := total + 1
       let twin := Name.str ns ("someSupport_" ++ x)
       let some twinInfo := env.find? twin
-        | logError m!"{n} has no `someSupport` twin ({twin}): the first filtering `correct def` \
+        | logError m!"{n} has no `someSupport` twin ({twin}): the first filtering `@[correct]` \
             whose generator uses this primitive will fail at the law bridge. Add the twin beside \
             the `support_` lemma (see `Data/Nat.lean` for the pattern)."
           continue

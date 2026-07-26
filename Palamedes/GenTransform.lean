@@ -19,7 +19,7 @@ table, so the result carries `support input = support output`. The driver is pas
 client supplies its own pass:
 
 - `Palamedes.Optimizer` — the optimizing passes (`mainPass`, `flattenPass`) and `optimizeGen`.
-- `Palamedes.DeriveTuning` — `installTuning`, which reweights each `oneOf` to read a runtime `Tuning`.
+- `Palamedes.Tuning` — `installTuning`, which reweights each `oneOf` to read a runtime `Tuning`.
 -/
 
 open Lean Elab Command Term Meta

@@ -11,7 +11,7 @@ import Palamedes.Data.Nat
 import Palamedes.Stats
 
 /-!
-# `correct def` regression
+# `@[correct]` regression
 
 The synthesizer's proofs survive into the environment. Every law below is **kernel-checked** by
 `addDecl`, which is the property that matters.
@@ -27,9 +27,9 @@ def isAllTwos : List Nat → Bool
   | [] => true
   | x :: xs => x = 2 && isAllTwos xs
 
-/-- info: correct def genAllTwos: emitted (generator), sound_complete, total, correct -/
+/-- info: @[correct] genAllTwos: emitted sound_complete, total, correct -/
 #guard_msgs in
-correct def genAllTwos : Palamedes.PGen (List Nat) := by generator_search (fun xs => isAllTwos xs)
+@[correct] def genAllTwos : Palamedes.PGen (List Nat) := by generator_search (fun xs => isAllTwos xs)
 
 -- The law is stated against the emitted *constant*, so it is a fact about `genAllTwos` rather than
 -- about a copy of its body.
@@ -63,21 +63,21 @@ example : genAllTwos.correct.val = genAllTwos := rfl
 def genAllTwosBasalt [Gen G] : G (List Nat) := genAllTwos.total.val.run
 
 -- `Palamedes/Laws.lean`'s other bridge: a `support = P` law at the internal carrier converts to
--- Basalt's vocabulary on demand. `correct def` does not emit this form — the declared shape is
+-- Basalt's vocabulary on demand. `@[correct]` does not emit this form — the declared shape is
 -- Palamedes', so the law it emits is too — but the conversion is one application away.
 example : IsSoundAndComplete (genAllTwos.run (G := SPMF)) (fun xs => isAllTwos xs = true) :=
   isSoundAndComplete_of_support genAllTwos.sound_complete
 
 /-! ## Binders
 
-`correct def` accepts binders, which is what lets a declaration be **both** Basalt-shaped **and**
-carry a law: the `[Gen G]` binder is what makes the shape Basalt's, and value binders are quantified
-over in the emitted law.
+Binders are Lean's, not ours — which is the point of being an attribute rather than a command. The
+`[Gen G]` binder is what makes the shape Basalt's (and `G` is auto-bound, never written), and value
+binders are quantified over in the emitted law.
 -/
 
-/-- info: correct def genBasalt: emitted (generator), sound_complete, gen -/
+/-- info: @[correct] genBasalt: emitted sound_complete -/
 #guard_msgs in
-correct def genBasalt [Gen G] : G (List Nat) := by generator_search (fun xs => isAllTwos xs)
+@[correct] def genBasalt [Gen G] : G (List Nat) := by generator_search (fun xs => isAllTwos xs)
 
 -- Nothing wraps it: this is the same `∀ {G} [Gen G], G α` a hand-written Basalt generator has.
 /-- info: @genBasalt : {G : Type → Type} → [Gen G] → G (List ℕ) -/
@@ -96,9 +96,9 @@ correct def genBasalt [Gen G] : G (List Nat) := by generator_search (fun xs => i
 #print axioms genBasalt.sound_complete
 
 -- Value binders are *kept*, and the law quantifies over them.
-/-- info: correct def genParam: emitted (generator), sound_complete, total, correct -/
+/-- info: @[correct] genParam: emitted sound_complete, total, correct -/
 #guard_msgs in
-correct def genParam (_n : Nat) : Palamedes.PGen (List Nat) := by
+@[correct] def genParam (_n : Nat) : Palamedes.PGen (List Nat) := by
   generator_search (fun xs => isAllTwos xs)
 
 /-- info: genParam.sound_complete : ∀ (_n : ℕ), (genParam _n).support = fun xs => isAllTwos xs = true -/
@@ -106,9 +106,9 @@ correct def genParam (_n : Nat) : Palamedes.PGen (List Nat) := by
 #check @genParam.sound_complete
 
 -- The filtering shape takes binders too, and it now carries a law of its own.
-/-- info: correct def genRange: emitted (generator), sound_complete, gen -/
+/-- info: @[correct] genRange: emitted sound_complete -/
 #guard_msgs in
-correct def genRange (lo hi : Nat) [Gen G] : G (Option Nat) := by
+@[correct] def genRange (lo hi : Nat) [Gen G] : G (Option Nat) := by
   generator_search (fun n => lo ≤ n ∧ n ≤ hi)
 
 /-- info: @genRange : {G : Type → Type} → ℕ → ℕ → [Gen G] → G (Option ℕ) -/
@@ -139,11 +139,11 @@ run_cmd do
 
 -- A non-recursive generator over a `Prop`-valued predicate. This one regression-guards the
 -- optimizer's assume-discharge: `support_assume_true` is stated at `b := true` precisely so its
--- proof carries no unassigned metavariable, and a `correct def` on it is what detects a relapse —
+-- proof carries no unassigned metavariable, and `@[correct]` on it is what detects a relapse —
 -- the kernel rejects a declaration containing metavariables, so the failure is loud.
-/-- info: correct def genBetween: emitted (generator), sound_complete, total, correct -/
+/-- info: @[correct] genBetween: emitted sound_complete, total, correct -/
 #guard_msgs in
-correct def genBetween : Palamedes.PGen Nat := by generator_search (fun n => 3 ≤ n ∧ n ≤ 7)
+@[correct] def genBetween : Palamedes.PGen Nat := by generator_search (fun n => 3 ≤ n ∧ n ≤ 7)
 
 /-- info: genBetween.sound_complete : genBetween.support = fun n => 3 ≤ n ∧ n ≤ 7 -/
 #guard_msgs in

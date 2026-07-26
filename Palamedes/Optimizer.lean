@@ -244,7 +244,7 @@ private def flattenPass (distribute : Bool) : HeadRewrite := fun depth e => do
 
 /-- Optimize a raw `PGen`, returning the optimized term with a proof its `support` is unchanged.
 `mainPass` to a fixed point, then `flattenPass true` — which also distributes choices into `dite`
-arms so each constructor is a separately addressable `oneOf`, the shape `derive_tuning` needs. -/
+arms so each constructor is a separately addressable `oneOf`, the shape the tuning pass needs. -/
 def optimizeGen (e : Expr) : MetaM (Expr × Expr) := do
   let table := getGenCongrRules (← getEnv)
   let r1 ← transform mainPass table none e

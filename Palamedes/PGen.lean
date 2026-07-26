@@ -82,17 +82,11 @@ open Lean PrettyPrinter Delaborator SubExpr
 
 /-! ## Delaborator Hacks
 
-We hack the delaborator so it doesn't print the side-condition arguments of `frequency`/`oneOf` when
-they are not needed. -/
-
-@[app_delab Palamedes.PGen.oneOf]
-def delabOneOf : Delab := do
-  let e ← getExpr
-  guard <| e.isAppOfArity ``Palamedes.PGen.oneOf 3
-  guard <| (e.getArg! 1).isAppOf ``List.cons
-  let gs ← withNaryArg 1 delab
-  let fn := mkIdent (← unresolveNameGlobal ``Palamedes.PGen.oneOf)
-  `($fn $gs)
+Choice combinators like `oneOf` and `frequency` carry a side conditions (`gs ≠ []`, `0 < Σ weights`)
+as an explicit argument. By default, these either print as `⋯`, which makes the generator unusable;
+if we set `pp.proofs := true`, those proofs become an ugly wall of text. To get around these issues,
+we hack the delaborator to only print the proofs when they can't be easily reconstructed by the
+combinator's autoparam. -/
 
 def natLit? (e : Expr) : Option Nat :=
   match e.nat? with
@@ -123,14 +117,33 @@ private partial def someWeightPos (l : Expr) : Bool :=
       | _ => false) || someWeightPos tl
   | _ => false
 
-@[app_delab Palamedes.PGen.frequency]
-def delabFrequency : Delab := do
+/-- Render `c gs`, dropping `c`'s trailing side-condition argument, when `branchesOk` says the branch
+list at `gsIdx` makes that side condition recoverable. -/
+private def delabDroppingSideCondition
+    (c : Name) (arity gsIdx : Nat)
+    (branchesOk : Expr → Bool) :
+    Delab := do
   let e ← getExpr
-  guard <| e.isAppOfArity ``Palamedes.PGen.frequency 3
-  guard <| someWeightPos (e.getArg! 1)
-  let gs ← withNaryArg 1 delab
-  let fn := mkIdent (← unresolveNameGlobal ``Palamedes.PGen.frequency)
+  guard <| e.isAppOfArity c arity
+  guard <| branchesOk (e.getArg! gsIdx)
+  let gs ← withNaryArg gsIdx delab
+  let fn := mkIdent (← unresolveNameGlobal c)
   `($fn $gs)
+
+@[app_delab Palamedes.PGen.oneOf]
+def delabOneOf : Delab :=
+  delabDroppingSideCondition ``Palamedes.PGen.oneOf 3 1 (·.isAppOf ``List.cons)
+
+@[app_delab Palamedes.PGen.frequency]
+def delabFrequency : Delab :=
+  delabDroppingSideCondition ``Palamedes.PGen.frequency 3 1 someWeightPos
+
+-- `_root_`-qualified: this section is inside `namespace Palamedes.PGen`, where a bare `frequency`
+-- resolves to the carrier's combinator. Unqualified, this silently registers a *second* delaborator
+-- for `PGen.frequency` and Basalt's keeps printing in full.
+@[app_delab _root_.frequency]
+def delabBasaltFrequency : Delab := do
+  delabDroppingSideCondition ``_root_.frequency 5 3 someWeightPos
 
 end Delab
 

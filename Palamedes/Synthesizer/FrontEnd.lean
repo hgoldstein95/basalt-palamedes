@@ -11,6 +11,7 @@ import Palamedes.Optimizer
 import Palamedes.Synthesizer.CGeneratorSearch
 import Palamedes.Synthesizer.Totality
 import Palamedes.Failure
+import Palamedes.Tuning
 
 /-!
 # The `generator_search` front-end
@@ -18,7 +19,7 @@ import Palamedes.Failure
 The user-facing pipeline: search (`cgenerator_search`) → extract a raw `PGen` → optimize → rebuild
 a totality witness → package at the declared shape (`G α` from the `TGen` witness, `G (Option α)`
 via `totalize`, or the `Palamedes.PGen` carrier directly). `runSynthesisPipeline` is the shared
-core; the `correct def` command (`CorrectDef.lean`) drives it too.
+core; the `@[correct]` attribute (`Correct.lean`) reads the proofs it leaves behind.
 -/
 
 open Lean Tactic Elab Meta Tactic
@@ -65,9 +66,9 @@ elab "optimize_gen " t:term : tactic =>
 
 /-- Run `tactic` against a fresh goal of type `goalType` and return the resulting term.
 
-`TermElabM` rather than `TacticM` so that both front-ends can drive it: the `generator_search` tactic
-lifts into it, and the `correct def` command — which has no surrounding tactic state at all — calls it
-directly. -/
+`TermElabM` rather than `TacticM` so that every caller can drive it: the `generator_search` tactic
+lifts into it, and `@[correct]` — which runs after elaboration, with no tactic state around it at
+all — calls it directly to discharge the filtering path's `someSupport` bridge. -/
 def solveGoalWithTactic (goalType : Expr) (tactic : TSyntax `tactic) : TermElabM Expr := do
   let m ← mkFreshExprMVar goalType
   let unsolved ← Tactic.run m.mvarId! (Tactic.evalTactic tactic)
@@ -131,13 +132,21 @@ structure SynthesisResult where
   /-- Heads the descent had no `@[total]` rule for, read off the goals it left. Empty when the
   witness succeeded or when the tactic threw. -/
   totalityGaps : Array Name := #[]
+  /-- The `frequency` sites `installTuning` created, when a `Tuning` binder was threaded. Empty when
+  the generator was left uniform. -/
+  sites : Array Palamedes.TuningSiteInfo := #[]
 
 /-- Run the shared pipeline against a predicate `pred : α → Prop`.
 
-Both front-ends are thin packagings over this: they differ only in what they do with the result, not
-in how it is computed. Totality failure is reported by a `none` witness rather than an exception, so
-the caller decides whether that is a warning, an error, or a signal to emit the filtering form. -/
-def runSynthesisPipeline (α pred : Expr) (checkTotal verbose : Bool) :
+Callers are thin packagings over this: they differ only in what they do with the result, not in how
+it is computed. Totality failure is reported by a `none` witness rather than an exception, so the
+caller decides whether that is a warning, an error, or a signal to emit the filtering form.
+
+`θ?` is the declaration's `Tuning` binder, when it has one. Tuning runs here rather than after the
+fact because everything downstream — the totality witness, the packaging, the law — should be about
+the *tuned* generator, and there should only ever be one of them. See `Palamedes/Tuning.lean`. -/
+def runSynthesisPipeline (α pred : Expr) (checkTotal verbose : Bool)
+    (θ? : Option Expr := none) (declName : Name := `_gen) :
     TermElabM SynthesisResult := do
   -- 1. Search for an inhabitant of `CorrectGen pred`.
   let cgen ←
@@ -174,7 +183,26 @@ def runSynthesisPipeline (α pred : Expr) (checkTotal verbose : Bool) :
   if verbose then
     logInfo m!"Optimized generator:\n{(← ppExpr gen'')}"
 
-  -- Chain the three, right to left:
+  -- 3b. Tuning: thread the declaration's `Tuning` binder through every choice site.
+  --
+  -- Before totality, deliberately. The witness, the packaging and the emitted law should all be
+  -- about the generator the user actually gets, and running this afterwards is what forced the old
+  -- `derive_tuning` to rebuild each of them against a second, separately-derived generator.
+  -- `total_frequency` never inspects weights, so stage 4 closes exactly as it would have.
+  let (gen''', tuneProof?, sites) ←
+    match θ? with
+    | none => pure (gen'', none, #[])
+    | some θ =>
+      try
+        let r ← Palamedes.installTuning declName θ gen''
+        if verbose then
+          logInfo m!"Tuned generator ({r.sites.size} sites):\n{(← ppExpr r.gen)}"
+        pure (r.gen, r.supportProof?, r.sites)
+      catch e =>
+        throwError m!"Failed while installing tuning.\n{e.toMessageData}"
+
+  -- Chain, right to left:
+  --   support gen'' = support gen'     (tuning, flipped; absent when no site fired)
   --   support gen'  = support gen      (optimizer, flipped)
   --   support gen   = support cgen.val (extraction, flipped, under `support`)
   --   support cgen.val = pred          (the `CorrectGen` subtype's own property)
@@ -182,11 +210,14 @@ def runSynthesisPipeline (α pred : Expr) (checkTotal verbose : Bool) :
     let supportFn := mkApp (Expr.const ``Palamedes.PGen.support []) α
     let viaExtract ← mkEqSymm (← mkCongrArg supportFn extractProof)
     let chained ← mkEqTrans (← mkEqSymm optProof) (← mkEqTrans viaExtract cgenProp)
+    let chained ← match tuneProof? with
+      | none => pure chained
+      | some p => mkEqTrans (← mkEqSymm p) chained
     -- `reduce` above produced a defeq but not syntactically equal term, so pin the statement to
     -- the generator actually being returned rather than the pre-reduction one.
-    let stmt ← mkEq (← mkAppM ``Palamedes.PGen.support #[gen'']) pred
-    -- Validate with `isDefEq` rather than `Meta.check`, matching `derive_tuning`'s `tuned_support`
-    -- template. A full `check` re-typechecks simp's own proof term, and since Lean 4.33 compares
+    let stmt ← mkEq (← mkAppM ``Palamedes.PGen.support #[gen''']) pred
+    -- Validate with `isDefEq` rather than `Meta.check`. A full `check` re-typechecks simp's own
+    -- proof term, and since Lean 4.33 compares
     -- types at `implicit` transparency, it rejects proofs whose predicate mentions
     -- a matcher where the statement mentions the underlying `casesOn` — defeq, but not at that
     -- transparency. `isDefEq` on the statement is the check that actually matters.
@@ -207,7 +238,7 @@ def runSynthesisPipeline (α pred : Expr) (checkTotal verbose : Bool) :
   if checkTotal then
     try
       match ← solveGoalWithTactic?
-          (← mkAppM ``Palamedes.PGen.total #[gen''])
+          (← mkAppM ``Palamedes.PGen.total #[gen'''])
           (← `(tactic| totality)) with
       | .ok w => totalWitness? := some w
       | .error unsolved => gaps ← totalityGaps unsolved
@@ -217,7 +248,8 @@ def runSynthesisPipeline (α pred : Expr) (checkTotal verbose : Bool) :
       if e.isInterrupt || e.isMaxHeartbeat || e.isMaxRecDepth then throw e
       totalityFailure? := some e.toMessageData
 
-  return { gen := gen'', supportProof, totalWitness?, totalityFailure?, totalityGaps := gaps }
+  return { gen := gen''', supportProof, totalWitness?, totalityFailure?, totalityGaps := gaps,
+           sites }
 
 /-- What the *declared return type* says the generator should be. Whether a generator filters is a
 fact about its type, visible at every use site. -/
@@ -234,6 +266,108 @@ inductive Target where
 /-- The element type the predicate must range over. -/
 def Target.elemType : Target → Expr
   | .palamedes α | .basalt _ α | .basaltOption _ α => α
+
+/-! ## The synthesis stash
+
+`generator_search` proves `support gen = P` and then closes a goal; the theorem it could state about
+the declaration cannot be added yet, because during the tactic that declaration does not exist. The
+`@[correct]` attribute (`Synthesizer/Correct.lean`) runs *after* it does, so the tactic leaves the
+proof here and the attribute picks it up.
+
+This is what replaced the `correct def` command. That command existed because "a tactic never learns
+the name of the declaration it is elaborating into", which is not true — `Term.getDeclName?` supplies
+it — so the only real obstacle was ordering, and an attribute at `applicationTime := .afterCompilation`
+is exactly the tool for that. Lean keeps ownership of binder elaboration, auto-bound implicits and
+universes, none of which a bespoke command elaborator has to reimplement any more.
+-/
+
+/-- Which declared shape a stashed synthesis was run at. `Target` cannot be stored as-is: it holds
+`Expr`s referring to binders that are out of scope by the time the attribute runs, and both of them
+(`G` and `α`) are recoverable from the finished constant's type. -/
+inductive Shape where
+  | palamedes | basalt | basaltOption
+  deriving Inhabited, BEq
+
+def Target.shape : Target → Shape
+  | .palamedes _ => .palamedes
+  | .basalt _ _ => .basalt
+  | .basaltOption _ _ => .basaltOption
+
+/-- What `generator_search` leaves for `@[correct]`.
+
+Every field is **closed over the declaration's binder telescope** (`fun xs => …`) and
+**metavariable-free**. Both are load-bearing: the attribute runs in a fresh `MetaM` where neither the
+tactic's local context nor its metavariable context exists, so an open term's `fvar`s are dangling
+and a surviving mvar surfaces there as `unknown universe metavariable ?_uniq.N` reported against the
+`def` — with no `?m` visible anywhere in it. `stashSynthesis` therefore checks rather than assumes. -/
+structure SynthesisStash where
+  /-- The declared shape, which chooses which law is emitted. -/
+  shape : Shape
+  /-- `fun xs => P`, the predicate the support was proved equal to. -/
+  pred : Expr
+  /-- `fun xs => gen`, the optimized `PGen` carrier. The Basalt shapes are projections of this, and
+  the filtering law's `someSupport` bridge is discharged against it. -/
+  gen : Expr
+  /-- `fun xs => (h : PGen.support gen = P)`. -/
+  supportProof : Expr
+  /-- `fun xs => (w : PGen.total gen)`, when the totality stage produced one. -/
+  totalWitness? : Option Expr
+
+initialize synthesisExt : EnvExtension (NameMap SynthesisStash) ←
+  registerEnvExtension (pure {})
+
+/-- The binders of the declaration currently being elaborated, as they stand at the tactic's site.
+
+The recursive self-reference is in scope too (`genFoo : ℕ → ℕ → PGen α`), flagged `isAuxDecl`.
+Dropping it and any implementation detail leaves exactly the telescope
+`forallTelescope ci.type` yields once the constant exists, **in the same order** — including
+auto-bound implicits, so the idiomatic `[Gen G]` spelling with `G` never written lines up too. That
+positional correspondence is what lets the attribute re-open a stashed `fun xs => _` with `.beta`. -/
+def declBinders : MetaM (Array Expr) := do
+  let mut xs := #[]
+  for d? in (← getLCtx).decls do
+    if let some d := d? then
+      unless d.isAuxDecl || d.isImplementationDetail do
+        xs := xs.push d.toExpr
+  return xs
+
+/-- The declaration's `Tuning` binder, if it declared one.
+
+**The signature says whether a generator is tunable**, the same way it already says whether one can
+filter. A `θ : Tuning` binder in scope is threaded through every choice site; no binder means the
+generator ships uniform. There is deliberately no flag and no warning — declining to be tunable is a
+legitimate thing for a signature to say, and `.uniform` makes the binder free to add later.
+
+The first such binder wins; a second is ignored rather than rejected, since nothing here can tell
+which one a user meant and a generator wanting two tunings is not a thing the pass can express. -/
+def declTuningBinder? : MetaM (Option Expr) := do
+  for x in ← declBinders do
+    if (← whnf (← inferType x)).isConstOf ``Tuning then return some x
+  return none
+
+/-- Record a completed synthesis for `@[correct]`, if we are elaborating into a named declaration.
+
+A `nothing to stash` outcome is silent and normal: `generator_search` inside an `example`, a `have`,
+or a term-level `by` block has no declaration to state a law about. `@[correct]` on such a
+declaration is what reports the absence, since that is where it is a mistake. -/
+def stashSynthesis (target : Target) (pred : Expr) (res : SynthesisResult) : TermElabM Unit := do
+  let some declName ← Term.getDeclName? | return
+  let xs ← declBinders
+  let close (e : Expr) : TermElabM Expr := do
+    let e ← instantiateMVars (← mkLambdaFVars xs (← instantiateMVars e))
+    if e.hasExprMVar || e.hasLevelMVar then
+      throwError "generator_search: the proof stashed for `{declName}` still has metavariables \
+        after instantiation{indentExpr e}\n\n\
+        This is a bug in the synthesizer rather than in the declaration: `@[correct]` runs in a \
+        fresh elaboration context, so anything left unassigned here has no way to be solved there."
+    return e
+  let stash : SynthesisStash := {
+    shape := target.shape
+    pred := ← close pred
+    gen := ← close res.gen
+    supportProof := ← close res.supportProof
+    totalWitness? := ← res.totalWitness?.mapM close }
+  modifyEnv (synthesisExt.modifyState · (·.insert declName stash))
 
 /-- Elaborate `t` as a predicate `α → Prop`, returning `none` if it does not fit that type.
 
@@ -300,7 +434,7 @@ def classifyGoal (goalTy : Expr) (t : Lean.Term) : TermElabM (Target × Expr) :=
 
 The Basalt-shaped emission is `witness.val.run`. Left as-is that is a *proof term* — a tree of
 `total_*` applications — which would make the emitted definition unreadable as a generator and hide
-its choice sites from `derive_tuning`. Palamedes' whole output contract is that a synthesized
+its choice sites from the tuning pass. Palamedes' whole output contract is that a synthesized
 generator is a generator you can read, so the projection has to actually be performed.
 
 Delta-unfolds exactly the witness constructors (the fixed combinator basis plus whatever the
@@ -335,8 +469,9 @@ inductive TotalityDiagnosis where
   /-- The generator genuinely filters: an `assume` is present and reconstruction stopped at it. -/
   | filters
   /-- Reconstruction could not cover this generator, which is a fact about the *basis*, not about
-  the generator. Carries the underlying error when the tactic threw rather than left goals. -/
-  | gap (err? : Option MessageData)
+  the generator. Carries the underlying error when the tactic threw rather than left goals, and the
+  heads it had no rule for when it left them. -/
+  | gap (err? : Option MessageData) (gaps : Array Name)
 
 /-- Distinguish a genuine filter from a gap in the reconstruction basis.
 
@@ -358,16 +493,22 @@ term whose `assume` is somehow hidden behind an un-unfolded constant costs a con
 rather than a wrong outcome. -/
 def diagnoseTotality (res : SynthesisResult) : TotalityDiagnosis :=
   match res.totalityFailure? with
-  | some err => .gap (some err)
+  | some err => .gap (some err) res.totalityGaps
   | none =>
-    if (res.gen.find? (·.isConstOf ``Palamedes.PGen.assume)).isSome then .filters else .gap none
+    if (res.gen.find? (·.isConstOf ``Palamedes.PGen.assume)).isSome then .filters
+    else .gap none res.totalityGaps
 
 /-- The shared explanation for a reconstruction gap: what it is, and what not to do about it. -/
-def gapMessage (err? : Option MessageData) : MessageData :=
-  let cause := match err? with
-    | some err => m!"Totality reconstruction errored rather than simply not applying. The \
+def gapMessage (err? : Option MessageData) (gaps : Array Name := #[]) : MessageData :=
+  let cause := match err?, gaps.toList with
+    | some err, _ => m!"Totality reconstruction errored rather than simply not applying. The \
         underlying error was:{indentD err}"
-    | none => m!"Totality reconstruction left goals unclosed, but the generator contains no \
+    -- The descent dispatches each node on its head constant, so an unclosed goal names the head it
+    -- had no rule for. Before that it could only guess, since `repeat' first | …` never fails.
+    | none, (_ :: _) => m!"Totality reconstruction has no `@[total]` rule for \
+        {MessageData.andList (gaps.toList.map (m!"`{·}`"))}, so it could not descend past \
+        {if gaps.size == 1 then "that node" else "those nodes"}."
+    | none, [] => m!"Totality reconstruction left goals unclosed, but the generator contains no \
         `PGen.assume` — so there is nothing in it that can fail, and the usual cause is a datatype \
         with no `@[total]` lemma registered."
   m!"{cause}\n\nThis is a gap in the reconstruction basis, **not** evidence that the generator \
@@ -388,8 +529,8 @@ def packageFor (target : Target) (res : SynthesisResult) (report : MessageData �
       | .filters =>
         report m!"this generator filters: a `PGen.assume` survived optimization, so it can fail when \
           sampled. Declare it as `[Gen G] → G (Option _)` to reflect that in the type."
-      | .gap err? =>
-        report m!"could not reconstruct a totality witness.\n\n{gapMessage err?}"
+      | .gap err? gaps =>
+        report m!"could not reconstruct a totality witness.\n\n{gapMessage err? gaps}"
     return res.gen
   | .basalt G α =>
     let some w := res.totalWitness?
@@ -399,9 +540,9 @@ def packageFor (target : Target) (res : SynthesisResult) (report : MessageData �
             optimization — so it cannot be emitted at{indentExpr (mkApp G α)}, which is `Fail`-free \
             by construction.\n\nDeclare it as `G (Option _)` instead, so the type reflects that it \
             can fail."
-        | .gap err? =>
+        | .gap err? gaps =>
           throwError "generator_search: could not reconstruct a totality witness, so this \
-            generator cannot be emitted at{indentExpr (mkApp G α)}.\n\n{gapMessage err?}"
+            generator cannot be emitted at{indentExpr (mkApp G α)}.\n\n{gapMessage err? gaps}"
     let tgen ← mkAppOptM ``Subtype.val #[none, none, w]
     extractWitness (← mkAppOptM ``Palamedes.TGen.run #[some α, some tgen, some G, none])
   | .basaltOption G α =>
@@ -411,11 +552,11 @@ def packageFor (target : Target) (res : SynthesisResult) (report : MessageData �
     -- reconstruction gap on its own — which is precisely how an `Option` added on a bad diagnosis
     -- would stay forever. Say so, since the check above is silent in exactly this case.
     if res.totalWitness?.isNone then
-      if let .gap err? := diagnoseTotality res then
+      if let .gap err? gaps := diagnoseTotality res then
         report m!"the `Option` in this generator's type may be unnecessary: nothing here \
           established that the generator can actually fail, and `totalize` accepts it either \
           way. If the gap below is fixed and the generator turns out to be total, declare it at \
-          `{← ppExpr (mkApp G α)}` instead.\n\n{gapMessage err?}"
+          `{← ppExpr (mkApp G α)}` instead.\n\n{gapMessage err? gaps}"
     mkAppOptM ``Palamedes.PGen.totalize #[some α, some res.gen, some G, none]
 
 def generatorSearchElab
@@ -470,8 +611,26 @@ def generatorSearchElab
   -- Totality is always checked: the declared type says whether the generator may filter, and
   -- totality is how that claim is verified. (Distinct from almost-sure termination, which is
   -- orthogonal and which nothing here establishes.)
-  let res ← runSynthesisPipeline α mpred true verbose
+  let declName? ← Term.getDeclName?
+  let θ? ← declTuningBinder?
+  let res ← runSynthesisPipeline α mpred true verbose θ? (declName?.getD `_gen)
   let emitted ← packageFor target res (fun msg => logWarning msg)
+
+  -- `genFoo.sites`, the table a `SchedulePolicy` is materialized against. Emitted by the *tactic*,
+  -- while `genFoo` itself is still being elaborated, because the table is closed data that does not
+  -- mention the generator — only theorems *about* the constant have to wait for `@[correct]`.
+  if let some declName := declName? then
+    unless res.sites.isEmpty do
+      let sitesVal ← Palamedes.mkSitesValue res.sites
+      addAndCompile <| .defnDecl {
+        name := declName ++ `sites, levelParams := [],
+        type := ← mkAppM ``Array #[mkConst ``Site], value := sitesVal,
+        hints := .abbrev, safety := .safe }
+
+  -- Leave the proofs where `@[correct]` can find them. Unconditional: the tactic cannot know
+  -- whether the declaration is tagged (attributes run later), and stashing an untagged declaration
+  -- costs one `NameMap` entry in a non-persistent extension.
+  stashSynthesis target mpred res
 
   if tryThis then
     withOptions ((pp.proofs.set · true) ∘ (pp.fieldNotation.generalized.set · false)) do
@@ -505,9 +664,12 @@ Row 3 is an *error* rather than the warning it is for a `Palamedes.PGen α` goal
 forced: `G α` is `Fail`-free by construction, so there is simply no term to emit. For the internal
 `Palamedes.PGen α` carrier there is one — it just filters — so that case warns and proceeds.
 
-A synthesized generator ships uniform, which diverges for a static- or growing-seed generator like
-`genWellTyped`. To weight it, run `derive_tuning` on it and sample `<gen>.tuned θ` at a `Tuning`
-(e.g. `SchedulePolicy.stlc.materialize <gen>.sites`). Support is unaffected by the weighting.
+A generator with no `Tuning` binder ships uniform, which diverges for a static- or growing-seed
+generator like `genWellTyped`. To weight it, give the declaration a `(θ : Tuning := .uniform)`
+binder: every choice site is then threaded with `θ`, `<gen>.sites` is emitted alongside, and
+`<gen> … (SchedulePolicy.stlc.materialize <gen>.sites)` is the weighted generator. Support is
+unaffected by the weighting, for every `θ`.
+
 -/
 syntax (name := generatorSearch) "generator_search " term : tactic
 
@@ -519,7 +681,14 @@ def expandGeneratorSearch : Tactic := fun stx => do
 
 /-- `generator_search?` is `generator_search` (same modifiers, same result) that additionally emits
 the synthesized generator as a "Try this" suggestion, so the term can be pasted in place of the
-tactic call. Useful for inspecting what the search actually produced. -/
+tactic call. Useful for inspecting what the search actually produced, and the escape hatch into
+editing it by hand.
+
+Kept as its own `syntax` declaration rather than folded into an optional `"?"?` token on
+`generator_search`. That collapse costs five lines of duplication and breaks the spelling: with
+`"generator_search" "?"?`, `generator_search? P` no longer lexes (only `generator_search ? P` does),
+because `generator_search?` is then not a token. Lean core keeps `simp`/`simp?` and `rw`/`rw?`
+separate for the same reason. -/
 syntax (name := generatorSearch?) "generator_search? " term : tactic
 
 @[tactic generatorSearch?]

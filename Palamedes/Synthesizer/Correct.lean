@@ -1,0 +1,251 @@
+/-
+Copyright (c) 2026 Harrison Goldstein. All rights reserved.
+Released under MIT license as described in the file LICENSE.
+Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
+  Leonidas Lampropoulos, Benjamin C. Pierce
+-/
+
+import Palamedes.Synthesizer.FrontEnd
+import Palamedes.Laws
+
+/-!
+# `@[correct]` — synthesis that names its proofs
+
+`generator_search` proves `support gen = P` on the way to closing its goal. `@[correct]` is what
+keeps that proof: it emits `genFoo.sound_complete` (and, at the carrier shape, `genFoo.total` and
+`genFoo.correct`) as ordinary theorems about the constant.
+
+## Why an attribute rather than a command
+
+This replaced a `correct def` command whose stated reason to exist was that "`generator_search` is a
+tactic and never learns the name of the declaration it is elaborating into". It does:
+`Term.getDeclName?` supplies it. The real obstacle was only *ordering* — a theorem about `genFoo`
+cannot be added while `genFoo` is still being elaborated — and `applicationTime := .afterCompilation`
+is precisely the tool for that, the same one `to_additive` uses to emit declarations derived from
+the one it is attached to.
+
+The payoff is everything the command had to reimplement and now does not: binder elaboration,
+auto-bound implicits, universe handling, and the `def` syntax itself all stay Lean's. It also
+composes — `@[correct]` sits next to any other attribute, and works with `generator_search?`, which
+`correct def` could not, since owning the `def` syntax meant owning the whole line.
+
+The tactic leaves its proofs in `synthesisExt` (see `Synthesizer/FrontEnd.lean`, which documents the
+two constraints on what crosses that boundary), and this module reads them back.
+
+**Purely additive.** The generator is exactly the one `generator_search` emits either way; the only
+difference is whether the proofs survive.
+-/
+
+open Lean Elab Meta Term
+
+namespace Palamedes
+
+/-- `addDecl` a law, after reconciling the independently-built statement and proof.
+
+`isDefEq` rather than `Meta.check` (see `runSynthesisPipeline`), and `instantiateMVars` *after* it,
+since `isDefEq` can assign rather than merely compare — an uninstantiated proof reaches the kernel as
+"declaration has metavariables", which names the symptom and not the cause.
+
+`xs` are the declaration's binders, which the law is generalized over *after* the reconciliation:
+`isDefEq` on the open terms is what the stashed proof's statement was built against, and closing
+first would put them out of scope. -/
+private def emitLaw (name : Name) (lvls : List Name) (xs : Array Expr) (stmt proof : Expr) :
+    MetaM Unit := do
+  unless ← isDefEq (← inferType proof) stmt do
+    throwError "@[correct]: the proof of `{name}` does not match{indentExpr stmt}\n\
+      proof has type{indentExpr (← inferType proof)}"
+  let stmt ← instantiateMVars stmt
+  let value ← instantiateMVars (← mkExpectedTypeHint proof stmt)
+  let stmt ← mkForallFVars xs stmt
+  let value ← mkLambdaFVars xs value
+  if value.hasExprMVar || stmt.hasExprMVar then
+    throwError "@[correct]: `{name}` still has metavariables after instantiation{indentExpr stmt}"
+  addDecl <| .thmDecl { name, levelParams := lvls, type := stmt, value }
+
+/-- The declaration applied to its own binders, and — for a Basalt-shaped generator — the same thing
+with the `Gen` monad instantiated at `SPMF`.
+
+A law about a `∀ {G} [Gen G], G α` generator is a statement about its `SPMF` semantics, so `G` and
+its instance are *supplied* rather than generalized: the law reads `∀ (lo hi : ℕ),
+IsSoundAndComplete (f lo hi) P`, with no vestigial `{G} [Gen G]` that the statement never mentions.
+The remaining binders stay, since the predicate may well depend on them. -/
+private def applyAt (declName : Name) (lvls : List Name) (xs : Array Expr) (G? : Option Expr) :
+    MetaM (Expr × Array Expr) := do
+  let c := Lean.mkConst declName (lvls.map .param)
+  let some G := G? | return (mkAppN c xs, xs)
+  unless G.isFVar do return (mkAppN c xs, xs)
+  let spmf := Lean.mkConst ``SPMF [Level.zero]
+  let inst ← synthInstance (← mkAppM ``Gen #[spmf])
+  let mut args := #[]
+  let mut keep := #[]
+  for x in xs do
+    -- the `[Gen G]` binder is identified by its *type*, since its name is the user's to choose.
+    let t ← whnf (← inferType x)
+    if x == G then
+      args := args.push spmf
+    else if t.isAppOfArity ``Gen 1 && t.appArg! == G then
+      args := args.push inst
+    else
+      args := args.push x
+      keep := keep.push x
+  return (mkAppN c args, keep)
+
+/-- Emit the laws for `declName` from its stashed synthesis. Returns what was emitted, for the
+report — a law that appears only for some shapes must not appear *silently* only for some shapes. -/
+def emitCorrectLaws (declName : Name) : TermElabM (Array String) := do
+  let some stash := (synthesisExt.getState (← getEnv)).find? declName
+    | throwError "@[correct]: `{declName}` was not synthesized by `generator_search`, so there is \
+        no support proof to emit a law from.\n\n\
+        `@[correct]` keeps the proof the *tactic* already computed; it does not prove a \
+        hand-written generator correct. Declare it as\n\n  \
+        @[correct] def {declName} … := by generator_search …\n\n\
+        or drop the attribute."
+  let some ci := (← getEnv).find? declName
+    | throwError "@[correct]: unknown constant {declName}"
+  let lvls := ci.levelParams
+  forallTelescope ci.type fun xs body => do
+    -- Re-open every stashed term at *this* telescope. `declBinders` built them against the binders
+    -- in the same order, so the correspondence is positional.
+    let pred := stash.pred.beta xs
+    let gen := stash.gen.beta xs
+    let supportProof := stash.supportProof.beta xs
+    let totalWitness? := stash.totalWitness?.map (·.beta xs)
+    -- `G` is read off the goal rather than stashed: it is a binder, so the stashed copy would be a
+    -- dangling `fvar` here, and the declared type names it anyway.
+    let G? := if stash.shape == .palamedes then none else some body.getAppFn
+    let mut emitted := #[]
+
+    -- `f.sound_complete`, stated against the emitted constant rather than the term, so it is a fact
+    -- about `f` and not about a copy of its body. The *statement* follows the declared shape: a
+    -- Basalt-shaped generator gets Basalt's `IsSoundAndComplete`, which is the point of the
+    -- exercise; the synthesis-internal carrier keeps the Palamedes-level `support = P`.
+    match stash.shape with
+    | .palamedes =>
+      let (declC, keep) ← applyAt declName lvls xs none
+      let stmt ← mkEq (← mkAppM ``Palamedes.PGen.support #[declC]) pred
+      emitLaw (declName ++ `sound_complete) lvls keep stmt supportProof
+    | .basalt =>
+      let some w := totalWitness?
+        | throwError "@[correct]: internal — Basalt shape without a totality witness"
+      -- `IsSoundAndComplete (f (G := SPMF)) P`, proved by transferring the pipeline's
+      -- `support = P` across the witness equation. No parametricity: both sides are the same
+      -- instantiation of the same polymorphic term. `emitLaw`'s `isDefEq` is what reconciles the
+      -- statement's `f (G := SPMF)` with the proof's `witness.val.run`, which is the same term
+      -- before `extractWitness` performed the projections.
+      let hw ← mkAppOptM ``Subtype.property #[none, none, w]
+      let proof ← mkAppM ``Palamedes.isSoundAndComplete_of_total #[hw, supportProof]
+      let (atSPMF, keep) ← applyAt declName lvls xs G?
+      let stmt ← mkAppM ``IsSoundAndComplete #[atSPMF, pred]
+      emitLaw (declName ++ `sound_complete) lvls keep stmt proof
+    | .basaltOption =>
+      -- The filtering path. The emitted definition runs the generator at `OptionT SPMF` while the
+      -- pipeline proved `support = P` at `SPMF`, so the law is stated with `someSupport` — the
+      -- support notion of *that* interpretation — and the bridge between the two is discharged by
+      -- `simp` over the combinator twins. That is a fact about this particular generator, not the
+      -- global `∀ g, someSupport g = g.support`, which is unprovable.
+      let bridgeGoal ← mkEq (← mkAppM ``Palamedes.someSupport #[gen])
+        (← mkAppM ``Palamedes.PGen.support #[gen])
+      -- `simp` alone suffices for a non-recursive generator: the per-combinator twins fire on both
+      -- sides and meet. A *recursive* one does not close, and the reason is not a missing twin.
+      -- `X.someSupport_unfold` and `X.support_unfold` both fire, leaving
+      -- `unfold_support (fun d x => someSupport (f d x)) … = unfold_support (fun d x => (f d x).support) …`
+      -- — equal only if the two step predicates are, which needs congruence under the `unfold_support`
+      -- application and then the *step* bridge. The step generator is a nest of conditionals (the
+      -- `dite` guarding each constructor choice, plus an `ite` per numeric side condition), and simp
+      -- will not case-split them, so it stalls at `someSupport (dite …)` with the twins unreachable
+      -- underneath. `repeat' split` exposes the branches; each is then a bare combinator spine the
+      -- twins close.
+      --
+      -- Three things in the script below are easy to get subtly wrong, and each *weakens* it
+      -- silently rather than failing:
+      --
+      -- * `funext d x b` takes **three** binders, not two. `unfold_support`'s predicate is
+      --   `fun d x => (f d x).support`, and `support` is itself `α → Prop`, so what `congr 1` leaves
+      --   is an equation between 3-ary functions. Introducing only `d x` leaves a lambda equality
+      --   that simp discharges *sometimes* — AVL closed that way, RBT did not.
+      -- * `(repeat' split)` needs its own parentheses. `;`-sequenced inside a quotation,
+      --   `repeat' split; all_goals simp` binds as `repeat' (split; all_goals simp)`, and the
+      --   conditionals never get split at all.
+      -- * the tail is `try`-guarded because a non-recursive generator is already closed by `simp`
+      --   alone, leaving `congr 1` with no goals to work on.
+      let bridge ←
+        try
+          solveGoalWithTactic bridgeGoal
+            (← `(tactic|
+              (simp; try (congr 1; funext d x b; (repeat' split); all_goals simp))))
+        catch e =>
+          -- Deliberately does **not** name a single cause. The previous wording asserted "a missing
+          -- `someSupport` twin", which was wrong in the only case that ever reached it: every twin
+          -- was present and the bridge simply could not case-split the step generator's control flow
+          -- to get at them. A confidently wrong diagnosis sends the reader to the wrong file.
+          throwError "@[correct]: could not relate this generator's `someSupport` to its \
+            `support`, so the filtering law cannot be stated. The unsolved goal is below.\n\n\
+            Two things commonly leave one: a combinator with no `someSupport` twin (add it beside \
+            the `support_` lemma — see `Data/Nat.lean` for the pattern), or a step generator whose \
+            control flow the bridge could not case-split to reach the twins underneath. Compare the \
+            two sides of the goal: if they differ only inside a `match` or an `if`, it is the \
+            second.\n{e.toMessageData}"
+      let hsome ← mkAppM ``Eq.trans #[bridge, supportProof]
+      let proof ← mkAppM ``Palamedes.isSomeSoundAndComplete_of_someSupport #[hsome]
+      let (atSPMF, keep) ← applyAt declName lvls xs G?
+      let stmt ← mkAppM ``Palamedes.IsSomeSoundAndComplete #[atSPMF, pred]
+      emitLaw (declName ++ `sound_complete) lvls keep stmt proof
+    emitted := emitted.push "sound_complete"
+
+    -- `f.total` only applies to the synthesis-internal carrier: `PGen.total` is a statement about a
+    -- `Palamedes.PGen`, and a Basalt-shaped generator has no `Fail` to be free of — its totality is
+    -- already the content of its type.
+    if stash.shape == .palamedes then
+      if let some w := totalWitness? then
+        let (declC, keep) ← applyAt declName lvls xs none
+        let stmt ← mkAppM ``Palamedes.PGen.total #[declC]
+        unless ← isDefEq (← inferType w) stmt do
+          throwError "@[correct]: the totality witness does not match{indentExpr stmt}"
+        let stmt ← instantiateMVars stmt
+        let value ← instantiateMVars (← mkExpectedTypeHint w stmt)
+        let stmt ← mkForallFVars keep stmt
+        let value ← mkLambdaFVars keep value
+        if value.hasExprMVar || stmt.hasExprMVar then
+          throwError "@[correct]: `total` still has metavariables after instantiation"
+        addAndCompile <| .defnDecl {
+          name := declName ++ `total, levelParams := lvls, type := stmt, value
+          hints := .abbrev, safety := .safe }
+        emitted := emitted.push "total"
+
+      -- `f.correct : CorrectGen P` — the bundled view, for feeding `f` back into synthesis where a
+      -- `CorrectGen` is what the rules consume. Only for the `Palamedes.PGen` shape, where `.val` is
+      -- *literally* `f` and the view is free. A Basalt-shaped `f` has no `CorrectGen` over it —
+      -- `CorrectGen` is a subtype of `Palamedes.PGen`, so the bundle would be over the internal
+      -- carrier rather than over `f`, reintroducing exactly the wrapper this shape exists to avoid.
+      let α := body.appArg!
+      let (declC, keep) ← applyAt declName lvls xs none
+      let genTyE ← mkAppM ``Palamedes.PGen #[α]
+      let prop ← withLocalDeclD `g genTyE fun g => do
+        mkLambdaFVars #[g] (← mkEq (← mkAppM ``Palamedes.PGen.support #[g]) pred)
+      let stmt ← mkAppM ``Palamedes.CorrectGen #[pred]
+      let value ← mkAppOptM ``Subtype.mk #[some genTyE, some prop, some declC, some supportProof]
+      unless ← isDefEq (← inferType value) stmt do
+        throwError "@[correct]: the `correct` view does not match{indentExpr stmt}"
+      let stmt ← mkForallFVars keep (← instantiateMVars stmt)
+      let value ← mkLambdaFVars keep (← instantiateMVars value)
+      if value.hasExprMVar || stmt.hasExprMVar then
+        throwError "@[correct]: `correct` still has metavariables after instantiation"
+      addAndCompile <| .defnDecl {
+        name := declName ++ `correct, levelParams := lvls, type := stmt, value
+        hints := .abbrev, safety := .safe }
+      emitted := emitted.push "correct"
+
+    return emitted
+
+initialize registerBuiltinAttribute {
+  name := `correct
+  descr := "keep the support proof `generator_search` computed, as named theorems about this \
+    declaration"
+  -- The laws are *about* the constant, so they cannot be added until it exists.
+  applicationTime := .afterCompilation
+  add := fun declName _ _ => do
+    let emitted ← MetaM.run' <| TermElabM.run' <| emitCorrectLaws declName
+    logInfo m!"@[correct] {declName}: emitted {String.intercalate ", " emitted.toList}"
+}
+
+end Palamedes

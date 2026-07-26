@@ -169,6 +169,54 @@ and `CorrectGen (P : Option β → Prop)` cannot be solved regardless of dispatc
 worth keeping, but the ambiguity it guards against is latent rather than live.
 -/
 
+/-! ## Three renderings, one per shape a printed choice can have
+
+`delabDroppingSideCondition` (`PGen.lean`) is registered on three constants, and the reason is that
+Palamedes has two output carriers, not that the code is duplicated. A carrier-shaped term is typed
+`PGen α`, so its choice *must* be a `PGen` combinator — unfolding `PGen.oneOf` to the Basalt
+`frequency` underneath gives `{ run := fun {_G} x x_1 => frequency [(1, fun x_2 => …), …] (by simp) }`,
+i.e. the `PGen.mk` wrapper, three dummy binders, and every branch eta-expanded. Strictly worse.
+
+`PGen.oneOf` and Basalt's `frequency` are what the library emits (`genAllTwos` and `genBST` above and
+in the corpus). `PGen.frequency` is reachable only by writing one, which the tuning pass emits via
+a hand-written companion — so it is pinned here rather than left as the one arm nothing exercises.
+Deleting any of the three puts a `._proof_i` reference back into a term that is meant to be pasted. -/
+
+section Renderings
+open Palamedes.PGen
+
+-- Basalt's: the tactic is printed, because Basalt's autoParam is `by omega`, which cannot close the
+-- goal — omitting the argument here would print a term that does not re-elaborate.
+def renderBasalt [Gen G] : G Nat := frequency [(1, fun _ => pure 1), (2, fun _ => pure 2)] (by simp)
+
+/--
+info: def renderBasalt.{u_1} : {G : Type → Type u_1} → [Gen G] → G ℕ :=
+fun {G} [Gen G] => _root_.frequency [(1, fun x => pure 1), (2, fun x => pure 2)]
+-/
+#guard_msgs in
+#print renderBasalt
+
+-- The carrier's two: dropped outright, since their autoParam is `by simp` and does close it.
+def renderOneOf : PGen Nat := PGen.oneOf [pure 1, pure 2]
+
+/--
+info: def renderOneOf : PGen ℕ :=
+PGen.oneOf [pure 1, pure 2]
+-/
+#guard_msgs in
+#print renderOneOf
+
+def renderFrequency : PGen Nat := PGen.frequency [(3, pure 1), (1, pure 2)]
+
+/--
+info: def renderFrequency : PGen ℕ :=
+PGen.frequency [(3, pure 1), (1, pure 2)]
+-/
+#guard_msgs in
+#print renderFrequency
+
+end Renderings
+
 /-! ## A missing witness is not the same claim as "it filters"
 
 `totality` is `repeat' first | …`, and `repeat'` does not fail — so a datatype with no `@[total]`
@@ -188,10 +236,13 @@ three cases are pinned directly. -/
 private def mkRes (gen : Lean.Expr) (err? : Option Lean.MessageData) : SynthesisResult :=
   { gen, supportProof := Lean.mkConst ``Nat.zero, totalWitness? := none, totalityFailure? := err? }
 
+private def mkResGap (gen : Lean.Expr) (gaps : Array Lean.Name) : SynthesisResult :=
+  { mkRes gen none with totalityGaps := gaps }
+
 private def diagnosisLabel : TotalityDiagnosis → String
   | .filters => "filters"
-  | .gap none => "gap (left goals, no assume)"
-  | .gap (some _) => "gap (errored)"
+  | .gap none gaps => s!"gap (left goals, no assume){if gaps.isEmpty then "" else s!", at {gaps}"}"
+  | .gap (some _) _ => "gap (errored)"
 
 /-- info: "filters" -/
 #guard_msgs in
@@ -200,6 +251,12 @@ private def diagnosisLabel : TotalityDiagnosis → String
 /-- info: "gap (left goals, no assume)" -/
 #guard_msgs in
 #eval diagnosisLabel (diagnoseTotality (mkRes (Lean.mkConst ``Nat.zero) none))
+
+-- ...and when the descent recorded *which* head it had no rule for, the diagnosis carries it, so
+-- `gapMessage` names the missing registration rather than guessing at it.
+/-- info: "gap (left goals, no assume), at #[Palamedes.PGen.mod2]" -/
+#guard_msgs in
+#eval diagnosisLabel (diagnoseTotality (mkResGap (Lean.mkConst ``Nat.zero) #[`Palamedes.PGen.mod2]))
 
 -- A thrown error is a gap whatever the term contains: it is not an answer about the generator.
 /-- info: "gap (errored)" -/

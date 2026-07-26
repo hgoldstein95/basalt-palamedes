@@ -10,11 +10,11 @@ import Palamedes.Stats
 import PalamedesTest.Corpus.STLC.WellTyped.WellTyped
 
 /-!
-# Regression test for depth-indexed weight schedules (`derive_tuning` + `SchedulePolicy.stlc`)
+# Regression test for depth-indexed weight schedules (`installTuning` + `SchedulePolicy.stlc`)
 
 The guard on `installTuning` and on `SchedulePolicy.stlc`'s hand-tuned coefficients — nothing else
 pins them, so this file is what notices if they are retuned. The generator under test is `genWTstlc`:
-the uniform, synthesized `genWellTyped` made addressable by `derive_tuning`, sampled under the `stlc`
+`genWellTyped` at its `Tuning` binder, sampled under the `stlc`
 schedule materialized into a runtime `Tuning` (no weights are baked into the term). The bar: sample
 without diverging, median term size ≥ 4, and ≥ 70% of terms containing an application. **Termination
 alone is not success** — a generator that decays too fast terminates by emitting nothing but leaves.
@@ -33,8 +33,7 @@ open Palamedes Palamedes.PGen
 
 /-- `genWellTyped` under the `stlc` schedule — the terminating generator (the uniform one diverges). -/
 def genWTstlc (Γ : List Ty) : PGen Term :=
-  WellTyped.genWellTyped.tuned
-    (SchedulePolicy.stlc.materialize WellTyped.genWellTyped.sites) Γ
+  WellTyped.genWellTyped Γ (SchedulePolicy.stlc.materialize WellTyped.genWellTyped.sites)
 
 /-! ## Outcomes and size — `#genstats`, pinned
 
@@ -72,13 +71,13 @@ info: (toStatGen arbTy) — 3000 draws (seed 0, fuel 10000)
 Under the materialized `stlc` schedule (`genWTstlc`) the `outcomes` and `size` lines below are the bar
 it now clears: 0 divergences, median 5, ≥ 80% with an application.
 
-The four state-class sites `derive_tuning` finds carry the `stlc` weights — a closing branch (0 holes)
+The four state-class sites `installTuning` finds carry the `stlc` weights — a closing branch (0 holes)
 `(1, 30)`, a single-child branch `(1, 14)`, a two-child `app` `(4, 0)` — so the recursion starts
 supercritical and decays with depth. The distribution's sharper tell is `var`. The `unit`-goal state's
 choice is `unit` against a `dite` on whether a variable of the goal type is in context, with `var`/`app`
 chosen inside it. The synthesizer's flatten pass distributes that choice *through* the `dite`
 (`distributeChoiceDite?`), so `unit`, `var`, and `app` sit in a single flat `oneOf` and each becomes
-its own `derive_tuning` site — `var` and `unit` a leaf weight (`1 + 30d`), `app` the constant recursive
+its own tuning site — `var` and `unit` a leaf weight (`1 + 30d`), `app` the constant recursive
 weight `4`. So `var` is a live option wherever a variable is available (the `most common` table shows
 both a `unit`-bodied and a `var 0`-bodied `app`), and `distinct` is 666. The head-constructor
 distribution is a depth-0 effect and is unchanged. -/

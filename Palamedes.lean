@@ -6,17 +6,17 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 -/
 
 -- This module is the root of the `Palamedes` library: importing it brings the full public API into
--- scope — the `generator_search` tactic and `correct def` command (`Synthesizer`), the
+-- scope — the `generator_search` tactic and `@[correct]` attribute (`Synthesizer`), the
 -- `derive_palamedes` command that adds a datatype to the synthesizer (`Derive`), the supported
--- datatypes and their synthesis rules (`Data`), the `derive_tuning` command (`DeriveTuning`), the
--- runnable sampler (`Sample`), and the `#genstats` bridge (`Stats`). The depth-decaying weight
--- schedules that feed `derive_tuning` live in `Schedule`. The example corpus and the extraction
+-- datatypes and their synthesis rules (`Data`), the runnable sampler (`Sample`), and the
+-- `#genstats` bridge (`Stats`). Weighting is part of synthesis rather than a separate command: a
+-- `Tuning` binder in a generator's signature is threaded through its choice sites (`Tuning`), and
+-- the depth-decaying schedules that populate one live in `Schedule`. The example corpus and the extraction
 -- audit live in the `PalamedesTest` library.
 import Palamedes.Synthesizer
 import Palamedes.Sample
 import Palamedes.Stats
 import Palamedes.Derive
-import Palamedes.DeriveTuning
 import Palamedes.Schedule
 import Palamedes.Data
 import Palamedes.Failure

@@ -5,6 +5,6 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
   Leonidas Lampropoulos, Benjamin C. Pierce
 -/
 
--- Aggregator for the synthesizer: the `generator_search` tactic and the `correct def` command.
+-- Aggregator for the synthesizer: the `generator_search` tactic and the `@[correct]` attribute.
 import Palamedes.Synthesizer.FrontEnd
-import Palamedes.Synthesizer.CorrectDef
+import Palamedes.Synthesizer.Correct

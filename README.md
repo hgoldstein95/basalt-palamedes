@@ -5,7 +5,7 @@ predicate `P : α → Prop` (or a decidable `α → Bool`), the `generator_searc
 generator — in [Basalt](https://github.com/hgoldstein95/basalt)'s own shape, `[Gen G] → G α` —
 whose *support* is exactly `P`: it can produce every value satisfying `P` and nothing else.
 Synthesis runs at elaboration time, inside a proof, driven by
-[Aesop](https://github.com/leanprover-community/aesop), and the `correct def` command keeps the
+[Aesop](https://github.com/leanprover-community/aesop), and the `@[correct]` attribute keeps the
 support fact as a named theorem.
 
 This is research code accompanying a [PLDI 2026 paper](https://dl.acm.org/doi/abs/10.1145/3808329).
@@ -87,25 +87,39 @@ def genBetween (lo hi : Nat) [Gen G] : G (Option Nat) := by
   generator_search (fun n => lo ≤ n ∧ n ≤ hi)
 ```
 
-`correct def` is `generator_search` that **names its proofs**: it emits the same generator plus
+`@[correct]` **keeps the proofs**: the generator is exactly the one you would get without it, plus
 `genFoo.sound_complete` (the support fact, in Basalt's law vocabulary) and, for the
 synthesis-internal `Palamedes.PGen` shape, `genFoo.total` and the bundled `genFoo.correct` view. It
 reports what it emitted, so a missing law is something you read rather than assume:
 
 ```lean4
-correct def genAllTwosLawful : Palamedes.PGen (List Nat) := by
+@[correct] def genAllTwosLawful : Palamedes.PGen (List Nat) := by
   generator_search (fun xs => isAllTwos xs)
--- info: correct def genAllTwosLawful: emitted (generator), sound_complete, total, correct
+-- info: @[correct] genAllTwosLawful: emitted sound_complete, total, correct
 ```
 
-Weighting is post-hoc, not a synthesis flag: a generator ships uniform, and `derive_tuning genFoo`
-makes its choice weights runtime-addressable (`genFoo.tuned θ`), with a proof that no `θ` changes
-the support — and, when the generator carries a `sound_complete`, the law restated for every `θ`
-(`genFoo.tuned_sound_complete`). This works at either shape: a Basalt-shaped declaration is tuned
-through the carrier companion `correct def` keeps alongside it (so tuning a Basalt-shaped generator
-requires `correct def`; a plain `def` is rejected with that fix). Depth-*decaying* weights are what
-make a recursive generator whose seed does not shrink terminate in practice (`genWellTyped`
-diverged on 54.3% of draws uniform); see `SchedulePolicy` in `Palamedes/Optimizer.lean`.
+It is an ordinary attribute, so it composes: it sits beside any other attribute, and it works with
+`generator_search?` below.
+
+**Weighting is part of the signature.** Give a generator a `Tuning` binder and every choice site
+reads it; leave it out and the generator ships uniform. There is no separate command and no flag —
+the declared type says whether a generator is tunable, the same way it says whether one can fail:
+
+```lean4
+def genWellTyped (Γ : List Ty) (θ : Tuning := .uniform) : Palamedes.PGen Term := by
+  generator_search (fun t => isWellTyped Γ t)
+
+#eval Palamedes.sampleN 10
+  (genWellTyped [] (SchedulePolicy.stlc.materialize genWellTyped.sites))
+```
+
+`genFoo.sites` is emitted alongside the generator, and a `SchedulePolicy` is materialized against
+it. `.uniform` is a universal default — `Tuning.weight` falls back to `(1, 0)` for any index — so
+the untuned call mentions tuning nowhere. Support is unaffected by the weighting *for every* `θ`,
+and because `θ` is one of the declaration's own binders that is the ordinary `genFoo.sound_complete`
+rather than a second law. Depth-*decaying* weights are what make a recursive generator whose seed
+does not shrink terminate in practice (`genWellTyped` diverged on 54.3% of draws uniform); see
+`SchedulePolicy` in `Palamedes/Schedule.lean`.
 
 Other variants: `generator_search? P` also emits the synthesized term as a "Try this" suggestion,
 so you can see (and paste) what the search actually produced.
@@ -167,18 +181,19 @@ Rejected by design, loudly: mutual, nested, and indexed inductives. (A rose tree
   support-preservation proof, which is type-checked before the goal is closed. Two passes: monad
   laws and assume-floating, then collapsing `pick` trees into uniform `oneOf`s. `Support.lean` holds
   the proof-side twin lemma for each rewrite.
-- **`Palamedes/DeriveTuning.lean`** — the `derive_tuning` command: rewrites a generator's `oneOf`s
-  into `frequency`s reading a `Tuning`, emits the site table, and proves the support unchanged for
-  every `θ`. A Basalt-shaped declaration is tuned through the carrier companion `correct def`
-  emits, then re-projected — so it needs `correct def` (a plain `def` is rejected with that fix).
+- **`Palamedes/Tuning.lean`** — `installTuning`, the pipeline stage between optimize and totality:
+  rewrites a generator's `oneOf`s into `frequency`s reading the declaration's `Tuning` binder, and
+  proves the support unchanged for every `θ`. Running *inside* the pipeline is what makes one
+  generator, one witness and one law suffice at every shape.
 - **`Palamedes/Total.lean`** — `TGen`, `PGen.total` (`Type`-valued: the totality witness *is* the
   failure-free generator the Basalt shape is projected from), and the combinator-wise totality
   lemmas that stage 4 reconstructs a witness from.
 - **`Palamedes/Laws.lean`** and **`SomeSupport.lean`** — the bridges from Palamedes' `support` facts
   to Basalt's law vocabulary (`IsSoundAndComplete`), including the filtering path's
   `IsSomeSoundAndComplete` and the `OptionT SPMF` twin lemmas it is discharged by.
-- **`Palamedes/Synthesizer/CorrectDef.lean`** — the `correct def` command: owns the elaboration so
-  the pipeline's proofs can be `addDecl`d as named theorems about the resulting constant.
+- **`Palamedes/Synthesizer/Correct.lean`** — the `@[correct]` attribute: the tactic stashes the
+  pipeline's proofs, and the attribute — running once the constant exists — `addDecl`s them as named
+  theorems about it.
 - **`Palamedes/Sample.lean`** and **`Stats.lean`** — running a generator: as an executable sampler on
   top of Plausible, and as a distribution report via Basalt's `#genstats`.
 - **`Palamedes/Data/`** — the supported datatypes. The recursive ones (`List`, `Tree`, `Stack`, and
