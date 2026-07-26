@@ -49,8 +49,20 @@ def isRBT : Palamedes.Tree (Color × Nat) → Nat → Nat → Nat → Bool := λ
   isRR t && isBST t (lo, hi) && isBH t height
 
 -- Filtering, declared in the return type.
-def genRBT (height lo hi : Nat) [Gen G] :
+--
+-- Tagged `@[correct]` as the regression for the `someSupport` bridge's **bound-scrutinee** case.
+-- `genAVL` guards the recursive-and-filtering combination, but its match arms are bare `pure`s that
+-- simp equates on both sides without ever needing the scrutinee; RBT's carry `ite`s on the matched
+-- colour, so the bridge has to case-split a `match` on a variable bound by an `∃` *inside* the goal.
+-- Nothing else in the corpus reaches that branch of the script.
+/-- info: @[correct] RBT.genRBT: emitted sound_complete -/
+#guard_msgs in
+@[correct] def genRBT (height lo hi : Nat) [Gen G] :
     G (Option (Palamedes.Tree (Color × Nat))) := by
   generator_search (fun t => isRBT t height lo hi)
+
+/-- info: 'RBT.genRBT.sound_complete' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms genRBT.sound_complete
 
 end RBT

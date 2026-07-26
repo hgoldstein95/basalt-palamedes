@@ -11,7 +11,8 @@ import Palamedes
 
 Every hand-written primitive pays a standing tax: its `support_X` characterization needs a
 `someSupport_X` twin, or the first *filtering* `@[correct]` whose generator uses the primitive
-fails at the law bridge (`CorrectDef` discharges `someSupport g = P` by simp over the twins). The
+fails at the law bridge (`Synthesizer/Correct.lean` discharges `someSupport g = P` by simp over the
+twins). The
 tax is per-primitive and easy to forget precisely because nothing consumes the twin until a
 filtering generator happens to reach it — the gap is silent until someone else's `@[correct]`
 breaks.
@@ -23,8 +24,13 @@ otherwise satisfy a name-only check while leaving the bridge just as broken.
 
 Exempt: `*_congr` lemmas and case-split combinators (`support_Ty_caseTy` &c.), which state
 *relative* facts rather than characterizations, so there is no `someSupport` reading to demand.
-(Case-split twins are a known residual of the same kind — no filtering generator cases on a derived
-type today, and the bridge will name the missing lemma if one ever does.)
+
+Case-split twins are deliberately **not** demanded, and `genRBT` is the proof that they need not be:
+it is a filtering generator that cases on a derived base functor, and it carries a law. The bridge
+gets past the `match` by case-splitting it rather than by rewriting through it, which is also the
+only thing that *could* work — a `someSupport_cases` simp lemma never fires, because matchers are
+per-elaboration and simp matches at `reducible`. See `Synthesizer/Correct.lean`'s `.basaltOption`
+branch.
 -/
 
 open Lean Meta Elab Command

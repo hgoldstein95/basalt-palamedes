@@ -168,11 +168,36 @@ def emitCorrectLaws (declName : Name) : TermElabM (Array String) := do
       --   conditionals never get split at all.
       -- * the tail is `try`-guarded because a non-recursive generator is already closed by `simp`
       --   alone, leaving `congr 1` with no goals to work on.
+      --
+      -- The final `all_goals` is the **bound-scrutinee** case, and it is a fallback by construction:
+      -- it runs only on what the two lines above left, so it cannot regress a generator they already
+      -- closed. `split` case-splits a `match` whose scrutinee is in the local context, and after
+      -- `someSupport_bind` the interesting one is not: it is bound by an `∃` *inside* the goal, in
+      -- `∃ a, P a ∧ someSupport (match a with …) b`. `split` cannot reach `a`, so the twins sit
+      -- unreachable under the match arms — the same shape of obstacle as the conditionals above, one
+      -- layer in. The descent fixes that by taking the `Iff` apart along the structure the two sides
+      -- share (they are identical bar `someSupport` vs `support`, so componentwise is exactly right),
+      -- which *introduces* `a` as a local — and then `split` works as it already did.
+      --
+      -- This is deliberately **not** a per-datatype `X.someSupport_cases` emitted beside
+      -- `X.total_cases`, which is the obvious analogy and does not work: `total_cases` is dispatched
+      -- by the discriminant's *type* and `apply`d, precisely because matchers are per-elaboration and
+      -- only defeq. A simp lemma is matched at `reducible`, so its own matcher auxiliary never
+      -- unifies with the generator's — the lemma is accepted, tagged, and then simply never fires
+      -- (`rw` fails on it too). The obstacle is tactical rather than per-datatype, and so is the fix:
+      -- nothing here mentions a datatype, so a type declared in a test file gets it for free.
       let bridge ←
         try
           solveGoalWithTactic bridgeGoal
             (← `(tactic|
-              (simp; try (congr 1; funext d x b; (repeat' split); all_goals simp))))
+              (simp
+               try (congr 1; funext d x b; (repeat' split); all_goals simp)
+               all_goals (try (
+                 (repeat' (first
+                   | apply or_congr
+                   | apply and_congr
+                   | apply exists_congr
+                   | intro _)) <;> (repeat' split) <;> simp)))))
         catch e =>
           -- Deliberately does **not** name a single cause. The previous wording asserted "a missing
           -- `someSupport` twin", which was wrong in the only case that ever reached it: every twin
