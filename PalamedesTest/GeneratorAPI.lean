@@ -179,12 +179,12 @@ Palamedes has two output carriers, not that the code is duplicated. A carrier-sh
 `frequency` underneath gives `{ run := fun {_G} x x_1 => frequency [(1, fun x_2 => …), …] (by simp) }`,
 i.e. the `PGen.mk` wrapper, three dummy binders, and every branch eta-expanded. Strictly worse.
 
-Basalt's `frequency` is what every corpus generator now emits, the corpus being Basalt-shaped
+Basalt's `frequency` is what every corpus generator emits, the corpus being Basalt-shaped
 throughout. `PGen.oneOf` is what the *carrier* shape emits — still reachable, and still what the
-optimizer's flatten pass produces before packaging — and `PGen.frequency` only by writing one, which
-the tuning pass does. All three are pinned here rather than leaving the two the corpus no longer
-witnesses as arms nothing exercises. Deleting any of them puts a `._proof_i` reference back into a
-term that is meant to be pasted. -/
+optimizer's flatten pass produces before packaging — and `PGen.frequency` arises only by writing
+one, which the tuning pass does. All three are pinned here, since the corpus witnesses only the
+first. Deleting any of them puts a `._proof_i` reference back into a term that is meant to be
+pasted. -/
 
 section Renderings
 

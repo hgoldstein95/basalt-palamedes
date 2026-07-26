@@ -114,8 +114,8 @@ private axiom f : Nat → PGen Nat
   goes_to
   oneOf [(fun x => pure (x + 1)) 5, pure 2]
 
--- ...and recursively: a choice nested in another choice's branch is reachable. It used to be that
--- `installTuning` could not see the inner `oneOf` at all.
+-- ...and recursively: a choice nested in another choice's branch is reachable, which is what lets
+-- `installTuning` see the inner `oneOf`.
 #assert_optimizes!
   oneOf [oneOf [(pure 5 : PGen Nat) >>= fun x => pure (x + 1), pure 2], pure 3]
   goes_to

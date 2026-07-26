@@ -27,10 +27,9 @@ open Palamedes Palamedes.PGen
 
 /-! ## Every registered rule is reachable
 
-The drift this replaces: the `totality` tactic used to re-list most of the basis by hand, and
-`total_color_rec` was tagged but missing from that list, reachable only because a `simp` fallback
-happened to catch it. Dispatch is keyed on the tag now, so the table and the registry must agree
-entry for entry — a mismatch means some rule is shadowed and silently unreachable. -/
+Dispatch is keyed on the tag, so the table and the registry must agree entry for entry: a mismatch
+means some rule is shadowed and silently unreachable. A rule listed nowhere but the registry is the
+easy case to lose, since a `simp` fallback can mask it. -/
 run_cmd do
   let rules := Palamedes.totalRules (← Lean.getEnv)
   let table := Palamedes.totalTable (← Lean.getEnv)
@@ -43,8 +42,8 @@ run_cmd do
     unless rules.any (·.decl == n) do
       throwError "`{n}` is not in the `@[total]` registry, so `totality` cannot dispatch to it"
 
--- Two rules for one head is a tag-time error, not a silent shadowing. This is the ordering hazard
--- (`total_oneOf` before `total_frequency`) made structural: rules that could race cannot coexist.
+-- Two rules for one head is a tag-time error, not a silent shadowing: rules that could race for a
+-- goal cannot coexist in the registry at all.
 /--
 error: @[total]: `PalamedesTest.shadowsPure` and `Palamedes.PGen.Total.total_pure` both reconstruct `Pure.pure`, so the `totality` tactic would have to choose between them. Keep one, or give them distinct heads.
 -/
@@ -54,10 +53,10 @@ error: @[total]: `PalamedesTest.shadowsPure` and `Palamedes.PGen.Total.total_pur
 
 /-! ## An unreconstructible head is named, not guessed
 
-`totality` is `repeat' first | …`, which never fails, so an unclosed goal used to carry no
-information about *why*: `gapMessage` had to say "the usual cause is a datatype with no `@[total]`
-lemma registered" and leave the reader to find which. A dispatch table can be asked instead, and
-this is the one thing keyed dispatch buys that the `apply` cascade structurally could not. -/
+`totality` is `repeat' first | …`, which never fails, so an unclosed goal carries no information
+about *why* on its own — a diagnosis built from the goal alone can only guess at "some datatype with
+no `@[total]` lemma" and leave the reader to find which. A dispatch table can be asked which head it
+had no rule for, which is what keyed dispatch buys that a search over rules cannot. -/
 
 opaque PalamedesTest.mystery : Palamedes.PGen Nat
 

@@ -19,10 +19,10 @@ failure-free `t : TGen α` with `t.toGen = g`.
 `total` is **`Type`-valued, not `Prop`-valued**, and that is load-bearing rather than incidental. The
 witness `t` is the failure-free generator itself, and `t.run` is already a Basalt-shaped generator
 (`∀ {G} [Gen G], G α`) — so a totality proof *is* the term we want to emit. Stated as an `∃` the
-witness was sealed behind `Exists`, and the compositional lemmas had to recover it with `choose`,
-pulling `Classical.choice` into every totality fact and making the result noncomputable. As a
-subtype the witness projects out with `.val`, the lemmas are computable, and `t.toGen = g` is what
-transfers a support fact from `g` to the emitted generator.
+witness would be sealed behind `Exists`, recoverable only with `choose`, which pulls
+`Classical.choice` into every totality fact and makes the result noncomputable. As a subtype the
+witness projects out with `.val`, the lemmas are computable, and `t.toGen = g` is what transfers a
+support fact from `g` to the emitted generator.
 
 This is a structural, syntactic notion of totality — "no `assume`" — for the polymorphic carrier. It is
 deliberately *not* Basalt's almost-sure termination (`SPMF.IsPMF`, i.e. mass = 1): the two agree on
@@ -36,16 +36,16 @@ the introduction lemmas below build those witnesses compositionally. The recursi
 datatype's own `unfold` re-instantiated at the failure-free interface.
 
 The combinator basis below is the one place where the two interfaces are both written out, and it
-has to be: a combinator's arguments are *generators*, so its `TGen` and `PGen` spellings genuinely
-differ in argument type and neither can be the image of the other. A datatype's **primitives** go
-the other way — defined once at `TGen`, with the `PGen` form as `TGen.toGen` of it (`TGen.arbNat`,
-`TGen.choose`, `TGen.elements`, …). Their `total_*` lemmas are then `⟨TGen.foo, rfl⟩`, with no
-second body to keep in agreement and no reconnecting lemma to forget.
+has to be: a combinator's arguments are *generators*, so its `TGen` and `PGen` spellings differ in
+argument type and neither can be the image of the other. A datatype's **primitives** go the other
+way — defined once at `TGen`, with the `PGen` form as `TGen.toGen` of it (`TGen.arbNat`,
+`TGen.choose`, `TGen.elements`, …), so their `total_*` lemmas are `⟨TGen.foo, rfl⟩` with no second
+body to keep in agreement.
 
 The dividing line is whether the witness has a compositional route, not whether the generator can
 fail. A *composite* over the primitives stays an ordinary `PGen` definition — `PGen.gt` is
 `(lo + 1 + ·) <$> arbNat`, and `total_gt` is `total_map total_arbNat` — because the registry already
-assembles its witness, so there is no second body to write in either direction.
+assembles its witness.
 -/
 
 namespace Palamedes
@@ -78,9 +78,9 @@ protected def map (f : α → β) (x : TGen α) : TGen β :=
 
 /-! ### Mirror equations
 
-Each `TGen` combinator coerces to its `PGen` twin. These used to be inlined as `by ext; rfl` inside
-every totality lemma; with `total` carrying data the witness and the equation are built separately,
-so the equations are stated once here and the lemmas below cite them. -/
+Each `TGen` combinator coerces to its `PGen` twin. Because `total` carries data, a totality lemma
+builds its witness and its equation separately, so the equations are stated once here and the lemmas
+below cite them rather than reproving `by ext; rfl` at each use. -/
 
 @[simp] theorem toGen_pure (a : α) : (TGen.pure a).toGen = Pure.pure a := by ext; rfl
 
@@ -104,7 +104,7 @@ end TGen
 
 /-- The `TGen` combinator basis: the failure-free mirror of the core generator algebra, as data.
 
-Two stages need the list rather than the definitions. `extractWitness` delta-unfolds exactly these
+Two stages need the list rather than the definitions: `extractWitness` delta-unfolds exactly these
 to turn a totality witness back into generator code, and `PalamedesTest/Extract.lean` reads a
 survivor of that unfolding as evidence that extraction stopped early. Both must agree on what counts
 as basis, so neither enumerates it.
@@ -142,13 +142,11 @@ namespace Total
 they build witnesses rather than prove propositions.
 
 Each is `@[total]`, exactly like a per-datatype leaf: the generic combinator basis has no privileged
-status in the descent, and `Synthesizer/Totality.lean` names none of them. The tag both registers
-the rule and fixes the head it reconstructs, so `total_oneOf` and `total_frequency` can no longer
-race however they are ordered here.
+status in the descent, and `Synthesizer/Totality.lean` names none of them. The tag fixes the head
+each rule reconstructs, so the order they appear in here carries no meaning.
 
-They must stay **computable** — the witness they assemble is what stage 2 emits
-as the generator's definition, so a `Classical.choice` anywhere here would make the emitted
-generator noncomputable. That is the direct reason `total_bind` no longer uses `choose`.
+They must stay **computable** — the witness they assemble is what stage 2 emits as the generator's
+definition, so a `Classical.choice` anywhere here would make the emitted generator noncomputable.
 
 **Every one of these is written as a direct `⟨witness, proof⟩`, with tactics confined to the proof
 component, and that is load-bearing rather than stylistic.** Written instead as `by obtain ⟨t, rfl⟩ …`
@@ -241,10 +239,7 @@ the `TGen.mk`s and simply does not cancel. What gets emitted is
 `(if hb : … then { run := … } else { run := … }).run` — structure literals, eta-expanded branches
 and a `._proof_1` reference, in a term that is supposed to be readable and re-elaborable. With the
 `mk` outermost the projection cancels at the top and the `dite` is left where it belongs, in the
-generator's body.
-
-This was invisible while the corpus was declared at the `Palamedes.PGen` carrier, which emits the
-optimized generator and never projects the witness. `genBST` is the canary. -/
+generator's body. `genBST` is the canary. -/
 @[total]
 def total_dite
     {g₁ : b = true → PGen α}
@@ -260,15 +255,14 @@ def total_dite
     · simp only [dif_neg hb]; exact (h₂ hb).property⟩
 
 /-- The non-dependent `ite`, which is **not** an instance of `total_dite`: that one is keyed on
-`dite` and on a `Bool` condition read as `b = true`, and dispatch is by head constant, so an
-`ite` over an arbitrary decidable `Prop` matched no rule at all.
+`dite` and on a `Bool` condition read as `b = true`, and dispatch is by head constant, so an `ite`
+over an arbitrary decidable `Prop` matches no rule of its own.
 
-What that cost was invisible for as long as the corpus was declared at the carrier. `totality` is
-`repeat' first | … | split`, so a node with no rule does not fail — it falls through to `split`,
-which leaves a `Decidable.rec` and an `Eq.mpr` per arm in the witness's **data** path. Reading a
-generator out of that is what `G α` does, and the code generator rejects it outright:
-"code generator does not support recursor `Decidable.rec`". A predicate as ordinary as
-`isComplete`'s `n == 0` reaches it.
+Without this rule the cost is silent. `totality` is `repeat' first | … | split`, so a node with no
+rule does not fail — it falls through to `split`, which leaves a `Decidable.rec` and an `Eq.mpr` per
+arm in the witness's **data** path. A `G α` generator is read straight out of that path, and the
+code generator rejects it outright: "code generator does not support recursor `Decidable.rec`". A
+predicate as ordinary as `isComplete`'s `n == 0` reaches it.
 
 `mk` outermost, for the reason `total_dite` gives. -/
 @[total]

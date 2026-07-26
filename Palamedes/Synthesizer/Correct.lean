@@ -15,28 +15,16 @@ import Palamedes.Laws
 keeps that proof: it emits `genFoo.sound_complete` (and, at the carrier shape, `genFoo.total`) as
 ordinary theorems about the constant.
 
-There used to be a third, `genFoo.correct : CorrectGen P` — the bundled view, "for feeding `f` back
-into synthesis where the rules consume a `CorrectGen`". Nothing ever consumed it but its own guard,
-so it was a public name with one job that no caller had. It is ~20 lines to restore from this
-paragraph if feeding synthesized generators back into search becomes real: at the carrier shape
-`.val` is *literally* the declaration, so the view is `⟨genFoo, genFoo.sound_complete⟩` and free.
-A Basalt-shaped generator could never have had one — `CorrectGen` is a subtype of `Palamedes.PGen`,
-so the bundle would be over the internal carrier rather than over `genFoo`, reintroducing exactly the
-wrapper that shape exists to avoid.
-
 ## Why an attribute rather than a command
 
-This replaced a `correct def` command whose stated reason to exist was that "`generator_search` is a
-tactic and never learns the name of the declaration it is elaborating into". It does:
-`Term.getDeclName?` supplies it. The real obstacle was only *ordering* — a theorem about `genFoo`
-cannot be added while `genFoo` is still being elaborated — and `applicationTime := .afterCompilation`
-is precisely the tool for that, the same one `to_additive` uses to emit declarations derived from
-the one it is attached to.
+A theorem about `genFoo` cannot be added while `genFoo` is still being elaborated, and
+`applicationTime := .afterCompilation` is precisely the tool for that — the same one `to_additive`
+uses to emit declarations derived from the one it is attached to. `Term.getDeclName?` supplies the
+name a tactic is elaborating into, so ordering is the only thing an attribute is needed for.
 
-The payoff is everything the command had to reimplement and now does not: binder elaboration,
-auto-bound implicits, universe handling, and the `def` syntax itself all stay Lean's. It also
-composes — `@[correct]` sits next to any other attribute, and works with `generator_search?`, which
-`correct def` could not, since owning the `def` syntax meant owning the whole line.
+Binder elaboration, auto-bound implicits, universe handling and the `def` syntax itself therefore
+stay Lean's, none of which a bespoke command elaborator would have to reimplement. It also composes:
+`@[correct]` sits next to any other attribute, and works with `generator_search?`.
 
 The tactic leaves its proofs in `synthesisExt` (see `Synthesizer/FrontEnd.lean`, which documents the
 two constraints on what crosses that boundary), and this module reads them back.
@@ -165,36 +153,32 @@ def emitCorrectLaws (declName : Name) : TermElabM (Array String) := do
       -- underneath. `repeat' split` exposes the branches; each is then a bare combinator spine the
       -- twins close.
       --
-      -- Three things in the script below are easy to get subtly wrong, and each *weakens* it
-      -- silently rather than failing:
+      -- Three details in the script below *weaken* it silently rather than failing:
       --
       -- * `funext d x b` takes **three** binders, not two. `unfold_support`'s predicate is
       --   `fun d x => (f d x).support`, and `support` is itself `α → Prop`, so what `congr 1` leaves
       --   is an equation between 3-ary functions. Introducing only `d x` leaves a lambda equality
-      --   that simp discharges *sometimes* — AVL closed that way, RBT did not.
+      --   that simp discharges only for some generators.
       -- * `(repeat' split)` needs its own parentheses. `;`-sequenced inside a quotation,
       --   `repeat' split; all_goals simp` binds as `repeat' (split; all_goals simp)`, and the
       --   conditionals never get split at all.
       -- * the tail is `try`-guarded because a non-recursive generator is already closed by `simp`
       --   alone, leaving `congr 1` with no goals to work on.
       --
-      -- The final `all_goals` is the **bound-scrutinee** case, and it is a fallback by construction:
-      -- it runs only on what the two lines above left, so it cannot regress a generator they already
-      -- closed. `split` case-splits a `match` whose scrutinee is in the local context, and after
+      -- The final `all_goals` handles a **bound scrutinee**, and runs only on what the lines above
+      -- left. `split` case-splits a `match` whose scrutinee is in the local context, and after
       -- `someSupport_bind` the interesting one is not: it is bound by an `∃` *inside* the goal, in
-      -- `∃ a, P a ∧ someSupport (match a with …) b`. `split` cannot reach `a`, so the twins sit
-      -- unreachable under the match arms — the same shape of obstacle as the conditionals above, one
-      -- layer in. The descent fixes that by taking the `Iff` apart along the structure the two sides
-      -- share (they are identical bar `someSupport` vs `support`, so componentwise is exactly right),
-      -- which *introduces* `a` as a local — and then `split` works as it already did.
+      -- `∃ a, P a ∧ someSupport (match a with …) b`, where `split` cannot reach `a` and the twins
+      -- sit unreachable under the arms. Taking the `Iff` apart along the structure the two sides
+      -- share — they are identical bar `someSupport` vs `support`, so componentwise is exactly
+      -- right — introduces `a` as a local, and then `split` applies.
       --
-      -- This is deliberately **not** a per-datatype `X.someSupport_cases` emitted beside
-      -- `X.total_cases`, which is the obvious analogy and does not work: `total_cases` is dispatched
-      -- by the discriminant's *type* and `apply`d, precisely because matchers are per-elaboration and
-      -- only defeq. A simp lemma is matched at `reducible`, so its own matcher auxiliary never
-      -- unifies with the generator's — the lemma is accepted, tagged, and then simply never fires
-      -- (`rw` fails on it too). The obstacle is tactical rather than per-datatype, and so is the fix:
-      -- nothing here mentions a datatype, so a type declared in a test file gets it for free.
+      -- A per-datatype `X.someSupport_cases` beside `X.total_cases` is the obvious alternative and
+      -- cannot work: `total_cases` is dispatched by the discriminant's *type* and `apply`d precisely
+      -- because matchers are per-elaboration and only defeq, whereas a simp lemma is matched at
+      -- `reducible`, so its matcher auxiliary never unifies with the generator's and the lemma never
+      -- fires (`rw` fails on it too). The obstacle is tactical rather than per-datatype, and so is
+      -- this fix: nothing here mentions a datatype, so a type declared in a test file gets it free.
       let bridge ←
         try
           solveGoalWithTactic bridgeGoal
@@ -208,10 +192,9 @@ def emitCorrectLaws (declName : Name) : TermElabM (Array String) := do
                    | apply exists_congr
                    | intro _)) <;> (repeat' split) <;> simp)))))
         catch e =>
-          -- Deliberately does **not** name a single cause. The previous wording asserted "a missing
-          -- `someSupport` twin", which was wrong in the only case that ever reached it: every twin
-          -- was present and the bridge simply could not case-split the step generator's control flow
-          -- to get at them. A confidently wrong diagnosis sends the reader to the wrong file.
+          -- Deliberately names no single cause: a missing twin and a control-flow shape the script
+          -- cannot case-split produce the same unsolved goal, and a confidently wrong diagnosis
+          -- sends the reader to the wrong file.
           throwError "@[correct]: could not relate this generator's `someSupport` to its \
             `support`, so the filtering law cannot be stated. The unsolved goal is below.\n\n\
             Two things commonly leave one: a combinator with no `someSupport` twin (add it beside \

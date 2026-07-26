@@ -258,11 +258,9 @@ and the binder would be dead — Lean's own unused-variable linter says so, whic
 reporting it.
 
 Filtering *and* branching is covered by `Corpus/Tree/AVL/AVL.lean`, which tags the recursive
-filtering `genAVL`. That combination used to leave the `someSupport` bridge with an unsolved goal —
-not for want of a twin, but because the bridge could not case-split the step generator's nested
-conditionals to reach them. Fixed in `Synthesizer/Correct.lean`. The old `derive_tuning` suite
-claimed to cover the tuned filtering path but tuned a site-free generator, so the claim was
-vacuous. -/
+filtering `genAVL`. That combination is the one that stresses the `someSupport` bridge: reaching the
+twins there means case-splitting the step generator's nested conditionals, not merely having a twin
+for each combinator. See `Synthesizer/Correct.lean`. -/
 
 /--
 info: @[correct] genRangeB: emitted sound_complete

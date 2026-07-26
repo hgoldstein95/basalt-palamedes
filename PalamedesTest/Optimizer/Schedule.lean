@@ -37,8 +37,8 @@ def genWTstlc (Γ : List Ty) [Gen G] : G Term :=
 
 /-! ## Outcomes and size — `#genstats`, pinned
 
-`arbTy` used to be a critical branching process (`m = 1` exactly, so `E[size] = ∞`; measured mean
-711, max 93,857). It is now subcritical, and this is where that shows. -/
+`arbTy` is a subcritical branching process, and this is where that shows. At `m = 1` exactly it
+would be critical, giving `E[size] = ∞`. -/
 
 /--
 info: (toStatGen arbTy) — 3000 draws (seed 0, fuel 10000)
@@ -129,8 +129,8 @@ def Term.hasApp : Term → Bool
   | .abs _ t => Term.hasApp t
   | .app _ _ => true
 
-/-- Total size of every type annotation. This is where a critical `arbTy` used to show up: mean 73.0,
-with a single term once carrying a 9,867-node type. -/
+/-- Total size of every type annotation. This is the statistic a critical `arbTy` blows up: it is
+where an unbounded mean and multi-thousand-node types would surface. -/
 def Term.annotSize : Term → Nat
   | .unit | .var _ => 0
   | .abs τ t => Ty.size τ + Term.annotSize t

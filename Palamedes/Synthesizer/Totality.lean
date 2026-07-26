@@ -32,20 +32,17 @@ private def unfoldBudget : Nat := 8
 
 /-- Reconstruct one node: dispatch the goal's head constant to its `@[total]` rule and `apply` it.
 
-`apply` rather than a hand-built application, deliberately. The rule's structural arguments, its
-implicit and instance arguments, and its universe levels all have to be solved against the goal, and
-`apply` is Lean's solver for exactly that — a descent that built the application itself would be
-re-implementing unification. What dispatch replaces is not `apply` but the `first | …` *search* that
-used to decide which lemma to hand it.
+`apply` rather than a hand-built application: the rule's structural, implicit and instance arguments
+and its universe levels all have to be solved against the goal, and `apply` is Lean's solver for
+exactly that. Dispatch only chooses *which* rule to hand it.
 
 **A head with no rule is unfolded and looked up again**, because a totality goal need not be stated
-about a spine: `PGen.total genAllTwos` names a generator that *contains* one. Unfolding is safe here
-in a way that unfolding up front would not be, and the difference is the whole reason dispatch can
-be exact: a constant is only ever peeled when the registry has *no* rule for it, so a combinator in
-the basis is never unfolded, and `PGen.oneOf` in particular cannot collapse into the
-`PGen.frequency` it is defined as. Only the reachable-but-unregistered case pays, and it pays a
-bounded `unfoldBudget` before giving up — `PGen.assume` is the one that reaches it in practice, and
-giving up there is the intended "this generator filters" outcome. -/
+about a spine: `PGen.total genAllTwos` names a generator that *contains* one. Unfolding only where
+the registry has no rule is what keeps dispatch exact — a combinator in the basis is never unfolded,
+so `PGen.oneOf` cannot collapse into the `PGen.frequency` it is defined as. The
+reachable-but-unregistered case pays a bounded `unfoldBudget` before giving up; `PGen.assume` is
+what reaches that bound in practice, and giving up there is the intended "this generator filters"
+outcome. -/
 elab "total_apply" : tactic => open Lean Elab Tactic Meta in do
   let goal ← getMainGoal
   goal.withContext do
@@ -67,7 +64,7 @@ elab "total_apply" : tactic => open Lean Elab Tactic Meta in do
       | throwError "total_apply: no `@[total]` rule reconstructs the head of{indentExpr ty}\n\
           (gave up after unfolding {unfoldBudget} definitions deep)"
     -- Against the *original* goal, not the unfolded one: `apply` unifies up to delta anyway, so
-    -- unfolding was only ever a way to find the rule, never a change to what is being proved.
+    -- unfolding is a way to find the rule, not a change to what is being proved.
     replaceMainGoal (← goal.apply (← mkConstWithFreshMVarLevels decl))
 
 /-- Case-split the discriminant of a `match` sitting inside a totality goal.
@@ -105,10 +102,8 @@ makes `generator_search` emit the generator via `totalize` instead).
 Dispatch is a lookup on the goal's head, not a search, and that is what keeps the four arms below
 from interacting:
 
-* `total_apply` is a *function* of the goal. Two rules can never race for one node — `@[total]`
-  rejects a second rule claiming a head already claimed — so this file has no ordering to get
-  right. `total_oneOf` before `total_frequency`, which used to be load-bearing and undocumentable
-  anywhere but here, is now just two different heads.
+* `total_apply` is a *function* of the goal. Two rules can never race for one node, since `@[total]`
+  rejects a second rule claiming a head already claimed, so this file has no ordering to get right.
 * `total_cases` fires only where dispatch found nothing *and* the node is a `match`, and `split`
   only where even that did not apply. Both leave a cast in the witness, so a datatype reaching them
   fails the extraction audit rather than silently emitting a proof term.

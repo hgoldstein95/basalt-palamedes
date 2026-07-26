@@ -20,19 +20,17 @@ next.
 
 ## Why this is a pipeline stage and not a command
 
-It used to be `derive_tuning genFoo`, run *after* the declaration existed. That ordering is what
-made it expensive. The rewrite substrate is the `Palamedes.PGen` carrier — `installTuning` keys on
-`PGen.oneOf`, and the optimizer's `support lhs = support rhs` chaining does not typecheck at an
-abstract `G` — so a Basalt-shaped declaration could not be rewritten in place. It had to be tuned
-through a *carrier companion* and then re-projected: re-run the `totality` cascade on the θ-open
-term, re-derive the `someSupport` bridge, extract a second witness, and finally check that the
-result was still a tuning *of the original declaration* at all, since the companion was located by
-name and nothing else related the two generators.
+The rewrite substrate is the `Palamedes.PGen` carrier: `installTuning` keys on `PGen.oneOf`, and the
+optimizer's `support lhs = support rhs` chaining does not typecheck at an abstract `G`. A
+Basalt-shaped *declaration* therefore cannot be rewritten in place at all — reaching one from
+outside would mean tuning a carrier companion and re-projecting it, which costs a second totality
+witness, a re-derived `someSupport` bridge, and a check that the companion is still a tuning of the
+declaration it is named after.
 
-Running the pass **inside** the pipeline, between optimize and totality, deletes all of that. There
-is one generator, tuned before it is ever packaged; stage 4 builds its witness once; and the law
-`@[correct]` emits is θ-generalized for free, because `θ` is one of the declaration's own binders
-rather than a parameter invented after the fact.
+Running between optimize and totality avoids all of it. There is one generator, tuned before it is
+ever packaged; stage 4 builds its witness once; and the law `@[correct]` emits is θ-generalized for
+free, because `θ` is one of the declaration's own binders rather than a parameter invented after the
+fact.
 
 `θ` is exactly that — a binder the user wrote:
 
@@ -56,9 +54,9 @@ tuning weights every branch of every site equally without having to know how man
 what makes `(θ : Tuning := .uniform)` a signature a user can write before knowing the site count. -/
 def Tuning.uniform : Tuning := ⟨#[]⟩
 
-/-! A tuned weight is positive by construction (`Tuning.weight` clamps to at least 1), and the
-choice combinators declare their positivity side condition as a `by simp` autoParam. Tagging the
-fact is what connects the two.
+/-! A tuned weight is positive by construction (`Tuning.weight` clamps to at least 1), and the choice
+combinators declare their positivity side condition as a `by simp` autoParam. This tag connects the
+two.
 
 `someWeightPos` treats `Tuning.weight θ i d` as positive by inspection, so `delabFrequency` drops
 that side condition from a tuned generator's printed branch list. Without the tag the omission is

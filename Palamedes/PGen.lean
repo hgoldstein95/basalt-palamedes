@@ -88,8 +88,8 @@ if we set `pp.proofs := true`, those proofs become an ugly wall of text. To get 
 we hack the delaborator to only print the proofs when they can't be easily reconstructed by the
 combinator's autoparam.
 
-The same problem, and the same fix, applies to a *primitive* whose side condition is an ordinary
-explicit argument — `choose`'s `lo ≤ hi`, `elements`' `xs.length > 0`. Those live in `Data/`, so
+The same problem and the same fix apply to a *primitive* whose side condition is an ordinary explicit
+argument — `choose`'s `lo ≤ hi`, `elements`' `xs.length > 0`. Those live in `Data/`, so
 `delabDroppingProof` and `gen_side_condition` below are the shared pieces they register against;
 `delabDroppingSideCondition` stays private because the three combinators it serves are all here. -/
 
@@ -172,27 +172,27 @@ def delabBasaltFrequency : Delab := do
 
 /-- Is `p` an auxiliary `._proof_i` applied to a local hypothesis?
 
-That is the shape a primitive's side condition takes in a *synthesized* generator: the synthesis
-rule discharges it with a tactic, the definition elaborator abstracts the result into a
-`._proof_i`, and the floated `assume`'s guard reaches it as an argument. Printed in full it is an
-unpasteable reference to a synthesis-internal constant; recovered by `gen_side_condition` from the
-guard the enclosing `dite` binds, it need not be printed at all.
+That is the shape a primitive's side condition takes in a *synthesized* generator: the synthesis rule
+discharges it with a tactic, the definition elaborator abstracts the result into a `._proof_i`, and
+the floated `assume`'s guard reaches it as an argument. Printed in full it is an unpasteable
+reference to a synthesis-internal constant, and `gen_side_condition` recovers it from the guard the
+enclosing `dite` binds.
 
-The `isFVar` conjunct is what makes this a statement about recoverability and not about names: the
-local it is applied to is the guard, and the guard is what the autoParam finds in the pasted term's
-context. A `._proof_i` closed over nothing local proves something about closed data, which
-`gen_side_condition` would have to establish from scratch. -/
+The `isFVar` conjunct makes this a statement about recoverability and not about names: the local it
+is applied to is the guard, which is what the autoParam finds in the pasted term's context. A
+`._proof_i` closed over nothing local proves something about closed data, which the autoParam would
+have to establish from scratch. -/
 def isAuxProofOverLocals (p : Expr) : Bool :=
   p.getAppFn.constName?.any (·.getString!.startsWith "_proof_") && p.getAppArgs.any Expr.isFVar
 
 /-- Render `c`'s arguments at `shown`, dropping its trailing side-condition *proof*, when
 `recoverable` says `c`'s `gen_side_condition` autoParam can put it back.
 
-The primitive counterpart of `delabDroppingSideCondition`, separate from it because the two differ
-in what they inspect. A combinator's side condition is recoverable from *one* argument (the branch
-list), which is also the only thing printed. A primitive's is recoverable from either its data
-arguments or the shape of the proof itself, so `recoverable` receives the whole application; and the
-arguments worth printing are an explicit subset, since the type parameter is implicit. -/
+The primitive counterpart of `delabDroppingSideCondition`, which differs in what it inspects: a
+combinator's side condition is recoverable from *one* argument (the branch list), which is also the
+only thing printed, whereas a primitive's is recoverable from either its data arguments or the shape
+of the proof itself. So `recoverable` receives the whole application, and the arguments worth
+printing are an explicit subset, the type parameter being implicit. -/
 def delabDroppingProof (c : Name) (arity : Nat) (shown : List Nat) (recoverable : Expr → Bool) :
     Delab := do
   let e ← getExpr

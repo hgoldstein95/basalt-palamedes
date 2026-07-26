@@ -105,10 +105,9 @@ namespace Total
 `@[irreducible]`, so the goal has to be opened, and the only question is where.
 
 Written `by unfold arbLabel; exact total_pick …` the whole term sits under an `Eq.mpr`, which lands
-in the **data** path, so `.val` stops projecting; the witness then reaches the environment as a
-proof term rather than as the generator it is supposed to be. Keeping the data a bare `TGen.arbLabel`
-is also what makes `genGoodStack` print each of its four label draws as one named generator instead
-of an inlined `pick`. -/
+in the **data** path, so `.val` stops projecting and the witness reaches the environment as a proof
+term. Keeping the data a bare `TGen.arbLabel` is also what makes `genGoodStack` print each of its
+four label draws as one named generator instead of an inlined `pick`. -/
 @[total]
 def total_arbLabel : total arbLabel := ⟨TGen.arbLabel, by unfold arbLabel; rfl⟩
 

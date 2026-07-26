@@ -10,10 +10,9 @@ import Palamedes
 # `someSupport` twin inventory
 
 Every hand-written primitive pays a standing tax: its `support_X` characterization needs a
-`someSupport_X` twin, or the first *filtering* `@[correct]` whose generator uses the primitive
-fails at the law bridge (`Synthesizer/Correct.lean` discharges `someSupport g = P` by simp over the
-twins). The
-tax is per-primitive and easy to forget precisely because nothing consumes the twin until a
+`someSupport_X` twin, or the first *filtering* `@[correct]` whose generator uses the primitive fails
+at the law bridge (`Synthesizer/Correct.lean` discharges `someSupport g = P` by simp over the twins).
+The tax is per-primitive and easy to forget precisely because nothing consumes the twin until a
 filtering generator happens to reach it — the gap is silent until someone else's `@[correct]`
 breaks.
 

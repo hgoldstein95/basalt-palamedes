@@ -62,13 +62,11 @@ The branches are deliberately **non-dependent** — neither receives the equatio
 `τ = .arrow τ₁ τ₂`) that its arm establishes — and that is what keeps this combinator inside the
 generic totality story. Were the proofs passed, `gu`/`ga`'s *types* would mention `τ`, so the
 `match τ with` in `total_Ty_caseTy`'s witness would generalize them too, leaving `(hu ⋯).val` inside
-a matcher arm where `hu` is the arm's own binder and nothing can project it. Escaping that costs a
-named `TGen.caseTy` twin whose match is generator code by construction: a hand-written failure-free
-twin, per datatype, that no registry validates.
+a matcher arm where `hu` is the arm's own binder and nothing can project it. The only escape would
+be a named failure-free `TGen.caseTy` twin, per datatype, that no registry validates.
 
-Non-dependent, the split moves inside `TGen.mk` exactly the way `X.total_cases` does it, and no twin
-is needed. The equations are not lost, only relocated: `support_Ty_caseTy` states them as
-conjuncts. -/
+Non-dependent, the split moves inside `TGen.mk` exactly the way `X.total_cases` does it. The
+equations are not lost, only relocated: `support_Ty_caseTy` states them as conjuncts. -/
 def caseTy
     (τ : Ty)
     (gu : PGen α)
@@ -170,11 +168,10 @@ namespace Total
 
 Opened by `simp only` in tactic mode the whole witness ends up under an `Eq.mpr`, and an `Eq.mpr` in
 the **data** path stops `.val` from projecting; `genWellScoped` then prints this one node as a
-150-line `Eq.mpr … ⟨…, congrFun' (congrFun' (congrArg …))⟩` congruence tree in a term whose whole
-purpose is to be read and pasted. With `arbTy` defined as a coercion, the data is the failure-free
-generator itself and the proof is `rfl` under the unfold.
+150-line congruence tree in a term whose whole purpose is to be read and pasted. With `arbTy` defined
+as a coercion, the data is the failure-free generator itself and the proof is `rfl` under the unfold.
 
-Same shape as `total_arbLabel`, which is `@[irreducible]` for the same reason. -/
+Same shape as `total_arbLabel`. -/
 @[total]
 def total_arbTy : total arbTy := ⟨TGen.arbTy, by unfold arbTy; rfl⟩
 

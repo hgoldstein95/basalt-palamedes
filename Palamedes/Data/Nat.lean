@@ -41,14 +41,14 @@ end PGen
 
 `arbNat` and `choose` are the two generators here that are neither built from the core algebra nor
 able to fail, so each is spelled once at the failure-free interface `TGen` and its `PGen` form is
-`TGen.toGen` of it. That direction is what makes `total_arbNat`/`total_choose` direct `⟨witness, rfl⟩`
-pairs: the witness a totality proof has to produce is the definition itself, not a
-separately-written mirror of it that a lemma then has to reconnect.
+`TGen.toGen` of it. That direction makes `total_arbNat`/`total_choose` direct `⟨witness, rfl⟩` pairs:
+the witness a totality proof has to produce is the definition itself, rather than a separately
+written mirror of it that a lemma then has to reconnect.
 
 Deliberately `Palamedes.TGen`, beside the type and the core algebra (`TGen.pure`, `TGen.bind`,
 `TGen.frequency`, … in `Total.lean`) — **not** `Palamedes.PGen.TGen`, which is where these two would
 land if written inside a `namespace PGen` block. Two namespaces both *printing* as `TGen` is
-confusing on its own, but the cost is concrete: it forces every file that reads emitted terms to
+confusing on its own, and the cost is concrete: it forces every file that reads emitted terms to
 `open Palamedes.PGen` in order to abbreviate `PGen.TGen.choose`, and that open shadows Basalt's
 root-level `frequency`, so the generator Palamedes emits prints as `_root_.frequency`. The same trap
 is one `namespace` line away in any `Data/` module that adds a primitive. -/

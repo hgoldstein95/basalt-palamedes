@@ -93,10 +93,9 @@ def solveGoalWithTactic? (goalType : Expr) (tactic : TSyntax `tactic) :
 
 /-- The head constants a totality goal is stuck on: those with no `@[total]` rule.
 
-This is the whole diagnostic payoff of keying the descent on the head. `totality` is
-`repeat' first | …`, which never fails, so previously an unclosed goal carried no information about
-*why* — `gapMessage` had to guess ("the usual cause is a datatype with no `@[total]` lemma"). A
-dispatch table can just be asked. -/
+This is the diagnostic payoff of keying the descent on the head. `totality` is `repeat' first | …`,
+which never fails, so an unclosed goal carries no information about *why* on its own — but a
+dispatch table can simply be asked which heads it has no rule for. -/
 def totalityGaps (goals : List MVarId) : MetaM (Array Name) := do
   let table := Palamedes.totalTable (← getEnv)
   let mut gaps := #[]
@@ -110,11 +109,10 @@ def totalityGaps (goals : List MVarId) : MetaM (Array Name) := do
 
 /-- One run of the synthesis pipeline: search → extract → optimize → totality.
 
-The pipeline used to compute three proofs and keep none of them. `CorrectGen.property`
+Three proofs arise along the way and compose to `support gen' = P`: `CorrectGen.property`
 (`cgen.val.support = P`), the extraction rewrite (`cgen.val = gen`), and the optimizer's
-support-preservation proof (`support gen = support gen'`) each existed as a real proof term inside
-`MetaM` and then went out of scope, so the fact the synthesizer exists to establish was proved and
-discarded. They compose to `support gen' = P`, which is what `supportProof` carries. -/
+support-preservation proof (`support gen = support gen'`). That composite is what `supportProof`
+carries, so the fact the synthesizer exists to establish outlives the `MetaM` that computed it. -/
 structure SynthesisResult where
   /-- The optimized generator. -/
   gen : Expr
@@ -185,10 +183,10 @@ def runSynthesisPipeline (α pred : Expr) (checkTotal verbose : Bool)
 
   -- 3b. Tuning: thread the declaration's `Tuning` binder through every choice site.
   --
-  -- Before totality, deliberately. The witness, the packaging and the emitted law should all be
-  -- about the generator the user actually gets, and running this afterwards is what forced the old
-  -- `derive_tuning` to rebuild each of them against a second, separately-derived generator.
-  -- `total_frequency` never inspects weights, so stage 4 closes exactly as it would have.
+  -- Before totality, deliberately: the witness, the packaging and the emitted law must all be about
+  -- the generator the user actually gets, and running this afterwards would mean rebuilding each of
+  -- them against a second, separately-tuned generator. `total_frequency` never inspects weights, so
+  -- stage 4 closes exactly as it would for the uniform generator.
   let (gen''', tuneProof?, sites) ←
     match θ? with
     | none => pure (gen'', none, #[])
@@ -274,11 +272,10 @@ the declaration cannot be added yet, because during the tactic that declaration 
 `@[correct]` attribute (`Synthesizer/Correct.lean`) runs *after* it does, so the tactic leaves the
 proof here and the attribute picks it up.
 
-This is what replaced the `correct def` command. That command existed because "a tactic never learns
-the name of the declaration it is elaborating into", which is not true — `Term.getDeclName?` supplies
-it — so the only real obstacle was ordering, and an attribute at `applicationTime := .afterCompilation`
-is exactly the tool for that. Lean keeps ownership of binder elaboration, auto-bound implicits and
-universes, none of which a bespoke command elaborator has to reimplement any more.
+Ordering is the only obstacle: `Term.getDeclName?` already supplies a tactic the name it is
+elaborating into, and an attribute at `applicationTime := .afterCompilation` is exactly the tool for
+adding a declaration once that name exists. Lean keeps ownership of binder elaboration, auto-bound
+implicits and universes.
 -/
 
 /-- Which declared shape a stashed synthesis was run at. `Target` cannot be stored as-is: it holds
@@ -441,10 +438,9 @@ every side-condition proof in the emitted generator ends up wrapped in an `Eq.mp
 
 The cost is not only noise. A primitive's side-condition delaborator (`delabChoose`,
 `delabElements`) drops the proof only when `isAuxProofOverLocals` can see that it is applied to a
-local hypothesis — the guard. Wrapped, the guard is no longer an argument by inspection, so the
-proof prints in full and the emitted term stops being pasteable. `genWellTyped`'s `elements` draws
-are where that shows, because they are the ones whose data argument is computed rather than a
-binder.
+local hypothesis — the guard. Wrapped, the guard is not an argument by inspection, so the proof
+prints in full and the emitted term stops being pasteable. `genWellTyped`'s `elements` draws are
+where that shows, being the ones whose data argument is computed rather than a binder.
 
 Replacing `Eq.mpr_prop h₁ h₂` by `h₂` is type-correct exactly when the two `Prop`s are defeq, which
 is what is checked; proof irrelevance does the rest. -/
@@ -706,7 +702,7 @@ editing it by hand.
 
 Kept as its own `syntax` declaration rather than folded into an optional `"?"?` token on
 `generator_search`. That collapse costs five lines of duplication and breaks the spelling: with
-`"generator_search" "?"?`, `generator_search? P` no longer lexes (only `generator_search ? P` does),
+`"generator_search" "?"?`, `generator_search? P` does not lex (only `generator_search ? P` does),
 because `generator_search?` is then not a token. Lean core keeps `simp`/`simp?` and `rw`/`rw?`
 separate for the same reason. -/
 syntax (name := generatorSearch?) "generator_search? " term : tactic

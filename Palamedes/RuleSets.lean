@@ -18,16 +18,14 @@ Aesop rule set (the search in `Synthesizer/CGeneratorSearch.lean`), and `@[total
 `@[total]` is deliberately *not* an Aesop rule set: `totality` is a **structural descent**, not a
 search. Every registered rule is keyed by the head constant it reconstructs (`totalKey?` below), so
 dispatch is a lookup rather than a `first | apply …` race, and the whole basis — the generic
-combinators as much as the per-datatype leaves — lives in this one registry. Two consequences that
-used to be hazards:
+combinators as much as the per-datatype leaves — lives in this one registry. Two properties follow,
+and both are what keep the descent honest:
 
-* **Order cannot matter.** `total_oneOf` and `total_frequency` used to have to be tried in that
-  order, since `oneOf` *is* a `frequency` and `apply` would let the latter capture the former's
-  goal. Keyed dispatch sees `PGen.oneOf` and `PGen.frequency` as different heads.
-* **A tagged rule cannot be unreachable.** The tactic used to re-list most of the basis by hand and
-  had already drifted once (`total_color_rec` was tagged but missing, and survived only because a
-  `simp` fallback happened to catch it). The tag *is* the registration now, and a second rule
-  claiming a head already claimed is rejected at tag time rather than silently shadowed.
+* **Order cannot matter.** `oneOf` *is* a `frequency`, so under `apply` the latter's rule could
+  capture the former's goal. Keyed dispatch sees `PGen.oneOf` and `PGen.frequency` as different
+  heads.
+* **A tagged rule cannot be unreachable.** The tag *is* the registration, and a second rule claiming
+  a head already claimed is rejected at tag time rather than silently shadowed.
 -/
 
 declare_aesop_rule_sets [synthesis]
@@ -76,9 +74,8 @@ generator (or branch list) it is about. `none` if `concl` is not a totality goal
 
 A `match` node is keyed by its **discriminant's type** rather than by the matcher constant. The
 matcher in a synthesized generator need not be the same auxiliary as the one in `X.total_cases`'s
-statement — matchers are per-elaboration and only defeq, which is why `apply` used to be the thing
-doing the matching — but the base functor is the same either way, and there is exactly one
-`total_cases` per base functor.
+statement — matchers are per-elaboration and only defeq — but the base functor is the same either
+way, and there is exactly one `total_cases` per base functor.
 
 The argument is `headBeta`'d and nothing else: no `whnf`. Delta-unfolding here would defeat the
 point, turning `PGen.oneOf` into the `PGen.frequency` it is defined as and reinstating the very
@@ -89,11 +86,10 @@ def totalKey? (concl : Expr) : MetaM (Option (Name × Name)) := do
   let arg := concl.appArg!.headBeta
   if let some app ← Lean.Meta.matchMatcherApp? arg then
     if let some d := app.discrs[0]? then
-      -- `instantiateMVars`, and not because the goal was not instantiated: the discriminant is an
-      -- fvar, and its *type in the local context* is whatever it was when the binder was
-      -- introduced — here an mvar the descent has since assigned. Reading it raw gets `?m`, the
-      -- match branch is skipped, and dispatch silently falls back to the matcher constant, which no
-      -- rule is keyed by. The symptom is a `casesOn` in the emitted generator, three stages away.
+      -- The discriminant is an fvar whose *type in the local context* is whatever it was when the
+      -- binder was introduced — typically an mvar the descent has since assigned. Read raw that is
+      -- `?m`, so the match branch is skipped and dispatch falls back to the matcher constant, which
+      -- no rule is keyed by; the symptom is a `casesOn` in the emitted generator, three stages away.
       let dty ← instantiateMVars (← Lean.Meta.inferType d)
       if let some ty := dty.consumeMData.getAppFn.constName? then
         return some (goal, ty)
@@ -117,8 +113,8 @@ initialize registerBuiltinAttribute {
       | throwError "@[total]: `{declName}` does not conclude in `Palamedes.PGen.total _` (nor \
           `totalList`/`totalWeighted`) applied to something with a head constant, so the \
           `totality` tactic could never dispatch to it"
-    -- One rule per head, checked at tag time. This is what makes the ordering hazard structural
-    -- rather than a comment: two rules that could race are now a build error naming both.
+    -- One rule per head, checked at tag time: two rules that could race are a build error naming
+    -- both.
     for prev in totalRules (← getEnv) do
       if (prev.goal, prev.head) == key then
         throwError "@[total]: `{declName}` and `{prev.decl}` both reconstruct `{key.2}`, so the \
