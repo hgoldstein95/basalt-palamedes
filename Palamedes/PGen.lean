@@ -86,7 +86,31 @@ Choice combinators like `oneOf` and `frequency` carry a side conditions (`gs ≠
 as an explicit argument. By default, these either print as `⋯`, which makes the generator unusable;
 if we set `pp.proofs := true`, those proofs become an ugly wall of text. To get around these issues,
 we hack the delaborator to only print the proofs when they can't be easily reconstructed by the
-combinator's autoparam. -/
+combinator's autoparam.
+
+The same problem, and the same fix, applies to a *primitive* whose side condition is an ordinary
+explicit argument — `choose`'s `lo ≤ hi`, `elements`' `xs.length > 0`. Those live in `Data/`, so
+`delabDroppingProof` and `gen_side_condition` below are the shared pieces they register against;
+`delabDroppingSideCondition` stays private because the three combinators it serves are all here. -/
+
+/-- Discharge a generator primitive's side condition, for its `autoParam`.
+
+Two cases, and a primitive's delaborator drops the proof exactly when one of them will fire on the
+pasted term: the condition holds outright (literal bounds, a literal branch list), or it follows
+from a decidable guard already in context — which is the shape a floated `assume` leaves, since the
+optimizer turns it into a `dite` binding `decide P = true`.
+
+Each branch is `done`-terminated, so a branch that makes progress without closing the goal falls
+through to the next rather than committing. `elements`' condition is where that bites: `simp` turns
+`(Γ.idxsOf τ).length > 0` into `τ ∈ Γ` and stops, which is progress, and the guard in context is
+about the length. -/
+syntax "gen_side_condition" : tactic
+macro_rules
+  | `(tactic| gen_side_condition) =>
+    `(tactic| first
+        | (simp; done)
+        | (simp_all only [decide_eq_true_eq]; done)
+        | (simp_all; done))
 
 def natLit? (e : Expr) : Option Nat :=
   match e.nat? with
@@ -145,6 +169,38 @@ def delabFrequency : Delab :=
 @[app_delab _root_.frequency]
 def delabBasaltFrequency : Delab := do
   delabDroppingSideCondition ``_root_.frequency 5 3 someWeightPos
+
+/-- Is `p` an auxiliary `._proof_i` applied to a local hypothesis?
+
+That is the shape a primitive's side condition takes in a *synthesized* generator: the synthesis
+rule discharges it with a tactic, the definition elaborator abstracts the result into a
+`._proof_i`, and the floated `assume`'s guard reaches it as an argument. Printed in full it is an
+unpasteable reference to a synthesis-internal constant; recovered by `gen_side_condition` from the
+guard the enclosing `dite` binds, it need not be printed at all.
+
+The `isFVar` conjunct is what makes this a statement about recoverability and not about names: the
+local it is applied to is the guard, and the guard is what the autoParam finds in the pasted term's
+context. A `._proof_i` closed over nothing local proves something about closed data, which
+`gen_side_condition` would have to establish from scratch. -/
+def isAuxProofOverLocals (p : Expr) : Bool :=
+  p.getAppFn.constName?.any (·.getString!.startsWith "_proof_") && p.getAppArgs.any Expr.isFVar
+
+/-- Render `c`'s arguments at `shown`, dropping its trailing side-condition *proof*, when
+`recoverable` says `c`'s `gen_side_condition` autoParam can put it back.
+
+The primitive counterpart of `delabDroppingSideCondition`, separate from it because the two differ
+in what they inspect. A combinator's side condition is recoverable from *one* argument (the branch
+list), which is also the only thing printed. A primitive's is recoverable from either its data
+arguments or the shape of the proof itself, so `recoverable` receives the whole application; and the
+arguments worth printing are an explicit subset, since the type parameter is implicit. -/
+def delabDroppingProof (c : Name) (arity : Nat) (shown : List Nat) (recoverable : Expr → Bool) :
+    Delab := do
+  let e ← getExpr
+  guard <| e.isAppOfArity c arity
+  guard <| recoverable e
+  let args ← shown.toArray.mapM fun i => withNaryArg i delab
+  let fn := mkIdent (← unresolveNameGlobal c)
+  `($fn $args*)
 
 end Delab
 

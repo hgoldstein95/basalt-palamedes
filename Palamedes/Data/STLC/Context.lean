@@ -17,7 +17,8 @@ import Mathlib.Data.List.Basic
 
 `elements xs h` draws uniformly from a nonempty list — how a variable is picked from an STLC
 context. With its support/`someSupport` facts, the synthesis rule `s_elements_partial`, and its
-totality witness.
+totality witness. Also `delabElements`, which keeps `generator_search?` output for `elements`
+re-elaborable without printing its side-condition proof.
 -/
 
 namespace Palamedes
@@ -40,8 +41,12 @@ this constant. -/
 
 namespace TGen
 
-/-- Draw uniformly from a nonempty list. -/
-def elements (xs : List α) (h : xs.length > 0) : TGen α :=
+/-- Draw uniformly from a nonempty list.
+
+The nonemptiness side condition is an `autoParam` for the same reason `choose`'s bounds are: it is
+what lets `delabElements` drop the proof from an emitted term and still have that term
+re-elaborate when pasted. -/
+def elements (xs : List α) (h : xs.length > 0 := by gen_side_condition) : TGen α :=
   match xs with
   | x :: xs =>
     match hxs : xs with
@@ -52,7 +57,35 @@ end TGen
 
 namespace PGen
 
-def elements (xs : List α) (h : xs.length > 0) : PGen α := (TGen.elements xs h).toGen
+def elements (xs : List α) (h : xs.length > 0 := by gen_side_condition) : PGen α :=
+  (TGen.elements xs h).toGen
+
+open Lean PrettyPrinter Delaborator in
+
+/-- Print `elements xs` without its nonemptiness proof, so `generator_search?` output re-elaborates.
+
+`genWellTyped` is what needs this. Its context lookup is `elements (Γ.idxsOf τ) _`, whose list is a
+computed expression rather than a literal, so the proof can only come from the guard the floated
+`assume` left — an auxiliary `._proof_i` applied to the `dite`'s hypothesis. Printed in full that is
+a reference to a synthesis-internal constant, in a term whose whole purpose is to be read and
+pasted; `gen_side_condition` recovers it from the same hypothesis.
+
+Registered on `TGen.elements` as well, and that is the registration a **Basalt-shaped** generator
+actually uses: the totality witness is built from the failure-free primitive, and `extractWitness`
+stops short of unfolding it. Exactly as for `choose`; see `delabTGenChoose`. -/
+def delabElementsFor (c : Name) : Delab :=
+  delabDroppingProof c 3 [1] fun e =>
+    (e.getArg! 1).isAppOf ``List.cons || isAuxProofOverLocals (e.getArg! 2)
+
+open Lean PrettyPrinter Delaborator in
+
+@[app_delab Palamedes.PGen.elements]
+def delabElements : Delab := delabElementsFor ``Palamedes.PGen.elements
+
+open Lean PrettyPrinter Delaborator in
+
+@[app_delab Palamedes.TGen.elements]
+def delabTGenElements : Delab := delabElementsFor ``Palamedes.TGen.elements
 
 /-! `elements`' defining equations, restated at `PGen`: the recursion computes at `TGen`, and these
 carry it across the coercion for the `support` proofs below. -/

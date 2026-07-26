@@ -31,6 +31,7 @@ import PalamedesTest.Corpus.List.AllTwos.AllTwos
 import PalamedesTest.Corpus.List.AllTwosEvenLen.AllTwosEvenLen
 import PalamedesTest.Corpus.List.AllEvens.AllEvens
 import PalamedesTest.Corpus.List.EvenLen.EvenLen
+import PalamedesTest.Corpus.List.IdxOf.IdxOf
 import PalamedesTest.Corpus.List.IncreasingByOne.IncreasingByOne
 import PalamedesTest.Corpus.List.LengthK.LengthK
 import PalamedesTest.Corpus.List.LengthKAllTwos.LengthKAllTwos

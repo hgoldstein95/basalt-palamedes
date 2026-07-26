@@ -56,6 +56,16 @@ tuning weights every branch of every site equally without having to know how man
 what makes `(θ : Tuning := .uniform)` a signature a user can write before knowing the site count. -/
 def Tuning.uniform : Tuning := ⟨#[]⟩
 
+/-! A tuned weight is positive by construction (`Tuning.weight` clamps to at least 1), and the
+choice combinators declare their positivity side condition as a `by simp` autoParam. Tagging the
+fact is what connects the two.
+
+`someWeightPos` treats `Tuning.weight θ i d` as positive by inspection, so `delabFrequency` drops
+that side condition from a tuned generator's printed branch list. Without the tag the omission is
+not recoverable: `simp` reduces the goal to `0 < θ.weight 0 d ∨ …` and stops, and the emitted term —
+`generator_search?` output, a `#guard_msgs` pin — fails to re-elaborate when pasted. -/
+attribute [simp] Tuning.weight_pos
+
 namespace Palamedes
 
 /-- A `frequency` site; the internal form of Basalt's `Site`. `offset` is the site's first index into

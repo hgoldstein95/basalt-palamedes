@@ -35,9 +35,6 @@ def arbNatGo [Gen G] : G Nat :=
     (fun () => arbNatGo >>= fun n => pure (n + 1))
   partial_fixpoint
 
-syntax "choose_bounds" : tactic
-macro_rules | `(tactic| choose_bounds) => `(tactic| first | simp | simp_all only [decide_eq_true_eq])
-
 end PGen
 
 /-! ## The primitives
@@ -63,7 +60,7 @@ def arbNat : TGen Nat := ⟨fun {_G} _ => arbNatGo⟩
 
 /-- A uniform draw from `[lo, hi]`, and what a Basalt-shaped generator emits for a range; see
 `delabTGenChoose`. -/
-def choose (lo hi : Nat) (h : lo ≤ hi := by choose_bounds) : TGen Nat :=
+def choose (lo hi : Nat) (h : lo ≤ hi := by gen_side_condition) : TGen Nat :=
   ⟨fun {_G} _ => RandomChoice.choose lo hi h >>= fun r => Pure.pure r.down.val⟩
 
 end TGen
@@ -75,7 +72,8 @@ def arbNat : PGen Nat := TGen.arbNat.toGen
 @[simp]
 theorem run_arbNat (G : Type → Type) [Gen G] [Fail G] : arbNat.run (G := G) = arbNatGo := rfl
 
-def choose (lo hi : Nat) (h : lo ≤ hi := by choose_bounds) : PGen Nat := (TGen.choose lo hi h).toGen
+def choose (lo hi : Nat) (h : lo ≤ hi := by gen_side_condition) : PGen Nat :=
+  (TGen.choose lo hi h).toGen
 
 /-! ### Composites over them
 
@@ -96,24 +94,16 @@ def lt (hi : Nat) (_ : hi > 0) : PGen Nat :=
 open Lean PrettyPrinter Delaborator SubExpr in
 
 /-- Print `choose lo hi` without its side-condition proof, so `generator_search?` output
-re-elaborates (the `by choose_bounds` autoParam recovers it). Fires only when the proof is
+re-elaborates (the `by gen_side_condition` autoParam recovers it). Fires only when the proof is
 recoverable: literal bounds, or an auxiliary `._proof_i` closed over local hypotheses, which is
 exactly the shape that would otherwise print as an unpasteable reference. -/
-def delabChooseFor (c : Name) : Delab := do
-  let e ← getExpr
-  guard <| e.isAppOfArity c 3
-  let litBounds : Bool := Id.run do
-    let some lo := natLit? (e.getArg! 0) | return false
-    let some hi := natLit? (e.getArg! 1) | return false
-    return lo ≤ hi
-  let auxProof : Bool :=
-    let p := e.getArg! 2
-    p.getAppFn.constName?.any (·.getString!.startsWith "_proof_") && p.getAppArgs.any Expr.isFVar
-  guard <| litBounds || auxProof
-  let loStx ← withNaryArg 0 delab
-  let hiStx ← withNaryArg 1 delab
-  let fn := mkIdent (← unresolveNameGlobal c)
-  `($fn $loStx $hiStx)
+def delabChooseFor (c : Name) : Delab :=
+  delabDroppingProof c 3 [0, 1] fun e =>
+    let litBounds : Bool := Id.run do
+      let some lo := natLit? (e.getArg! 0) | return false
+      let some hi := natLit? (e.getArg! 1) | return false
+      return lo ≤ hi
+    litBounds || isAuxProofOverLocals (e.getArg! 2)
 
 open Lean PrettyPrinter Delaborator in
 
