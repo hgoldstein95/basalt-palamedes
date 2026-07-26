@@ -208,6 +208,19 @@ def total_map
     total (f <$> x) :=
   ⟨TGen.map f hx.val, by rw [TGen.toGen_map, hx.property]⟩
 
+/-- The conditional lives **inside** `TGen.mk`, not outside it, and that placement is the whole
+content of this lemma — the same trick, and for the same reason, as `X.total_cases`.
+
+Written the other way round (`if hb : b then (h₁ hb).val else (h₂ hb).val`) the witness is a `dite`
+whose branches are `TGen`s, so the `.run` the Basalt shape projects with has a `dite` between it and
+the `TGen.mk`s and simply does not cancel. What gets emitted is
+`(if hb : … then { run := … } else { run := … }).run` — structure literals, eta-expanded branches
+and a `._proof_1` reference, in a term that is supposed to be readable and re-elaborable. With the
+`mk` outermost the projection cancels at the top and the `dite` is left where it belongs, in the
+generator's body.
+
+This was invisible while the corpus was declared at the `Palamedes.PGen` carrier, which emits the
+optimized generator and never projects the witness. `genBST` is the canary. -/
 @[total]
 def total_dite
     {g₁ : b = true → PGen α}
@@ -215,12 +228,34 @@ def total_dite
     (h₁ : (h : b = true) → total (g₁ h))
     (h₂ : (h : ¬(b = true)) → total (g₂ h))
     : total (if h : b then g₁ h else g₂ h) :=
-  -- The witness mirrors the `dite` rather than casing on `b` outside it: a `by_cases` here would put
-  -- the case split in the data path, where it cannot reduce until `b` is concrete.
-  ⟨if hb : b then (h₁ hb).val else (h₂ hb).val, by
+  -- Still not a `by_cases` on `b`: that would put the case split in the data path, where it cannot
+  -- reduce until `b` is concrete. The `dite` stays, it just moves inside the `mk`.
+  ⟨⟨fun {_G} _ => if hb : b then (h₁ hb).val.run else (h₂ hb).val.run⟩, by
     by_cases hb : b = true
-    · rw [dif_pos hb, dif_pos hb]; exact (h₁ hb).property
-    · rw [dif_neg hb, dif_neg hb]; exact (h₂ hb).property⟩
+    · simp only [dif_pos hb]; exact (h₁ hb).property
+    · simp only [dif_neg hb]; exact (h₂ hb).property⟩
+
+/-- The non-dependent `ite`, which is **not** an instance of `total_dite`: that one is keyed on
+`dite` and on a `Bool` condition read as `b = true`, and dispatch is by head constant, so an
+`ite` over an arbitrary decidable `Prop` matched no rule at all.
+
+What that cost was invisible for as long as the corpus was declared at the carrier. `totality` is
+`repeat' first | … | split`, so a node with no rule does not fail — it falls through to `split`,
+which leaves a `Decidable.rec` and an `Eq.mpr` per arm in the witness's **data** path. Reading a
+generator out of that is what `G α` does, and the code generator rejects it outright:
+"code generator does not support recursor `Decidable.rec`". A predicate as ordinary as
+`isComplete`'s `n == 0` reaches it.
+
+`mk` outermost, for the reason `total_dite` gives. -/
+@[total]
+def total_ite {c : Prop} [Decidable c] {g₁ g₂ : PGen α}
+    (h₁ : total g₁)
+    (h₂ : total g₂)
+    : total (if c then g₁ else g₂) :=
+  ⟨⟨fun {_G} _ => if c then h₁.val.run else h₂.val.run⟩, by
+    by_cases hc : c
+    · simp only [if_pos hc]; exact h₁.property
+    · simp only [if_neg hc]; exact h₂.property⟩
 
 /- Recursion has no generic totality lemma: each datatype's `unfold` gets its own `X.total_unfold`
 in `Palamedes/Data/`, whose witness is that datatype's `unfold` re-run at the failure-free interface

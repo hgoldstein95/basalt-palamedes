@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: existential
 
-Synthesizes `genThreePlusOne : PGen Nat` for `fun b => ∃ a, a = 3 ∧ b = a + 1`. Pins the emitted
+Synthesizes `genThreePlusOne : G Nat` for `fun b => ∃ a, a = 3 ∧ b = a + 1`. Pins the emitted
 term (`pure 4`).
 -/
 
@@ -21,5 +21,5 @@ info: Try this:
   [apply] exact pure 4
 -/
 #guard_msgs in
-def genThreePlusOne : PGen Nat := by
+def genThreePlusOne [Gen G] : G Nat := by
   generator_search? (fun b => ∃ a, a = 3 ∧ b = a + 1)

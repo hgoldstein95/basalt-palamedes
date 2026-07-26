@@ -33,6 +33,23 @@ def elements (xs : List α) (h : xs.length > 0) : PGen α :=
     | [] => pure x
     | _ :: _ => pick (pure x) (elements xs (by rw [hxs]; simp))
 
+/-- The failure-free twin, mirroring `elements` structurally — the same relationship `TGen.choose`
+and `TGen.arbNat` have to their `PGen` counterparts.
+
+It exists because `total_elements`'s witness has to be a **generator**, and `elements` recurses on a
+list that is only known at runtime (an STLC context's `idxsOf`). Assembled instead from
+`total_pure`/`total_pick` by structural recursion, the witness is a recursive *proof* term, and
+`.val` has nothing to project until the list is a literal — which it never is. `genWellTyped` then
+carried `(total_elements …).val` into the emitted term, i.e. `Subtype.val`, `PGen.total` and a
+`TGen.mk` where generator code was supposed to be. With the recursion done once here, `.val` is a
+projection out of a direct `⟨_, _⟩` and lands on this constant. -/
+def TGen.elements (xs : List α) (h : xs.length > 0) : TGen α :=
+  match xs with
+  | x :: xs =>
+    match hxs : xs with
+    | [] => TGen.pure x
+    | _ :: _ => TGen.pick (TGen.pure x) (TGen.elements xs (by rw [hxs]; simp))
+
 @[simp]
 theorem support_elements
     {xs : List α} {v : α} {h : xs.length > 0} :
@@ -74,10 +91,23 @@ end CorrectGen
 
 namespace Total
 
+/-- The recursion, done once, in `Prop` — where it is erased. -/
+theorem toGen_elements : ∀ (xs : List α) (h : xs.length > 0),
+    (TGen.elements xs h).toGen = elements xs h
+  | [x], _ => TGen.toGen_pure x
+  | x :: y :: ys, _ => by
+    -- `show` rather than `simp only [elements]`: both sides' outer `match` reduces on a literal
+    -- `cons`, and stopping there is the point — unfolding the *inner* one too leaves two `match`es
+    -- to relate instead of a `pick` to descend into.
+    show (TGen.pick (TGen.pure x) (TGen.elements (y :: ys) (by simp))).toGen
+       = pick (pure x) (elements (y :: ys) (by simp))
+    rw [TGen.toGen_pick, TGen.toGen_pure, toGen_elements (y :: ys) (by simp)]
+
+/-- Direct `⟨witness, proof⟩` over `TGen.elements` — the same discipline `Total.lean` states for the
+combinator basis, and the reason `TGen.elements` exists. -/
 @[total]
-def total_elements : ∀ {xs : List α} {h : xs.length > 0}, PGen.total (elements xs h)
-  | [_], _ => total_pure _
-  | _ :: y :: ys, _ => total_pick (total_pure _) (total_elements (xs := y :: ys) (h := by simp))
+def total_elements {xs : List α} {h : xs.length > 0} : PGen.total (elements xs h) :=
+  ⟨TGen.elements xs h, toGen_elements xs h⟩
 
 end Total
 

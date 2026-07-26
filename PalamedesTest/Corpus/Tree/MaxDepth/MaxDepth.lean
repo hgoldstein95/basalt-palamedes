@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: trees bounded by a maximum depth
 
-Synthesizes `genComplete : PGen (Palamedes.Tree Nat)` from `isMaxDepth`, which holds when every
+Synthesizes `genComplete : G (Palamedes.Tree Nat)` from `isMaxDepth`, which holds when every
 leaf is at depth at most `n`.
 -/
 
@@ -27,7 +27,7 @@ def isMaxDepth (t : Palamedes.Tree α) (n : Nat) : Bool :=
     isMaxDepth l (n - 1) &&
     isMaxDepth r (n - 1)
 
-def genComplete (n : Nat) : PGen (Palamedes.Tree Nat) := by
+def genComplete (n : Nat) [Gen G] : G (Palamedes.Tree Nat) := by
   generator_search (fun t => isMaxDepth t n = true)
 
 end MaxDepth

@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: even length (structural)
 
-Synthesizes `genEvenLen : PGen (List Nat)` for `isEvenLen`, defined by structural recursion that
+Synthesizes `genEvenLen : G (List Nat)` for `isEvenLen`, defined by structural recursion that
 flips a boolean per element.
 -/
 
@@ -23,7 +23,7 @@ def isEvenLen : List α → Bool
   | [] => true
   | _ :: xs => !(isEvenLen xs)
 
-def genEvenLen : PGen (List Nat) := by
+def genEvenLen [Gen G] : G (List Nat) := by
   generator_search (fun xs => isEvenLen xs = true)
 
 end EvenLen

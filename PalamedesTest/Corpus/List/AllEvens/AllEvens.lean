@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: all-evens list (structural)
 
-Synthesizes `genAllEvens : PGen (List Nat)` for `isAllEvens`, defined by structural recursion on
+Synthesizes `genAllEvens : G (List Nat)` for `isAllEvens`, defined by structural recursion on
 the list.
 -/
 
@@ -23,7 +23,7 @@ def isAllEvens : List Nat → Bool
   | [] => true
   | x :: xs => x % 2 = 0 && isAllEvens xs
 
-def genAllEvens : PGen (List Nat) := by
+def genAllEvens [Gen G] : G (List Nat) := by
   generator_search (fun xs => isAllEvens xs)
 
 end AllEvens

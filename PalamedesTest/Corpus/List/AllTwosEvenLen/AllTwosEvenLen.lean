@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: all-twos and even length (structural)
 
-Synthesizes `genAllTwosEvenLen : PGen (List Nat)` for `isAllTwosEvenLen`, the conjunction of
+Synthesizes `genAllTwosEvenLen : G (List Nat)` for `isAllTwosEvenLen`, the conjunction of
 `isAllTwos` and `isEvenLen`, each defined by structural recursion.
 -/
 
@@ -32,7 +32,7 @@ def isEvenLen : List α → Bool
 def isAllTwosEvenLen (xs : List Nat) : Bool :=
   isAllTwos xs && isEvenLen xs
 
-def genAllTwosEvenLen : PGen (List Nat) := by
+def genAllTwosEvenLen [Gen G] : G (List Nat) := by
   generator_search (fun xs => isAllTwosEvenLen xs = true)
 
 end AllTwosEvenLen

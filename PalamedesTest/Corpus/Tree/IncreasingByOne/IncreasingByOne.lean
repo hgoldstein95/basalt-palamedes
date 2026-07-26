@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: root-to-leaf labels increasing by one
 
-Synthesizes `genIncreasingByOne : PGen (Palamedes.Tree Nat)` from `isIncreasingByOne`, which holds
+Synthesizes `genIncreasingByOne : G (Palamedes.Tree Nat)` from `isIncreasingByOne`, which holds
 when each node's label is one more than its parent's, starting from `0`.
 -/
 
@@ -28,7 +28,7 @@ def isIncreasingByOneAux (t : Palamedes.Tree Nat) (prev : Nat) : Bool :=
 def isIncreasingByOne (t : Palamedes.Tree Nat) : Bool :=
   isIncreasingByOneAux t 0
 
-def genIncreasingByOne : PGen (Palamedes.Tree Nat) := by
+def genIncreasingByOne [Gen G] : G (Palamedes.Tree Nat) := by
   generator_search (fun t => isIncreasingByOne t = true)
 
 end IncreasingByOneTree

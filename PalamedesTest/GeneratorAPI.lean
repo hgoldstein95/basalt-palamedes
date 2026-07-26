@@ -112,8 +112,10 @@ def genAllTwosOpt [Gen G] : G (Option (List Nat)) := by
 
 The carrier is not `Fail`-free, so a filtering term *does* exist and can be emitted — hence a
 warning where row 3's Basalt `G α` is an error. This is the only row that fires on the carrier
-shape, and no corpus generator is declared this way any more, so without this case the branch is
-unreachable from the whole build.
+shape, and **no corpus generator is declared at the carrier at all** any more, so without this case
+the branch is unreachable from the whole build. That is the entire remaining coverage for
+`Target.palamedes`'s warning path, which is why the case is kept rather than deleted with the rest
+of the carrier's status as a recommended shape.
 -/
 
 /--
@@ -177,10 +179,12 @@ Palamedes has two output carriers, not that the code is duplicated. A carrier-sh
 `frequency` underneath gives `{ run := fun {_G} x x_1 => frequency [(1, fun x_2 => …), …] (by simp) }`,
 i.e. the `PGen.mk` wrapper, three dummy binders, and every branch eta-expanded. Strictly worse.
 
-`PGen.oneOf` and Basalt's `frequency` are what the library emits (`genAllTwos` and `genBST` above and
-in the corpus). `PGen.frequency` is reachable only by writing one, which the tuning pass emits via
-a hand-written companion — so it is pinned here rather than left as the one arm nothing exercises.
-Deleting any of the three puts a `._proof_i` reference back into a term that is meant to be pasted. -/
+Basalt's `frequency` is what every corpus generator now emits, the corpus being Basalt-shaped
+throughout. `PGen.oneOf` is what the *carrier* shape emits — still reachable, and still what the
+optimizer's flatten pass produces before packaging — and `PGen.frequency` only by writing one, which
+the tuning pass does. All three are pinned here rather than leaving the two the corpus no longer
+witnesses as arms nothing exercises. Deleting any of them puts a `._proof_i` reference back into a
+term that is meant to be pasted. -/
 
 section Renderings
 open Palamedes.PGen

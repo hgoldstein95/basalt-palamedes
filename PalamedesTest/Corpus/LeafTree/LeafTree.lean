@@ -32,14 +32,14 @@ def isAllTwos : LeafTree Nat → Bool
   | .tip x => x == 2
   | .branch l r => isAllTwos l && isAllTwos r
 
-def genAllTwos : PGen (LeafTree Nat) := by
+def genAllTwos [Gen G] : G (LeafTree Nat) := by
   generator_search (fun t => isAllTwos t)
 
 @[simp]
 def isAllTwosFold (t : LeafTree Nat) : Bool :=
   LeafTree.fold (fun x => x == 2) (fun bl br => bl && br) t
 
-def genAllTwosFold : PGen (LeafTree Nat) := by
+def genAllTwosFold [Gen G] : G (LeafTree Nat) := by
   generator_search (fun t => isAllTwosFold t = true)
 
 -- Complete of depth exactly `d`: a `σ → Bool` function-carrier fold with state threading.
@@ -50,20 +50,20 @@ def isCompleteFold (t : LeafTree Nat) (d : Nat) : Bool :=
 /--
 info: Try this:
   [apply] exact
-    LeafTree.unfold
-      (fun d p => do
-        let tv ←
-          if p.2 = 0 then do
-              let a ← arbNat
+    LeafTree.unfoldGo
+      (fun d x => do
+        let a ←
+          if x.2 = 0 then do
+              let a ← TGen.arbNat.run
               pure (LeafTreeF.tip a)
             else pure (LeafTreeF.branch PUnit.unit PUnit.unit)
-        match tv with
+        match a with
           | LeafTreeF.tip a1 => pure (LeafTreeF.tip a1)
-          | LeafTreeF.branch a1 a2 => pure (LeafTreeF.branch (a1, p.2 - 1) (a2, p.2 - 1)))
-      (PUnit.unit, d)
+          | LeafTreeF.branch a1 a2 => pure (LeafTreeF.branch (a1, x.2 - 1) (a2, x.2 - 1)))
+      0 (PUnit.unit, d)
 -/
 #guard_msgs in
-def genCompleteFold (d : Nat) : PGen (LeafTree Nat) := by
+def genCompleteFold (d : Nat) [Gen G] : G (LeafTree Nat) := by
   generator_search? (fun t => isCompleteFold t d = true)
 
 end LeafTreeDemo

@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: sorted between lo and hi (structural)
 
-Synthesizes `genSortedBetween lo hi : PGen (List Nat)` for `isSortedBetween`, a sorted-list
+Synthesizes `genSortedBetween lo hi : G (List Nat)` for `isSortedBetween`, a sorted-list
 predicate that threads the running lower bound as state. Pins the emitted term under
 `#guard_msgs`.
 -/
@@ -28,22 +28,23 @@ def isSortedBetween (xs : List Nat) : Nat × Nat → Bool := fun (lo, hi) =>
 /--
 info: Try this:
   [apply] exact
-    List.unfold
-      (fun d p => do
-        let tv ←
-          if h : decide (p.2.1 ≤ p.2.2) = true then
-              PGen.oneOf
-                [pure ListF.nil, do
-                  let a ← choose p.2.1 p.2.2
-                  pure (ListF.cons a PUnit.unit)]
+    List.unfoldGo
+      (fun d x => do
+        let a ←
+          if hb : decide (x.2.1 ≤ x.2.2) = true then
+              _root_.frequency
+                [(1, fun x => pure ListF.nil),
+                  (1, fun x_1 => do
+                    let a ← (TGen.choose x.2.1 x.2.2).run
+                    pure (ListF.cons a PUnit.unit))]
             else pure ListF.nil
-        match tv with
+        match a with
           | ListF.nil => pure ListF.nil
-          | ListF.cons a1 a2 => pure (ListF.cons a1 (a2, a1, p.2.2)))
-      (PUnit.unit, lo, hi)
+          | ListF.cons a1 a2 => pure (ListF.cons a1 (a2, a1, x.2.2)))
+      0 (PUnit.unit, lo, hi)
 -/
 #guard_msgs in
-def genSortedBetween (lo hi : Nat) : PGen (List Nat) := by
+def genSortedBetween (lo hi : Nat) [Gen G] : G (List Nat) := by
   generator_search? (fun xs => isSortedBetween xs (lo, hi) = true)
 
 end SortedBetween

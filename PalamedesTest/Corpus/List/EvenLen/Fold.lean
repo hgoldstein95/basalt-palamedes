@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: even length (fold)
 
-Synthesizes `genEvenLenFold : PGen (List Nat)` for `isEvenLenFold`, the fold-spelled twin of
+Synthesizes `genEvenLenFold : G (List Nat)` for `isEvenLenFold`, the fold-spelled twin of
 `isEvenLen` via `List.fold`, exercising a different search path than the structurally recursive
 sibling.
 -/
@@ -23,7 +23,7 @@ namespace EvenLenFold
 def isEvenLenFold (xs : List α) : Bool :=
   List.fold true (fun _ b => !b) xs
 
-def genEvenLenFold : PGen (List Nat) := by
+def genEvenLenFold [Gen G] : G (List Nat) := by
   generator_search (fun xs => isEvenLenFold xs = true)
 
 end EvenLenFold

@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: length k (fold)
 
-Synthesizes `genLengthKFold : PGen (List Nat)` for `lengthFold`, the fold-spelled twin of
+Synthesizes `genLengthKFold : G (List Nat)` for `lengthFold`, the fold-spelled twin of
 `List.length` via `List.fold`, exercising a different search path than the structurally recursive
 sibling.
 -/
@@ -23,7 +23,7 @@ namespace LengthKFold
 def lengthFold (xs : List α) : Nat :=
   List.fold 0 (fun _ b => b + 1) xs
 
-def genLengthKFold {k : Nat} : PGen (List Nat) := by
+def genLengthKFold {k : Nat} [Gen G] : G (List Nat) := by
   generator_search (fun xs => lengthFold xs = k)
 
 end LengthKFold

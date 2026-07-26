@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: root-to-leaf labels increasing by one, fold-spelled
 
-Synthesizes `genIncreasingByOneFold : PGen (Palamedes.Tree Nat)` from `isIncreasingByOneFold`, the
+Synthesizes `genIncreasingByOneFold : G (Palamedes.Tree Nat)` from `isIncreasingByOneFold`, the
 fold-spelled twin of `isIncreasingByOne`.
 -/
 
@@ -22,7 +22,7 @@ namespace IncreasingByOneTreeFold
 def isIncreasingByOneFold (t : Palamedes.Tree Nat) : Bool :=
   Palamedes.Tree.fold (fun _ => true) (fun bl x br prev => x == prev + 1 && bl x && br x) t 0
 
-def genIncreasingByOneFold : PGen (Palamedes.Tree Nat) := by
+def genIncreasingByOneFold [Gen G] : G (Palamedes.Tree Nat) := by
   generator_search (fun t => isIncreasingByOneFold t = true)
 
 end IncreasingByOneTreeFold

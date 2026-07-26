@@ -11,7 +11,7 @@ import Palamedes.Sample
 /-!
 # Corpus: red-black tree without the BST condition, fold-spelled
 
-Synthesizes `genRBTFold : PGen (Palamedes.Tree (Color × Nat))` from `isRBTFold`, the fold-spelled
+Synthesizes `genRBTFold : G (Palamedes.Tree (Color × Nat))` from `isRBTFold`, the fold-spelled
 twin of `isBadRBT`; runs near a raised `maxHeartbeats`/`maxRecDepth`.
 -/
 
@@ -42,7 +42,7 @@ set_option maxRecDepth 2000
 def isRBTFold (height : Nat) (t : Palamedes.Tree (Color × Nat)) : Bool :=
   isBHFold t height = true ∧ isRRFold t = true
 
-def genRBTFold (height : Nat) : PGen (Palamedes.Tree (Color × Nat)) := by
+def genRBTFold (height : Nat) [Gen G] : G (Palamedes.Tree (Color × Nat)) := by
   generator_search (fun t => isRBTFold height t = true)
 
 end BadRBTFold

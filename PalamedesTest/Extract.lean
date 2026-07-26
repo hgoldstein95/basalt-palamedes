@@ -54,7 +54,18 @@ def isResidue (c : Name) : Bool :=
     -- witness's `.val`/`.run` did not reduce away, what lands in the environment is the *proof* and
     -- not the generator — readable as a witness tree rather than as generator code. `Eq.rec` above
     -- already catches the `▸` such a tree carries; these name the cause rather than the symptom.
-    (`Palamedes.PGen.Total).isPrefixOf c || (`Palamedes.TGen).isPrefixOf c ||
+    --
+    -- `TGen` is deliberately **not** blanket-flagged, which it used to be. A `TGen`-valued
+    -- *primitive* applied to `.run` — `TGen.arbNat.run`, `(TGen.choose lo hi).run` — is not residue
+    -- but the only way to spell a failure-free primitive at `G`: its `PGen` twin cannot appear in a
+    -- term typed without `Fail`. Flagging those made 35 of the corpus's generators fail an audit
+    -- they pass, and the rule was only ever silent because no corpus generator was Basalt-shaped.
+    -- What *is* residue is the witness machinery: the `total_*` lemmas, `PGen.total` itself, and the
+    -- `TGen` combinator basis `extractWitness` is supposed to have unfolded (a survivor there means
+    -- extraction stopped early). `Subtype.val` above catches the rest.
+    (`Palamedes.PGen.Total).isPrefixOf c ||
+    c == ``Palamedes.TGen.toGen || c == ``Palamedes.TGen.pure || c == ``Palamedes.TGen.bind ||
+    c == ``Palamedes.TGen.pick || c == ``Palamedes.TGen.frequency || c == ``Palamedes.TGen.map ||
     c == ``Palamedes.PGen.total || c.toString.endsWith "total_unfold"
 
 run_cmd liftTermElabM do

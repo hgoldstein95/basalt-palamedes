@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: length k and all-twos (structural)
 
-Synthesizes `genLengthKAllTwos k : PGen (List Nat)` for `isLengthKAllTwos`, the conjunction of a
+Synthesizes `genLengthKAllTwos k : G (List Nat)` for `isLengthKAllTwos`, the conjunction of a
 fixed length and `isAllTwos`.
 -/
 
@@ -30,7 +30,7 @@ def isLengthKAllTwos (k : Nat) (xs : List Nat) : Bool :=
   xs.length == k && isAllTwos xs
 
 @[simp]
-def genLengthKAllTwos (k : Nat) : PGen (List Nat) := by
+def genLengthKAllTwos (k : Nat) [Gen G] : G (List Nat) := by
   generator_search (fun xs => isLengthKAllTwos k xs = true)
 
 end LengthKAllTwos

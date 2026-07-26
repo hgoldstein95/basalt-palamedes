@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: length k and all-twos (fold)
 
-Synthesizes `genLengthKAllTwosFold k : PGen (List Nat)` for `isLengthKAllTwosFold`, the
+Synthesizes `genLengthKAllTwosFold k : G (List Nat)` for `isLengthKAllTwosFold`, the
 fold-spelled twin of `isLengthKAllTwos` via `List.fold`, exercising a different search path than
 the structurally recursive sibling.
 -/
@@ -23,7 +23,7 @@ namespace LengthKAllTwosFold
 def isLengthKAllTwosFold (k : Nat) (xs : List Nat) :=
   List.fold 0 (fun _ b => b + 1) xs = k ∧ List.fold true (fun x b => x == 2 && b) xs
 
-def genLengthKAllTwosFold (k : Nat) : PGen (List Nat) := by
+def genLengthKAllTwosFold (k : Nat) [Gen G] : G (List Nat) := by
   generator_search (fun xs => isLengthKAllTwosFold k xs = true)
 
 end LengthKAllTwosFold

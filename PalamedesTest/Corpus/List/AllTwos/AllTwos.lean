@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: all-twos list (structural)
 
-Synthesizes `genAllTwos : PGen (List Nat)` for `isAllTwos`, defined by structural recursion on the
+Synthesizes `genAllTwos : G (List Nat)` for `isAllTwos`, defined by structural recursion on the
 list.
 -/
 
@@ -23,7 +23,7 @@ def isAllTwos : List Nat → Bool
   | [] => true
   | x :: xs => x = 2 && isAllTwos xs
 
-def genAllTwos : PGen (List Nat) := by
+def genAllTwos [Gen G] : G (List Nat) := by
   generator_search (fun xs => isAllTwos xs)
 
 end AllTwos

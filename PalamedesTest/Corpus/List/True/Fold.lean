@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: vacuous list predicate (fold)
 
-Synthesizes `genTrueFold : PGen (List Nat)` for `isTrueFold`, the fold-spelled twin of `isTrue` via
+Synthesizes `genTrueFold : G (List Nat)` for `isTrueFold`, the fold-spelled twin of `isTrue` via
 `List.fold`, exercising a different search path than the structurally recursive sibling.
 -/
 
@@ -22,7 +22,7 @@ namespace TrueFold
 def isTrueFold (xs : List α) : Bool :=
   List.fold true (fun _ b => b) xs
 
-def genTrueFold : PGen (List Nat) := by
+def genTrueFold [Gen G] : G (List Nat) := by
   generator_search (fun xs => isTrueFold xs = true)
 
 end TrueFold

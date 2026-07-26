@@ -66,9 +66,17 @@ namespace Total
 def total_arbBool : total (arbBool : PGen Bool) :=
   total_pick (total_pure _) (total_pure _)
 
+/-- The case split stays **inside** `TGen.mk`, for the reason `total_dite` and `X.total_cases` give:
+`by cases b <;> assumption` puts `Bool.rec` in the data path, where `.val` cannot project past it
+until `b` is concrete, and the Basalt shape then emits `(Bool.rec … b).val.run` instead of a
+generator. A `match` rather than `Bool.rec` in the data — the conclusion is keyed on `Bool.rec`
+because that is what the descent dispatches on, but the code generator rejects a bare recursor. -/
 @[total]
-def total_Bool_rec (hf : total gf) (ht : total gt) : total (Bool.rec gf gt b) := by
-  cases b <;> assumption
+def total_Bool_rec (hf : total gf) (ht : total gt) : total (Bool.rec gf gt b) :=
+  ⟨⟨fun {_G} _ => match b with | false => hf.val.run | true => ht.val.run⟩, by
+    cases b
+    · exact hf.property
+    · exact ht.property⟩
 
 end Total
 

@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: stacks of good atoms
 
-Synthesizes `genGoodStack : PGen Stack` from `isGoodStack`, which holds when every atom in a
+Synthesizes `genGoodStack : G Stack` from `isGoodStack`, which holds when every atom in a
 length-`n` stack passes `isGoodAtom`/`isGoodNat` (the 3-constructor `Stack` datatype). Pins the
 emitted term under `#guard_msgs`.
 -/
@@ -37,37 +37,40 @@ def isGoodStack (s : Stack) (n : Nat) : Bool :=
 /--
 info: Try this:
   [apply] exact
-    Stack.unfold
-      (fun d p => do
-        let tv ←
-          if p.2 = 0 then pure StackF.mty
+    Stack.unfoldGo
+      (fun d x => do
+        let a ←
+          if x.2 = 0 then pure StackF.mty
             else
-              PGen.oneOf
-                [do
-                  let a ←
-                    PGen.oneOf
-                        [do
-                          let a ← arbLabel
-                          pure (Atom.atm 0 a), do
-                          let a ← arbLabel
-                          pure (Atom.atm 1 a)]
-                  pure (StackF.cons a PUnit.unit), do
-                  let a ←
-                    PGen.oneOf
-                        [do
-                          let a ← arbLabel
-                          pure (Atom.atm 0 a), do
-                          let a ← arbLabel
-                          pure (Atom.atm 1 a)]
-                  pure (StackF.ret_cons a PUnit.unit)]
-        match tv with
+              _root_.frequency
+                [(1, fun x => do
+                    let a ←
+                      _root_.frequency
+                          [(1, fun x => do
+                              let a ← RandomChoice.pick (fun x => pure Label.low) fun x => pure Label.high
+                              pure (Atom.atm 0 a)),
+                            (1, fun x => do
+                              let a ← RandomChoice.pick (fun x => pure Label.low) fun x => pure Label.high
+                              pure (Atom.atm 1 a))]
+                    pure (StackF.cons a PUnit.unit)),
+                  (1, fun x => do
+                    let a ←
+                      _root_.frequency
+                          [(1, fun x => do
+                              let a ← RandomChoice.pick (fun x => pure Label.low) fun x => pure Label.high
+                              pure (Atom.atm 0 a)),
+                            (1, fun x => do
+                              let a ← RandomChoice.pick (fun x => pure Label.low) fun x => pure Label.high
+                              pure (Atom.atm 1 a))]
+                    pure (StackF.ret_cons a PUnit.unit))]
+        match a with
           | StackF.mty => pure StackF.mty
-          | StackF.cons a1 a2 => pure (StackF.cons a1 (a2, p.2 - 1))
-          | StackF.ret_cons a1 a2 => pure (StackF.ret_cons a1 (a2, p.2 - 1)))
-      (PUnit.unit, n)
+          | StackF.cons a1 a2 => pure (StackF.cons a1 (a2, x.2 - 1))
+          | StackF.ret_cons a1 a2 => pure (StackF.ret_cons a1 (a2, x.2 - 1)))
+      0 (PUnit.unit, n)
 -/
 #guard_msgs in
-def genGoodStack (n : Nat) : PGen Stack := by
+def genGoodStack (n : Nat) [Gen G] : G Stack := by
   generator_search? (fun s => isGoodStack s n = true)
 
 end GoodStack

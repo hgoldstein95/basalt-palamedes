@@ -19,7 +19,7 @@ and a shrinking-seed recursive generator (`genBSTFold`).
 open Palamedes Palamedes.PGen
 
 /--
-info: (toStatGen genSmall) — 1000 draws (seed 0, fuel 10000)
+info: genSmall — 1000 draws (seed 0, fuel 10000)
 
   outcomes    ok 1000 (100.0%)
   size        mean 3.5   p50 3   p95 5   max 5
@@ -41,7 +41,7 @@ info: (toStatGen genSmall) — 1000 draws (seed 0, fuel 10000)
     1
 -/
 #guard_msgs in
-#genstats (toStatGen genSmall)
+#genstats genSmall
 
 /--
 info: (toStatGen (choose 0 10 (by omega))) — 1000 draws (seed 0, fuel 10000)
@@ -71,7 +71,7 @@ info: (toStatGen (choose 0 10 (by omega))) — 1000 draws (seed 0, fuel 10000)
 #genstats (toStatGen (choose 0 10 (by omega)))
 
 /--
-info: (toStatGen (BSTFold.genBSTFold 0 10)) — 4000 draws (seed 0, fuel 10000)
+info: (BSTFold.genBSTFold 0 10) — 4000 draws (seed 0, fuel 10000)
 
   outcomes    ok 4000 (100.0%)
   size        mean 4.2   p50 3   p95 13   max 31
@@ -95,4 +95,4 @@ info: (toStatGen (BSTFold.genBSTFold 0 10)) — 4000 draws (seed 0, fuel 10000)
     Palamedes.Tree.leaf
 -/
 #guard_msgs in
-#genstats (draws := 4000) (toStatGen (BSTFold.genBSTFold 0 10))
+#genstats (draws := 4000) (BSTFold.genBSTFold 0 10)

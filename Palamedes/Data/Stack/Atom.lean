@@ -87,10 +87,19 @@ end CorrectGen
 
 namespace Total
 
+/-- Direct `⟨witness, proof⟩`, with the `unfold` confined to the proof — `total_arbBool` gets this
+for free by being a bare application, and this one cannot because `arbLabel` is `@[irreducible]`.
+
+Written `by unfold arbLabel; exact total_pick …` the whole term is under an `Eq.mpr`, which lands in
+the **data** path, so `.val` stops projecting. At the `Palamedes.PGen` carrier that was invisible;
+at `[Gen G] : G _` the witness is the emitted generator, and `genGoodStack` printed each of its four
+`arbLabel`s as `(↑(id ⟨{ run := … }, id (Eq.refl …) ▸ Total.total_pick._proof_1 …⟩)).run` — the
+term quadrupled in size and carried `._proof_1` references into a pinned golden. -/
 @[total]
-def total_arbLabel : total arbLabel := by
-  unfold arbLabel
-  exact total_pick (total_pure Label.low) (total_pure Label.high)
+def total_arbLabel : total arbLabel :=
+  ⟨TGen.pick (TGen.pure Label.low) (TGen.pure Label.high), by
+    unfold arbLabel
+    rw [TGen.toGen_pick, TGen.toGen_pure, TGen.toGen_pure]⟩
 
 end Total
 

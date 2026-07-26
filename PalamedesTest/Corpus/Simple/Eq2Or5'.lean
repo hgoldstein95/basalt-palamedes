@@ -10,11 +10,11 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: `= 2 ∨ (= 5 ∧ True)`
 
-Synthesizes `genEq2Or5' : PGen Nat` for `fun a => a = 2 ∨ a = 5 ∧ True`, checking the search sees
+Synthesizes `genEq2Or5' : G Nat` for `fun a => a = 2 ∨ a = 5 ∧ True`, checking the search sees
 through a redundant `∧ True` conjunct.
 -/
 
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
-def genEq2Or5' : PGen Nat := by
+def genEq2Or5' [Gen G] : G Nat := by
   generator_search (fun a => a = 2 ∨ a = 5 ∧ True)

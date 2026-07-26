@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: complete trees of a given depth, fold-spelled
 
-Synthesizes `genCompleteFold : PGen (Palamedes.Tree Nat)` from `isCompleteFold`, the fold-spelled
+Synthesizes `genCompleteFold : G (Palamedes.Tree Nat)` from `isCompleteFold`, the fold-spelled
 twin of `isComplete`.
 -/
 
@@ -22,7 +22,7 @@ namespace CompleteFold
 def isCompleteFold (t : Palamedes.Tree Nat) (n : Nat) : Bool :=
   Palamedes.Tree.fold (fun s => s == 0) (fun bl _ br s => decide (s > 0) && bl (s - 1) && br (s - 1)) t n
 
-def genCompleteFold (n : Nat) : PGen (Palamedes.Tree Nat) := by
+def genCompleteFold (n : Nat) [Gen G] : G (Palamedes.Tree Nat) := by
   generator_search (fun t => isCompleteFold t n = true)
 
 end CompleteFold

@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: vacuous list predicate (accuM/Option)
 
-Synthesizes `genTrueAccuOpt : PGen (List Nat)` for `isTrueAccuOpt`, the vacuous predicate spelled
+Synthesizes `genTrueAccuOpt : G (List Nat)` for `isTrueAccuOpt`, the vacuous predicate spelled
 via the accumulating `List.accuM`/`Option` fold path.
 -/
 
@@ -27,7 +27,7 @@ def isTrueAccuOpt (xs : List α) : Option Unit :=
       xs
       ()
 
-def genTrueAccuOpt : PGen (List Nat) := by
+def genTrueAccuOpt [Gen G] : G (List Nat) := by
   generator_search (fun xs => isTrueAccuOpt xs = some ())
 
 end TrueAccuOpt

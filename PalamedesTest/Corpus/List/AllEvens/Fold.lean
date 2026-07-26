@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: all-evens list (fold)
 
-Synthesizes `genAllEvensFold : PGen (List Nat)` for `isAllEvensFold`, the fold-spelled twin of
+Synthesizes `genAllEvensFold : G (List Nat)` for `isAllEvensFold`, the fold-spelled twin of
 `isAllEvens` via `List.fold`, exercising a different search path than the structurally recursive
 sibling.
 -/
@@ -23,7 +23,7 @@ namespace AllEvensFold
 def isAllEvensFold (xs : List Nat) : Bool :=
   List.fold true (fun x b => x % 2 == 0 && b) xs
 
-def genAllEvensFold : PGen (List Nat) := by
+def genAllEvensFold [Gen G] : G (List Nat) := by
   generator_search (fun xs => isAllEvensFold xs = true)
 
 end AllEvensFold

@@ -11,7 +11,7 @@ import Palamedes.Data.Color
 /-!
 # Corpus: red-black tree without the BST condition
 
-Synthesizes `genBadRBT : PGen (Palamedes.Tree (Color × Nat))` from `isBadRBT`, which conjoins
+Synthesizes `genBadRBT : G (Palamedes.Tree (Color × Nat))` from `isBadRBT`, which conjoins
 `isRR` (no red-red violation) and `isBH` (equal black height) but omits the BST ordering
 condition; runs near a raised `maxHeartbeats`/`maxRecDepth`.
 -/
@@ -42,7 +42,7 @@ set_option maxRecDepth 2000
 def isBadRBT : Palamedes.Tree (Color × Nat) → Nat → Bool := λ t height =>
   isRR t && isBH t height
 
-def genBadRBT (height : Nat) : PGen (Palamedes.Tree (Color × Nat)) := by
+def genBadRBT (height : Nat) [Gen G] : G (Palamedes.Tree (Color × Nat)) := by
   generator_search (fun t => isBadRBT t height)
 
 end BadRBT

@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: `= 2`
 
-Synthesizes `genEq2 : PGen Nat` for the trivial predicate `(· = 2)`. Pins the emitted term
+Synthesizes `genEq2 : G Nat` for the trivial predicate `(· = 2)`. Pins the emitted term
 (`pure 2`) under `#guard_msgs`.
 -/
 
@@ -21,5 +21,5 @@ info: Try this:
   [apply] exact pure 2
 -/
 #guard_msgs in
-def genEq2 : PGen Nat := by
+def genEq2 [Gen G] : G Nat := by
   generator_search? (· = 2)

@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: complete trees of a given depth
 
-Synthesizes `genComplete : PGen (Palamedes.Tree Nat)` from `isComplete`, which holds when every
+Synthesizes `genComplete : G (Palamedes.Tree Nat)` from `isComplete`, which holds when every
 leaf sits at exactly depth `n`.
 -/
 
@@ -27,7 +27,7 @@ def isComplete (t : Palamedes.Tree α) (n : Nat) : Bool :=
     isComplete l (n - 1) &&
     isComplete r (n - 1)
 
-def genComplete (n : Nat) : PGen (Palamedes.Tree Nat) := by
+def genComplete (n : Nat) [Gen G] : G (Palamedes.Tree Nat) := by
   generator_search (fun t => isComplete t n = true)
 
 end Complete

@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: well-typed STLC terms, fold-spelled
 
-Synthesizes `genWellTypedFold : PGen Term` from `isWellTypedFold`, the fold-spelled twin of
+Synthesizes `genWellTypedFold : G Term` from `isWellTypedFold`, the fold-spelled twin of
 `isWellTyped`; runs near a raised `maxHeartbeats`.
 -/
 
@@ -42,7 +42,7 @@ def isWellTypedFold (Γ : List Ty) (t : Term) : Prop :=
   ∃ τ, getTypeFold t Γ = some τ
 
 attribute [local simp] Ty.as_or Ty.deforest_eq in
-def genWellTypedFold (Γ : List Ty) : PGen Term := by
+def genWellTypedFold (Γ : List Ty) [Gen G] : G Term := by
   generator_search (fun t => isWellTypedFold Γ t)
 
 end WellTypedFold

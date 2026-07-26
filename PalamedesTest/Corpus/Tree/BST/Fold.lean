@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: binary search trees, fold-spelled
 
-Synthesizes `genBSTFold : PGen (Palamedes.Tree Nat)` from `isBSTFold`, the fold-spelled twin of
+Synthesizes `genBSTFold : G (Palamedes.Tree Nat)` from `isBSTFold`, the fold-spelled twin of
 `isBST`.
 -/
 
@@ -27,7 +27,7 @@ def isBSTFold (lo hi : Nat) (t : Palamedes.Tree Nat) : Bool :=
           | (sl, sr) => (decide (sl ≤ x) && decide (x ≤ sr)) && bl (sl, x - 1) && br (x + 1, sr))
         t (lo, hi)
 
-def genBSTFold (lo hi : Nat) : PGen (Palamedes.Tree Nat) := by
+def genBSTFold (lo hi : Nat) [Gen G] : G (Palamedes.Tree Nat) := by
   generator_search (fun t  => isBSTFold lo hi t = true)
 
 end BSTFold

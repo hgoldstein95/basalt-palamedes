@@ -16,11 +16,11 @@ different carrier types.
 
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
-def genUnit : PGen Unit := by
+def genUnit [Gen G] : G Unit := by
   generator_search (fun (_ : Unit) => True)
 
-def genBool : PGen Bool := by
+def genBool [Gen G] : G Bool := by
   generator_search (fun _ => True)
 
-def genNat : PGen Nat := by
+def genNat [Gen G] : G Nat := by
   generator_search (fun _ => True)

@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: length k (accuM/Option)
 
-Synthesizes `genLengthKAccuOpt : PGen (List Nat)` for `lengthAccuOpt`, the length predicate
+Synthesizes `genLengthKAccuOpt : G (List Nat)` for `lengthAccuOpt`, the length predicate
 spelled via the accumulating `List.accuM`/`Option` fold path.
 -/
 
@@ -27,7 +27,7 @@ def lengthAccuOpt (xs : List α) : Option Nat :=
     xs
     ()
 
-def genLengthKAccuOpt {k : Nat} : PGen (List Nat) := by
+def genLengthKAccuOpt {k : Nat} [Gen G] : G (List Nat) := by
   generator_search (fun xs => lengthAccuOpt xs = some k)
 
 end LengthKAccuOpt

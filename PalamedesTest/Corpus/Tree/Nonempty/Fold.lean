@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: non-empty trees, fold-spelled
 
-Synthesizes `genNonemptyFold : PGen (Palamedes.Tree Nat)` from `isNonemptyFold`, the fold-spelled
+Synthesizes `genNonemptyFold : G (Palamedes.Tree Nat)` from `isNonemptyFold`, the fold-spelled
 twin of `isNonempty`.
 -/
 
@@ -21,7 +21,7 @@ namespace NonemptyFold
 def isNonemptyFold (t : Palamedes.Tree α) : Bool :=
   Palamedes.Tree.fold false (fun _ _ _ => true) t
 
-def genNonemptyFold : PGen (Palamedes.Tree Nat) := by
+def genNonemptyFold [Gen G] : G (Palamedes.Tree Nat) := by
   generator_search (fun t => isNonemptyFold t = true)
 
 end NonemptyFold

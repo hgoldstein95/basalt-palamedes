@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: even length (accuM/Option)
 
-Synthesizes `genEvenLenAccuOpt : PGen (List Nat)` for `isEvenLenAccuOpt`, spelled via
+Synthesizes `genEvenLenAccuOpt : G (List Nat)` for `isEvenLenAccuOpt`, spelled via
 `List.accuM`/`Option` fusion rather than structural recursion or `List.fold`. Pins the emitted term
 under `#guard_msgs`.
 -/
@@ -31,24 +31,25 @@ def isEvenLenAccuOpt (xs : List α) : Option Bool :=
 /--
 info: Try this:
   [apply] exact
-    List.unfold
-      (fun d p => do
-        let tv ←
-          if h : p.1 = true then
-              PGen.oneOf
-                [pure ListF.nil, do
-                  let a ← arbNat
-                  pure (ListF.cons a false)]
+    List.unfoldGo
+      (fun d x => do
+        let a ←
+          if hb : x.1 = true then
+              _root_.frequency
+                [(1, fun x => pure ListF.nil),
+                  (1, fun x => do
+                    let a ← TGen.arbNat.run
+                    pure (ListF.cons a false))]
             else do
-              let a ← arbNat
+              let a ← TGen.arbNat.run
               pure (ListF.cons a true)
-        match tv with
+        match a with
           | ListF.nil => pure ListF.nil
           | ListF.cons a1 a2 => pure (ListF.cons a1 (a2, PUnit.unit)))
-      (true, PUnit.unit)
+      0 (true, PUnit.unit)
 -/
 #guard_msgs in
-def genEvenLenAccuOpt : PGen (List Nat) := by
+def genEvenLenAccuOpt [Gen G] : G (List Nat) := by
   generator_search? (fun xs => isEvenLenAccuOpt xs = some true)
 
 end EvenLenAccuOpt

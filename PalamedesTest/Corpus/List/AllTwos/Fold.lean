@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: all-twos list (fold)
 
-Synthesizes `genAllTwosFold : PGen (List Nat)` for `isAllTwosFold`, the fold-spelled twin of
+Synthesizes `genAllTwosFold : G (List Nat)` for `isAllTwosFold`, the fold-spelled twin of
 `isAllTwos` via `List.fold`, exercising a different search path than the structurally recursive
 sibling.
 -/
@@ -23,7 +23,7 @@ namespace AllTwosFold
 def isAllTwosFold (xs : List Nat) : Bool :=
   List.fold true (fun x b => x == 2 && b) xs
 
-def genAllTwosFold : PGen (List Nat) := by
+def genAllTwosFold [Gen G] : G (List Nat) := by
   generator_search (fun xs => isAllTwosFold xs = true)
 
 end AllTwosFold

@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: all-twos tree
 
-Synthesizes `genAllTwos : PGen (Palamedes.Tree Nat)` from the structurally recursive predicate
+Synthesizes `genAllTwos : G (Palamedes.Tree Nat)` from the structurally recursive predicate
 `isAllTwos`, which holds when every node label is `2`.
 -/
 
@@ -23,7 +23,7 @@ def isAllTwos : Palamedes.Tree Nat → Bool
   | .leaf => true
   | .node l x r => x = 2 && isAllTwos l && isAllTwos r
 
-def genAllTwos : PGen (Palamedes.Tree Nat) := by
+def genAllTwos [Gen G] : G (Palamedes.Tree Nat) := by
   generator_search (fun t => isAllTwos t)
 
 end AllTwosTree

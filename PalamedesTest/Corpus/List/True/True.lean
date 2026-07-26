@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: vacuous list predicate (structural)
 
-Synthesizes `genTrue : PGen (List Nat)` for `isTrue`, a predicate that holds of every list.
+Synthesizes `genTrue : G (List Nat)` for `isTrue`, a predicate that holds of every list.
 -/
 
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
@@ -22,7 +22,7 @@ def isTrue : List α → Bool
   | [] => true
   | x :: xs => (fun _ => true) x && isTrue xs
 
-def genTrue : PGen (List Nat) := by
+def genTrue [Gen G] : G (List Nat) := by
   generator_search (fun xs => isTrue xs = true)
 
 end ConstTrue

@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: non-empty trees
 
-Synthesizes `genNonempty : PGen (Palamedes.Tree Nat)` from `isNonempty`, which excludes only the
+Synthesizes `genNonempty : G (Palamedes.Tree Nat)` from `isNonempty`, which excludes only the
 `leaf` case.
 -/
 
@@ -23,7 +23,7 @@ def isNonempty : Palamedes.Tree α → Bool
   | .leaf => false
   | .node l _ r => true && isNonempty l && isNonempty r
 
-def genNonempty : PGen (Palamedes.Tree Nat) := by
+def genNonempty [Gen G] : G (Palamedes.Tree Nat) := by
   generator_search (fun t => isNonempty t = true)
 
 end Nonempty

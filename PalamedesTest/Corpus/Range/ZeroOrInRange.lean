@@ -10,11 +10,11 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: zero or in range
 
-Synthesizes `genZeroOrInRange lo hi : PGen Nat` for `fun n => n = 0 ∨ (lo ≤ n ∧ n ≤ hi)`, a
+Synthesizes `genZeroOrInRange lo hi : G Nat` for `fun n => n = 0 ∨ (lo ≤ n ∧ n ≤ hi)`, a
 disjunction of a literal and a symbolic range.
 -/
 
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
 
-def genZeroOrInRange (lo hi : Nat) : PGen Nat := by
+def genZeroOrInRange (lo hi : Nat) [Gen G] : G Nat := by
   generator_search fun n => n = 0 ∨ (lo ≤ n ∧ n ≤ hi)

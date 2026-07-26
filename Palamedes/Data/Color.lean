@@ -90,9 +90,15 @@ namespace Total
 def total_arbColor : total (arbColor : PGen Color) :=
   total_pick (total_pure _) (total_pure _)
 
+/-- Case split inside `TGen.mk` — see `total_Bool_rec`, and `total_dite` for why. A `match` rather
+than `Color.rec`: the conclusion is keyed on `Color.rec` because that is what the descent dispatches
+on, but the *data* has to be something the code generator compiles, and it rejects a bare recursor. -/
 @[total]
-def total_color_rec (hf : total gr) (ht : total gb) : total (Color.rec gr gb c) := by
-  cases c <;> assumption
+def total_color_rec (hf : total gr) (ht : total gb) : total (Color.rec gr gb c) :=
+  ⟨⟨fun {_G} _ => match c with | .red => hf.val.run | .black => ht.val.run⟩, by
+    cases c
+    · exact hf.property
+    · exact ht.property⟩
 
 end Total
 

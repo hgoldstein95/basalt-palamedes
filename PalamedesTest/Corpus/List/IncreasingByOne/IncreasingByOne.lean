@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: increasing by one (structural)
 
-Synthesizes `genIncreasingByOneRec : PGen (List Nat)` for `isIncreasingByOne`, defined by
+Synthesizes `genIncreasingByOneRec : G (List Nat)` for `isIncreasingByOne`, defined by
 structural recursion over an accumulating `prev` argument.
 -/
 
@@ -28,7 +28,7 @@ def isIncreasingByOneAux (xs : List Nat) (prev : Nat) : Bool :=
 def isIncreasingByOne (xs : List Nat) : Bool :=
   isIncreasingByOneAux xs 0
 
-def genIncreasingByOneRec : PGen (List Nat) := by
+def genIncreasingByOneRec [Gen G] : G (List Nat) := by
   generator_search (fun xs => isIncreasingByOne xs = true)
 
 end IncreasingByOneList

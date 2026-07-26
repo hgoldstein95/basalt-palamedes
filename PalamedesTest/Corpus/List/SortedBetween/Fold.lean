@@ -10,7 +10,7 @@ import Palamedes.Synthesizer
 /-!
 # Corpus: sorted between lo and hi (fold)
 
-Synthesizes `genSortedBetweenFold lo hi : PGen (List Nat)` for `isSortedBetweenFold`, the
+Synthesizes `genSortedBetweenFold lo hi : G (List Nat)` for `isSortedBetweenFold`, the
 fold-spelled twin of `isSortedBetween` via `List.fold`, exercising a different search path than the
 structurally recursive sibling.
 -/
@@ -22,7 +22,7 @@ namespace SortedBetweenFold
 def isSortedBetweenFold (lo hi : Nat) (xs : List Nat) : Prop :=
   List.fold (fun _ => true) (fun x b s => decide (s ≤ x) && decide (x ≤ hi) && b x) xs lo
 
-def genSortedBetweenFold (lo hi : Nat) : PGen (List Nat) := by
+def genSortedBetweenFold (lo hi : Nat) [Gen G] : G (List Nat) := by
   generator_search (fun xs => isSortedBetweenFold lo hi xs = true)
 
 end SortedBetweenFold

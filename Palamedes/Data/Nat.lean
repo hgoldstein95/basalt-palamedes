@@ -61,10 +61,13 @@ def lt (hi : Nat) (_ : hi > 0) : PGen Nat :=
 
 open Lean PrettyPrinter Delaborator SubExpr in
 
-@[app_delab Palamedes.PGen.choose]
-def delabChoose : Delab := do
+/-- Print `choose lo hi` without its side-condition proof, so `generator_search?` output
+re-elaborates (the `by choose_bounds` autoParam recovers it). Fires only when the proof is
+recoverable: literal bounds, or an auxiliary `._proof_i` closed over local hypotheses, which is
+exactly the shape that would otherwise print as an unpasteable reference. -/
+def delabChooseFor (c : Name) : Delab := do
   let e ← getExpr
-  guard <| e.isAppOfArity ``Palamedes.PGen.choose 3
+  guard <| e.isAppOfArity c 3
   let litBounds : Bool := Id.run do
     let some lo := natLit? (e.getArg! 0) | return false
     let some hi := natLit? (e.getArg! 1) | return false
@@ -75,8 +78,24 @@ def delabChoose : Delab := do
   guard <| litBounds || auxProof
   let loStx ← withNaryArg 0 delab
   let hiStx ← withNaryArg 1 delab
-  let fn := mkIdent (← unresolveNameGlobal ``Palamedes.PGen.choose)
+  let fn := mkIdent (← unresolveNameGlobal c)
   `($fn $loStx $hiStx)
+
+open Lean PrettyPrinter Delaborator in
+
+@[app_delab Palamedes.PGen.choose]
+def delabChoose : Delab := delabChooseFor ``Palamedes.PGen.choose
+
+open Lean PrettyPrinter Delaborator in
+
+/-- The same for the failure-free twin, which is what a **Basalt-shaped** generator emits: the
+totality witness is built from `TGen.choose`, and `extractWitness` deliberately stops short of
+unfolding it. Without this registration `genBST` at `[Gen G] : G _` prints
+`(TGen.choose lo hi (s_between_partial._proof_1 hb)).run` — a `._proof_1` reference in a term whose
+whole purpose is to be read and pasted. Exactly the reason `delabDroppingSideCondition` is
+registered on three constants rather than one; see `PGen.lean`. -/
+@[app_delab Palamedes.PGen.TGen.choose]
+def delabTGenChoose : Delab := delabChooseFor ``Palamedes.PGen.TGen.choose
 
 @[simp]
 theorem support_arbNat :

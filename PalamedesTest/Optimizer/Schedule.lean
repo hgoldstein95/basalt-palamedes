@@ -32,7 +32,7 @@ take minutes.
 open Palamedes Palamedes.PGen
 
 /-- `genWellTyped` under the `stlc` schedule — the terminating generator (the uniform one diverges). -/
-def genWTstlc (Γ : List Ty) : PGen Term :=
+def genWTstlc (Γ : List Ty) [Gen G] : G Term :=
   WellTyped.genWellTyped Γ (SchedulePolicy.stlc.materialize WellTyped.genWellTyped.sites)
 
 /-! ## Outcomes and size — `#genstats`, pinned
@@ -83,7 +83,7 @@ both a `unit`-bodied and a `var 0`-bodied `app`), and `distinct` is 666. The hea
 distribution is a depth-0 effect and is unchanged. -/
 
 /--
-info: (toStatGen (genWTstlc [])) — 3000 draws (seed 0, fuel 10000)
+info: (genWTstlc []) — 3000 draws (seed 0, fuel 10000)
 
   outcomes    ok 3000 (100.0%)
   size        mean 5.6   p50 5   p95 12   max 26
@@ -108,7 +108,7 @@ info: (toStatGen (genWTstlc [])) — 3000 draws (seed 0, fuel 10000)
     Term.app (Term.abs (Ty.arrow (Ty.unit) (Ty.unit)) (Term.unit)) (Term.abs (Ty.unit) (Term.…
 -/
 #guard_msgs in
-#genstats (draws := 3000) (fuel := 10000) (toStatGen (genWTstlc []))
+#genstats (draws := 3000) (fuel := 10000) (genWTstlc [])
 
 /-! ## The four STLC-specific observables `#genstats` cannot express -/
 
@@ -163,8 +163,8 @@ private def mean10 (xs : Array Nat) : String :=
 recomputed here — read them off the `#genstats` output above.
 
 TODO: Consider upstreaming more generic infrastructure to Basalt to support this kind of thing. -/
-def measureShape (g : Palamedes.PGen Term) (draws := 3000) (fuel := 10000) : IO Unit := do
-  let ok := (GenStats.runDraws (toStatGen g) { draws, fuel, seed := 0 }).filterMap
+def measureShape (g : GenStats.StatGen Term) (draws := 3000) (fuel := 10000) : IO Unit := do
+  let ok := (GenStats.runDraws g { draws, fuel, seed := 0 }).filterMap
     fun | .ok (t, _) => some t | .error _ => none
   let withApp := ok.filter Term.hasApp |>.size
   let trivial := ok.filter (fun t => Term.size t ≤ 2) |>.size
