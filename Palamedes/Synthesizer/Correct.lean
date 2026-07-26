@@ -12,8 +12,17 @@ import Palamedes.Laws
 # `@[correct]` — synthesis that names its proofs
 
 `generator_search` proves `support gen = P` on the way to closing its goal. `@[correct]` is what
-keeps that proof: it emits `genFoo.sound_complete` (and, at the carrier shape, `genFoo.total` and
-`genFoo.correct`) as ordinary theorems about the constant.
+keeps that proof: it emits `genFoo.sound_complete` (and, at the carrier shape, `genFoo.total`) as
+ordinary theorems about the constant.
+
+There used to be a third, `genFoo.correct : CorrectGen P` — the bundled view, "for feeding `f` back
+into synthesis where the rules consume a `CorrectGen`". Nothing ever consumed it but its own guard,
+so it was a public name with one job that no caller had. It is ~20 lines to restore from this
+paragraph if feeding synthesized generators back into search becomes real: at the carrier shape
+`.val` is *literally* the declaration, so the view is `⟨genFoo, genFoo.sound_complete⟩` and free.
+A Basalt-shaped generator could never have had one — `CorrectGen` is a subtype of `Palamedes.PGen`,
+so the bundle would be over the internal carrier rather than over `genFoo`, reintroducing exactly the
+wrapper that shape exists to avoid.
 
 ## Why an attribute rather than a command
 
@@ -236,29 +245,6 @@ def emitCorrectLaws (declName : Name) : TermElabM (Array String) := do
           name := declName ++ `total, levelParams := lvls, type := stmt, value
           hints := .abbrev, safety := .safe }
         emitted := emitted.push "total"
-
-      -- `f.correct : CorrectGen P` — the bundled view, for feeding `f` back into synthesis where a
-      -- `CorrectGen` is what the rules consume. Only for the `Palamedes.PGen` shape, where `.val` is
-      -- *literally* `f` and the view is free. A Basalt-shaped `f` has no `CorrectGen` over it —
-      -- `CorrectGen` is a subtype of `Palamedes.PGen`, so the bundle would be over the internal
-      -- carrier rather than over `f`, reintroducing exactly the wrapper this shape exists to avoid.
-      let α := body.appArg!
-      let (declC, keep) ← applyAt declName lvls xs none
-      let genTyE ← mkAppM ``Palamedes.PGen #[α]
-      let prop ← withLocalDeclD `g genTyE fun g => do
-        mkLambdaFVars #[g] (← mkEq (← mkAppM ``Palamedes.PGen.support #[g]) pred)
-      let stmt ← mkAppM ``Palamedes.CorrectGen #[pred]
-      let value ← mkAppOptM ``Subtype.mk #[some genTyE, some prop, some declC, some supportProof]
-      unless ← isDefEq (← inferType value) stmt do
-        throwError "@[correct]: the `correct` view does not match{indentExpr stmt}"
-      let stmt ← mkForallFVars keep (← instantiateMVars stmt)
-      let value ← mkLambdaFVars keep (← instantiateMVars value)
-      if value.hasExprMVar || stmt.hasExprMVar then
-        throwError "@[correct]: `correct` still has metavariables after instantiation"
-      addAndCompile <| .defnDecl {
-        name := declName ++ `correct, levelParams := lvls, type := stmt, value
-        hints := .abbrev, safety := .safe }
-      emitted := emitted.push "correct"
 
     return emitted
 

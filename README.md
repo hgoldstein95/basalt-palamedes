@@ -88,14 +88,14 @@ def genBetween (lo hi : Nat) [Gen G] : G (Option Nat) := by
 ```
 
 `@[correct]` **keeps the proofs**: the generator is exactly the one you would get without it, plus
-`genFoo.sound_complete` (the support fact, in Basalt's law vocabulary) and, for the
-synthesis-internal `Palamedes.PGen` shape, `genFoo.total` and the bundled `genFoo.correct` view. It
-reports what it emitted, so a missing law is something you read rather than assume:
+`genFoo.sound_complete` — the support fact, in Basalt's law vocabulary. It reports what it emitted,
+so a missing law is something you read rather than assume:
 
 ```lean4
-@[correct] def genAllTwosLawful : Palamedes.PGen (List Nat) := by
+@[correct] def genAllTwosLawful [Gen G] : G (List Nat) := by
   generator_search (fun xs => isAllTwos xs)
--- info: @[correct] genAllTwosLawful: emitted sound_complete, total, correct
+-- info: @[correct] genAllTwosLawful: emitted sound_complete
+-- genAllTwosLawful.sound_complete : IsSoundAndComplete genAllTwosLawful fun xs => isAllTwos xs = true
 ```
 
 It is an ordinary attribute, so it composes: it sits beside any other attribute, and it works with
@@ -106,11 +106,10 @@ reads it; leave it out and the generator ships uniform. There is no separate com
 the declared type says whether a generator is tunable, the same way it says whether one can fail:
 
 ```lean4
-def genWellTyped (Γ : List Ty) (θ : Tuning := .uniform) : Palamedes.PGen Term := by
+def genWellTyped (Γ : List Ty) (θ : Tuning := .uniform) [Gen G] : G Term := by
   generator_search (fun t => isWellTyped Γ t)
 
-#eval Palamedes.sampleN 10
-  (genWellTyped [] (SchedulePolicy.stlc.materialize genWellTyped.sites))
+#genstats (genWellTyped [] (SchedulePolicy.stlc.materialize genWellTyped.sites))
 ```
 
 `genFoo.sites` is emitted alongside the generator, and a `SchedulePolicy` is materialized against
@@ -124,21 +123,39 @@ does not shrink terminate in practice (`genWellTyped` diverged on 54.3% of draws
 Other variants: `generator_search? P` also emits the synthesized term as a "Try this" suggestion,
 so you can see (and paste) what the search actually produced.
 
+There is a third declarable shape, `Palamedes.PGen α` — the synthesis carrier, and the semantic
+object the library's proofs are about (`support g := SPMF.support g.run`). Declare it when you want
+to reason about `support` directly rather than through Basalt's `IsSoundAndComplete`; `@[correct]`
+then emits `genFoo.total` alongside `genFoo.sound_complete`, stated at Palamedes' own vocabulary.
+It is not the shape to reach for otherwise: it is not a Basalt generator, so everything downstream
+needs an adapter, and where a Basalt `G α` makes a totality failure an error the carrier can only
+warn — and `lake build` exits 0 on warnings.
+
+```lean4
+@[correct] def genAllTwosCarrier : Palamedes.PGen (List Nat) := by
+  generator_search (fun xs => isAllTwos xs)
+-- info: @[correct] genAllTwosCarrier: emitted sound_complete, total
+-- genAllTwosCarrier.sound_complete : genAllTwosCarrier.support = fun xs => isAllTwos xs = true
+```
+
 To draw values:
 
 ```lean4
-#eval Palamedes.sampleN 10 genAllTwosLawful      -- Palamedes.PGen shape: draw 10 values
-#eval Palamedes.samplePartialN 10 (genBetween 3 7)  -- G (Option _) shape: draw through the retry loop
+#eval Plausible.Gen.run genAllTwos 10               -- G α: a Plausible generator already
+#eval Palamedes.samplePartialN 10 (genBetween 3 7)  -- G (Option α): draw through the retry loop
+#eval Palamedes.sampleN 10 genAllTwosCarrier        -- Palamedes.PGen α: via `totalize`, then the loop
 ```
 
-Both take an optional `size`. A failed draw (a filtering generator rejecting) is redrawn up to
-`maxAttempts` times, so filtering samples rather than throwing — but **there is no fuel against
-divergence**: a generator that is not almost-surely terminating can hang. See the module docstring
-in `Palamedes/Sample.lean`.
+A `G α` needs nothing from Palamedes to run — Basalt's `Gen Plausible.Gen` instance makes it a
+`Plausible.Gen`, and the second argument is Plausible's `size`. The other two go through
+`Palamedes/Sample.lean`, which redraws a failed draw (a filtering generator rejecting) up to
+`maxAttempts` times, so filtering samples rather than throwing. But **there is no fuel against
+divergence**: a generator that is not almost-surely terminating can hang. See that module's
+docstring.
 
 To inspect a generator's *distribution* rather than a few samples, use Basalt's `#genstats` command.
-A Basalt-shaped generator is consumed directly, no adapter: `#genstats (draws := 30) genAllTwos`;
-a `Palamedes.PGen`-shaped one goes through `toStatGen` (`import Palamedes.Stats`).
+Both Basalt shapes are consumed directly, no adapter: `#genstats (draws := 30) genAllTwos`; a
+`Palamedes.PGen`-shaped one goes through `toStatGen` (`import Palamedes.Stats`).
 
 ## Adding a datatype
 

@@ -13,9 +13,20 @@ import Plausible
 /-!
 # Executable sampling for Palamedes generators
 
-Sampling interprets a `PGen` through the explicit `Option` layer (`PGen.totalize`) at
-`Plausible.Gen`: a failed `assume` is an ordinary `none` draw — the same failure the
-`SPMF`/`massSome` semantics reasons about — rather than a separate `throw`-based `Fail` instance.
+**Most generators need nothing from this module.** A generator declared at `[Gen G] : G α` is a
+Basalt generator, and Plausible runs one directly — there is no adapter, and `#genstats genFoo`
+needs none either. What is left over is the *filtering* shape, `[Gen G] : G (Option α)`, whose draws
+can be `none`; that is what `samplePartial`/`samplePartial?`/`samplePartialN` are for, and it is the
+path a reader should assume unless they are working at the carrier.
+
+The `sample`/`sample?`/`sampleN` family below takes a `Palamedes.PGen` — the synthesis carrier — and
+is the same three functions one layer out, composed with `PGen.totalize`. It exists because the
+carrier remains a declarable shape for reasoning about `support` directly, not because it is the
+recommended way to sample anything.
+
+Either way sampling interprets failure through the explicit `Option` layer at `Plausible.Gen`: a
+failed `assume` is an ordinary `none` draw — the same failure the `SPMF`/`massSome` semantics
+reasons about — rather than a separate `throw`-based `Fail` instance.
 
 The sampler **retries on failure**: a `none` draw is redrawn whole (a global restart, via
 Plausible's `Gen.runUntil`) up to `maxAttempts` times, so a filtering generator samples instead of
@@ -71,8 +82,9 @@ def sampleN (n : Nat) (g : PGen α) (size : Nat := 100) (maxAttempts : Nat := 10
 
 /-! ### Sampling a filtering generator
 
-A generator synthesized at `G (Option α)` has already been through `totalize`, so it needs the retry
-loop but not the reflection. These are the `sample*` family one layer in. -/
+The primary path, per the module docstring. A generator synthesized at `G (Option α)` has already
+been through `totalize`, so it needs the retry loop but not the reflection — these are the `sample*`
+family with the reflection step taken out rather than put in. -/
 
 /-- `sample` for a generator whose type already says it can fail. -/
 def samplePartial (g : Plausible.Gen (Option α))

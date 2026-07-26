@@ -11,12 +11,18 @@ import Palamedes.PGen
 
 Basalt's `#genstats` command draws from a generator many times and summarizes the distribution it
 produces (see `Basalt.GenStats`). Its interpretation monad, `GenStats.StatGen`, is an instance of
-Basalt's `Gen` typeclass; all a Palamedes generator additionally needs is a `Fail` instance, which
-this file provides. Wrap the generator in `toStatGen`:
+Basalt's `Gen` typeclass, so a generator declared at a **Basalt shape needs no adapter at all**:
 
 ```
-#genstats (toStatGen (genBST 0 10))
-#genstats (draws := 3000) (fuel := 10000) (toStatGen (genWellTyped []))
+#genstats (genBST 0 10)
+#genstats (draws := 3000) (fuel := 10000) (genWellTyped [])
+```
+
+What a `Palamedes.PGen` additionally needs is a `Fail` instance, which this file provides, plus
+`toStatGen` to name the interpretation. Three real lines, and only the carrier shape pays them:
+
+```
+#genstats (toStatGen genAtTheCarrier)
 ```
 
 The report separates a failing `assume` (a terminating `failed` draw, so `ok` is an acceptance rate)

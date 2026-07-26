@@ -39,7 +39,7 @@ def isAllTwos : List Nat → Bool
 /-! ## The carrier shape -/
 
 /--
-info: @[correct] genAllTwos: emitted sound_complete, total, correct
+info: @[correct] genAllTwos: emitted sound_complete, total
 -/
 #guard_msgs in
 @[correct] def genAllTwos (θ : Tuning := .uniform) : Palamedes.PGen (List Nat) := by
