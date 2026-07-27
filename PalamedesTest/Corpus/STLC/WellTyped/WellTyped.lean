@@ -9,19 +9,14 @@ import Palamedes.Synthesizer
 import Palamedes.Tuning
 
 /-!
-# Corpus: well-typed STLC terms
+# Corpus: Well-Typed STLC Terms
 
-Synthesizes `genWellTyped : G Term` from `isWellTyped`, the existential well-typedness
-predicate over `getType`; a growing-seed generator, so a `Tuning` binder and a decaying schedule are
-required for a.s. termination. Runs near a raised `maxHeartbeats`; distribution pinned by
-`Optimizer/Schedule.lean`.
+This example requires `Tuning` for a.s. termination.
 -/
 
 open Palamedes
 
 namespace WellTyped
-
-set_option maxHeartbeats 5000000
 
 @[simp]
 def getType (t : Term) (Γ : List Ty) : Option Ty :=
@@ -45,13 +40,76 @@ def isWellTyped (Γ : List Ty) (t : Term) : Prop :=
   ∃ (τ : Ty), getType t Γ = τ
 
 attribute [local simp] Ty.as_or Ty.deforest_eq in
-/-- The well-typed-term generator: `app` invents its argument type and recurses on `σ → τ` for a
-freshly generated `σ`, so the seed *grows*. At the default `.uniform` weighting it is supercritical
-and diverges when sampled directly; the usable generator is
-`genWellTyped Γ (SchedulePolicy.stlc.materialize genWellTyped.sites)`, whose depth-decaying weights
-force closure. The `θ` binder is what makes that call possible — without one the generator would
-ship uniform and there would be nothing to weight. -/
-def genWellTyped (Γ : List Ty) (θ : Tuning := .uniform) [Gen G] : G Term := by
-  generator_search (fun t => isWellTyped Γ t)
+/--
+info: Try this:
+  [apply] exact do
+    let a ← TGen.arbTy.run
+    Term.unfoldGo
+        (fun d x => do
+          let a ←
+            match x.1 with
+              | Ty.unit =>
+                if h : decide (List.length (List.idxsOf Ty.unit x.2) > 0) = true then
+                  frequency
+                    [(Tuning.weight θ 0 d, fun x => pure TermF.unit),
+                      (Tuning.weight θ 1 d, fun x_1 => do
+                        let a ← (TGen.elements (List.idxsOf Ty.unit x.2)).run
+                        pure (TermF.var a)),
+                      (Tuning.weight θ 2 d, fun x => do
+                        let a ← TGen.arbTy.run
+                        pure (TermF.app (Ty.arrow a Ty.unit) a))]
+                else
+                  frequency
+                    [(Tuning.weight θ 3 d, fun x => pure TermF.unit),
+                      (Tuning.weight θ 4 d, fun x => do
+                        let a ← TGen.arbTy.run
+                        pure (TermF.app (Ty.arrow a Ty.unit) a))]
+              | Ty.arrow τ₁ τ₂ =>
+                if h : decide (List.length (List.idxsOf (Ty.arrow τ₁ τ₂) x.2) > 0) = true then
+                  frequency
+                    [(Tuning.weight θ 5 d, fun x_1 => do
+                        let a ← (TGen.elements (List.idxsOf (Ty.arrow τ₁ τ₂) x.2)).run
+                        pure (TermF.var a)),
+                      (Tuning.weight θ 6 d, fun x => pure (TermF.abs τ₁ τ₂)),
+                      (Tuning.weight θ 7 d, fun x => do
+                        let a ← TGen.arbTy.run
+                        pure (TermF.app (Ty.arrow a (Ty.arrow τ₁ τ₂)) a))]
+                else
+                  frequency
+                    [(Tuning.weight θ 8 d, fun x => pure (TermF.abs τ₁ τ₂)),
+                      (Tuning.weight θ 9 d, fun x => do
+                        let a ← TGen.arbTy.run
+                        pure (TermF.app (Ty.arrow a (Ty.arrow τ₁ τ₂)) a))]
+          match a with
+            | TermF.unit => pure TermF.unit
+            | TermF.var a1 => pure (TermF.var a1)
+            | TermF.abs a1 a2 => pure (TermF.abs a1 (a2, a1 :: x.2))
+            | TermF.app a1 a2 => pure (TermF.app (a1, x.2) (a2, x.2)))
+        0 (a, Γ)
+-/
+#guard_msgs in
+def genWellTyped (Γ : List Ty) (θ : Tuning) [Gen G] : G Term := by
+  generator_search? (fun t => isWellTyped Γ t)
+
+/-!
+To run the above generator, we recommend the following tuning, which has been designed to ensure
+that the generator terminates
+```lean
+genWellTyped Γ (SchedulePolicy.stlc.materialize genWellTyped.sites)
+```
+Future versions of Palamedes will derive a tuning like this automatically.
+-/
+
+/--
+info: def Palamedes.SchedulePolicy.stlc : SchedulePolicy :=
+{
+  weight := fun x =>
+    match x with
+    | 0 => { base := 1, growth := 30 }
+    | 1 => { base := 1, growth := 14 }
+    | x => { base := 4, growth := 0 } }
+-/
+#guard_msgs in
+#print SchedulePolicy.stlc
 
 end WellTyped
