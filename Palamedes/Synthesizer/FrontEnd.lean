@@ -264,10 +264,10 @@ initialize synthesisExt : EnvExtension (NameMap SynthesisStash) ←
 /-- The binders of the declaration currently being elaborated, as they stand at the tactic's site.
 
 The recursive self-reference is in scope too (`genFoo : ℕ → ℕ → PGen α`), flagged `isAuxDecl`.
-Dropping it and any implementation detail leaves exactly the telescope
-`forallTelescope ci.type` yields once the constant exists, **in the same order** — including
-auto-bound implicits, so the idiomatic `[Gen G]` spelling with `G` never written lines up too. That
-positional correspondence is what lets the attribute re-open a stashed `fun xs => _` with `.beta`. -/
+Dropping it and any implementation detail leaves exactly the telescope that `forallTelescope
+ci.type` yields once the constant exists, in the same order — including auto-bound implicits. That
+positional correspondence is what lets the attribute re-open a stashed `fun xs => _` with `.beta`.
+-/
 def declBinders : MetaM (Array Expr) := do
   let mut xs := #[]
   for d? in (← getLCtx).decls do
@@ -276,25 +276,14 @@ def declBinders : MetaM (Array Expr) := do
         xs := xs.push d.toExpr
   return xs
 
-/-- The declaration's `Tuning` binder, if it declared one.
-
-**The signature says whether a generator is tunable**, the same way it already says whether one can
-filter. A `θ : Tuning` binder in scope is threaded through every choice site; no binder means the
-generator ships uniform. There is deliberately no flag and no warning — declining to be tunable is a
-legitimate thing for a signature to say, and `.uniform` makes the binder free to add later.
-
-The first such binder wins; a second is ignored rather than rejected, since nothing here can tell
-which one a user meant and a generator wanting two tunings is not a thing the pass can express. -/
+/-- The declaration's `Tuning` binder, if it declared one. -/
 def declTuningBinder? : MetaM (Option Expr) := do
   for x in ← declBinders do
     if (← whnf (← inferType x)).isConstOf ``Tuning then return some x
   return none
 
 /-- Record a completed synthesis for `@[correct]`, if we are elaborating into a named declaration.
-
-A `nothing to stash` outcome is silent and normal: `generator_search` inside an `example`, a `have`,
-or a term-level `by` block has no declaration to state a law about. `@[correct]` on such a
-declaration is what reports the absence, since that is where it is a mistake. -/
+-/
 def stashSynthesis (target : Target) (pred : Expr) (res : SynthesisResult) : TermElabM Unit := do
   let some declName ← Term.getDeclName? | return
   let xs ← declBinders
@@ -314,10 +303,7 @@ def stashSynthesis (target : Target) (pred : Expr) (res : SynthesisResult) : Ter
     totalWitness? := ← res.totalWitness?.mapM close }
   modifyEnv (synthesisExt.modifyState · (·.insert declName stash))
 
-/-- Elaborate `t` as a predicate `α → Prop`, returning `none` if it does not fit that type.
-
-Used to *choose* between the total and filtering readings of a `G (Option β)` goal, so a failure here
-is an ordinary control-flow outcome rather than an error to report. -/
+/-- Elaborate `t` as a predicate `α → Prop`, returning `none` if it does not fit that type. -/
 private def elabPredAt? (t : Lean.Term) (α : Expr) : TermElabM (Option Expr) :=
   try
     Term.withoutErrToSorry do
@@ -328,14 +314,7 @@ private def elabPredAt? (t : Lean.Term) (α : Expr) : TermElabM (Option Expr) :=
       return some e
   catch _ => return none
 
-/-- Read the target off the goal type, and the predicate against it.
-
-Dispatch is on the **predicate's** type, since `P : α → Prop` fixes `α` and a predicate genuinely
-over `Option β` would otherwise be ambiguous with the filtering case. But it cannot simply *read*
-`P`'s type first: `generator_search (· = 2)` has no type of its own and needs the goal to supply the
-expected one. So the goal proposes `τ`, and only if `P` does not fit `τ → Prop` — and `τ` is
-`Option β` — is the filtering reading tried. A predicate that really is over `Option β` fits the
-first attempt and wins. -/
+/-- Read the target off the goal type, and the predicate against it. -/
 def classifyGoal (goalTy : Expr) (t : Lean.Term) : TermElabM (Target × Expr) := do
   match goalTy with
   | .app (.const ``Palamedes.PGen []) τ =>
@@ -397,17 +376,8 @@ private def dropIdentityTransports (e : Expr) : MetaM Expr :=
     let_expr Eq.mpr_prop p q _ h := e | return .continue
     if ← withNewMCtxDepth (isDefEq p q) then return .continue h else return .continue)
 
-/-- Turn a totality witness back into generator code.
-
-The Basalt-shaped emission is `witness.val.run`. Left as-is that is a *proof term* — a tree of
-`total_*` applications — which would make the emitted definition unreadable as a generator and hide
-its choice sites from the tuning pass. Palamedes' whole output contract is that a synthesized
-generator is a generator you can read, so the projection has to actually be performed.
-
-Delta-unfolds exactly the witness constructors (the fixed combinator basis plus whatever the
-`@[total]` registry holds, so a new datatype needs no edit here) and lets simp do the `.val`/`.run`
-projections. Deliberately *not* a full `Meta.reduce`: that would also unfold Basalt's `frequency`
-and `oneOf` into `frequencyAux`/`choose`, destroying exactly the structure we want to keep. -/
+/-- Turn a totality witness back into generator code using lemmas in the `totality_witness` simp
+set. -/
 def extractWitness (e : Expr) : MetaM Expr := do
   -- The witness constructors are exactly the `@[total]` registry — the generic basis included, since
   -- it is registered the same way — so the rest is the `TGen` combinators they build with.
@@ -573,8 +543,7 @@ def generatorSearchElab
   withTraceNode `palamedes.trace (fun _ => pure m!"⟪{α}⟫⟪{prettyPred}⟫") do
 
   -- Totality is always checked: the declared type says whether the generator may filter, and
-  -- totality is how that claim is verified. (Distinct from almost-sure termination, which is
-  -- orthogonal and which nothing here establishes.)
+  -- totality is how that claim is verified.
   let declName? ← Term.getDeclName?
   let θ? ← declTuningBinder?
   let res ← runSynthesisPipeline α mpred true verbose θ? (declName?.getD `_gen)
@@ -602,38 +571,26 @@ def generatorSearchElab
 
   closeMainGoal `generator_search emitted
 
-/--
-`generator_search P` closes a generator goal with a generator whose *support* is exactly `P` — it can
-produce every value satisfying `P`, and nothing else. `P` may be a `Prop`-valued predicate or a
-decidable `α → Bool`, including a recursive one over any `derive_palamedes`d datatype.
+/-- `generator_search P` closes a generator goal with a generator whose support is exactly `P` —
+it can produce every value satisfying `P`, and nothing else. `P` may be a `Prop`-valued predicate or
+a decidable `α → Bool`, including a recursive one over a `derive_palamedes`d datatype.
 
-**The declared return type chooses the shape**, and is dispatched on the predicate's type:
+We use the declared return type to determine the failure behavior; a return type of `G α` defaults
+to a generator that may not backtrack, whereas one declared at type `G (Option α)` is allowed to
+backtrack if necessary:
 
 ```lean
-def genEq2 [Gen G] : G Nat := by generator_search (· = 2)              -- total
+def genEq2 [Gen G] : G Nat := by generator_search (· = 2)               -- total
 def genRBT [Gen G] : G (Option (Tree Nat)) := by generator_search isRBT -- filtering
-def genEq2' : Palamedes.PGen Nat := by generator_search (· = 2)          -- synthesis-internal carrier
 ```
 
-Whether a generator can fail is a fact about its type, visible at every use site:
+Palamedes can also automatically add tuning parameters, which can be used for manual or automated
+tuning. Simply add a parameter of type `Tuning`:
 
-| totality | declared | result |
-|---|---|---|
-| succeeds | `G α` | emitted from the `TGen` witness |
-| fails | `G (Option α)` | emitted via `totalize` |
-| fails | `G α` | **error** — declare `G (Option α)` |
-| succeeds | `G (Option α)` | warning — it never fails, `G α` will do |
-
-Row 3 is an *error* rather than the warning it is for a `Palamedes.PGen α` goal, and that asymmetry is
-forced: `G α` is `Fail`-free by construction, so there is simply no term to emit. For the internal
-`Palamedes.PGen α` carrier there is one — it just filters — so that case warns and proceeds.
-
-A generator with no `Tuning` binder ships uniform, which diverges for a static- or growing-seed
-generator like `genWellTyped`. To weight it, give the declaration a `(θ : Tuning := .uniform)`
-binder: every choice site is then threaded with `θ`, `<gen>.sites` is emitted alongside, and
-`<gen> … (SchedulePolicy.stlc.materialize <gen>.sites)` is the weighted generator. Support is
-unaffected by the weighting, for every `θ`.
-
+```lean
+def genRBT [Gen G] (lo hi : Nat) (θ : Tuning) : G (Tree Nat) := by
+  generator_search (fun t => isBST lo hi t)
+```
 -/
 syntax (name := generatorSearch) "generator_search " term : tactic
 
@@ -643,16 +600,9 @@ def expandGeneratorSearch : Tactic := fun stx => do
   | `(tactic| generator_search $t) => generatorSearchElab stx t false
   | _ => throwError "invalid syntax"
 
-/-- `generator_search?` is `generator_search` (same modifiers, same result) that additionally emits
-the synthesized generator as a "Try this" suggestion, so the term can be pasted in place of the
-tactic call. Useful for inspecting what the search actually produced, and the escape hatch into
-editing it by hand.
-
-Kept as its own `syntax` declaration rather than folded into an optional `"?"?` token on
-`generator_search`. That collapse costs five lines of duplication and breaks the spelling: with
-`"generator_search" "?"?`, `generator_search? P` does not lex (only `generator_search ? P` does),
-because `generator_search?` is then not a token. Lean core keeps `simp`/`simp?` and `rw`/`rw?`
-separate for the same reason. -/
+/-- `generator_search?` is `generator_search` that additionally emits the synthesized generator as a
+"Try this" suggestion, so the term can be pasted in place of the tactic call. Useful for inspecting
+what the search actually produced, and the escape hatch into editing it by hand. -/
 syntax (name := generatorSearch?) "generator_search? " term : tactic
 
 @[tactic generatorSearch?]
