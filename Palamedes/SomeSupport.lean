@@ -159,6 +159,20 @@ variable {α β : Type}
         ∨ some w ∈ SPMF.support (OptionT.run (y.run : OptionT SPMF α)))
   exact mem_support_optionT_pick
 
+@[simp] theorem someSupport_choose {lo hi : Nat} {h : lo ≤ hi} :
+    someSupport (PGen.choose lo hi h) = fun a => lo ≤ a ∧ a ≤ hi := by
+  funext v
+  apply propext
+  show some v ∈ SPMF.support (OptionT.run (chooseNat lo hi h : OptionT SPMF Nat)) ↔ _
+  rw [show (chooseNat lo hi h : OptionT SPMF Nat)
+      = (·.down.val) <$> RandomChoice.choose lo hi h from rfl, mem_support_optionT_map]
+  simp only [instRandomChoiceOptionT, mem_support_optionT_lift, SPMF.mem_support_choose_iff]
+  constructor
+  · rintro ⟨⟨a, ha⟩, -, rfl⟩
+    exact ha
+  · intro hv
+    exact ⟨⟨v, hv⟩, trivial, rfl⟩
+
 @[simp] theorem someSupport_assume {b : Bool} {f : b → PGen α} :
     someSupport (PGen.assume b f) = fun a => ∃ h : b, someSupport (f h) a := by
   unfold PGen.assume

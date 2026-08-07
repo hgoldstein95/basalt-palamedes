@@ -48,6 +48,26 @@ structure TGen (α : Type) : Type 1 where
 /-- Forget that a failure-free generator never needed `Fail`, viewing it as a `PGen`. -/
 def TGen.toGen (t : TGen α) : PGen α := ⟨fun {_G} _ _ => t.run⟩
 
+/-! ## Basalt's uniform range draw
+
+`chooseNat` is Basalt vocabulary, like `pick` and `frequency` below, rather than a generator
+Palamedes defines: `TGen Nat` is exactly the type of a `Gen`-polymorphic `G Nat`, so the failure-free
+view of it costs a `TGen.mk` and nothing else, and the `PGen` view is that coerced.
+
+Spelled here, in an explicit `namespace TGen` block outside the `PGen` one, for the reason every
+`Data/` module spells its own primitives that way: a `def TGen.choose` written inside
+`namespace PGen` lands in `Palamedes.PGen.TGen`, and two namespaces both printing as `TGen` force
+any file that reads emitted terms to `open Palamedes.PGen` to abbreviate the name — which shadows
+Basalt's root-level `frequency`. -/
+
+namespace TGen
+
+/-- A uniform draw from `[lo, hi]`, inclusive. -/
+def choose (lo hi : Nat) (h : lo ≤ hi := by gen_side_condition) : TGen Nat :=
+  ⟨fun {_G} _ => chooseNat lo hi h⟩
+
+end TGen
+
 namespace PGen
 
 @[ext] theorem ext {x y : PGen α} (h : ∀ {G} [Gen G] [Fail G], x.run = (y.run : G α)) : x = y := by
@@ -75,6 +95,12 @@ def frequency (gs : List (Nat × PGen α)) (h : 0 < (gs.map Prod.fst).sum := by 
 /-- Uniform n-ary choice. -/
 def oneOf (gs : List (PGen α)) (h : gs ≠ [] := by simp) : PGen α :=
   frequency (gs.map fun g => (1, g)) (by cases gs <;> simp_all)
+
+/-- A uniform draw from `[lo, hi]`, inclusive. Failure-free, so it is `TGen.choose` coerced rather
+than a second body: `total_choose` is then `⟨TGen.choose lo hi h, rfl⟩`, with no lemma reconnecting
+two spellings. -/
+def choose (lo hi : Nat) (h : lo ≤ hi := by gen_side_condition) : PGen Nat :=
+  (TGen.choose lo hi h).toGen
 
 section Delab
 
@@ -186,6 +212,30 @@ def delabDroppingProof (c : Name) (arity : Nat) (shown : List Nat) (recoverable 
   let fn := mkIdent (← unresolveNameGlobal c)
   `($fn $args*)
 
+/-- Print `choose lo hi` without its side-condition proof, so `generator_search?` output
+re-elaborates (the `gen_side_condition` autoParam recovers it). Fires only when the proof is
+recoverable: literal bounds, or an auxiliary `._proof_i` closed over local hypotheses, which is
+exactly the shape that would otherwise print as an unpasteable reference. -/
+def delabChooseFor (c : Name) : Delab :=
+  delabDroppingProof c 3 [0, 1] fun e =>
+    let litBounds : Bool := Id.run do
+      let some lo := natLit? (e.getArg! 0) | return false
+      let some hi := natLit? (e.getArg! 1) | return false
+      return lo ≤ hi
+    litBounds || isAuxProofOverLocals (e.getArg! 2)
+
+@[app_delab Palamedes.PGen.choose]
+def delabChoose : Delab := delabChooseFor ``Palamedes.PGen.choose
+
+/-- The same for the failure-free twin, which is what a **Basalt-shaped** generator emits: the
+totality witness is built from `TGen.choose`, and `extractWitness` deliberately stops short of
+unfolding it. Without this registration `genBST` at `[Gen G] : G _` prints
+`(TGen.choose lo hi (s_between_partial._proof_1 hb)).run` — a `._proof_1` reference in a term whose
+whole purpose is to be read and pasted. Exactly the reason `delabDroppingSideCondition` is
+registered on three constants rather than one. -/
+@[app_delab Palamedes.TGen.choose]
+def delabTGenChoose : Delab := delabChooseFor ``Palamedes.TGen.choose
+
 end Delab
 
 /-- The empty generator: produces nothing. -/
@@ -230,8 +280,8 @@ its counterpart on the totality path, and has the same contract: `extractPartial
 exactly these, and `PalamedesTest/Extract.lean` reads a survivor as evidence that it stopped early.
 
 `TGen.toGen` is here because a datatype's assume-free primitive is defined at `TGen` and coerced, so
-unfolding the coercion turns `PGen.choose lo hi` into `(TGen.choose lo hi ⋯).run` — a generator, and
-the point at which unfolding should stop. The primitive itself is never in a basis. -/
+unfolding the coercion turns `PGen.arbNat` into `TGen.arbNat.run` — a generator, and the point at
+which unfolding should stop. The primitive itself is never in a basis. -/
 def pgenBasis : Array Lean.Name :=
   #[``PGen.pure, ``PGen.bind, ``PGen.pick, ``PGen.frequency, ``PGen.oneOf, ``PGen.assume,
     ``PGen.empty, ``TGen.toGen]
@@ -308,6 +358,14 @@ theorem support_oneOf {gs : List (PGen α)} (h) :
     exact ⟨g', hmem, ha⟩
   · rintro ⟨g, hmem, ha⟩
     exact ⟨1, g, ⟨g, hmem, rfl, rfl⟩, Nat.one_pos, ha⟩
+
+@[simp]
+theorem support_choose :
+    support (choose lo hi h) = fun a => lo ≤ a ∧ a ≤ hi := by
+  funext v
+  apply propext
+  show v ∈ SPMF.support (chooseNat lo hi h) ↔ _
+  exact SPMF.mem_support_chooseNat_iff
 
 @[simp]
 theorem support_empty :

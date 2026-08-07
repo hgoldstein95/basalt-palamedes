@@ -36,11 +36,15 @@ the introduction lemmas below build those witnesses compositionally. The recursi
 datatype's own `unfold` re-instantiated at the failure-free interface.
 
 The combinator basis below is the one place where the two interfaces are both written out, and it
-has to be: a combinator's arguments are *generators*, so its `TGen` and `PGen` spellings differ in
-argument type and neither can be the image of the other. A datatype's **primitives** go the other
-way — defined once at `TGen`, with the `PGen` form as `TGen.toGen` of it (`TGen.arbNat`,
-`TGen.choose`, `TGen.elements`, …), so their `total_*` lemmas are `⟨TGen.foo, rfl⟩` with no second
-body to keep in agreement.
+has to be: `pure`, `bind`, `pick`, `frequency` and `map` take *generators* as arguments, so their
+`TGen` and `PGen` spellings differ in argument type and neither can be the image of the other.
+Everything else goes the other way — defined once at `TGen`, with the `PGen` form as `TGen.toGen` of
+it (`TGen.arbNat`, `TGen.choose`, `TGen.elements`, …), so its `total_*` lemma is `⟨TGen.foo, rfl⟩`
+with no second body to keep in agreement.
+
+Generator-valued arguments are the whole of that criterion. It is *not* a split between a datatype's
+primitives and the core algebra: `PGen.choose` sits with the core algebra in `PGen.lean` and still
+takes the coercion route, because a uniform range draw takes no generators.
 
 The dividing line is whether the witness has a compositional route, not whether the generator can
 fail. A *composite* over the primitives stays an ordinary `PGen` definition — `PGen.gt` is
@@ -174,6 +178,11 @@ def total_pick
     (hy : total y) :
     total (pick x y) :=
   ⟨TGen.pick hx.val hy.val, by rw [TGen.toGen_pick, hx.property, hy.property]⟩
+
+/-- `choose` is `TGen.choose` coerced, so the witness *is* the definition and the equation is `rfl`.
+No `TGen.toGen_choose` mirror equation is needed for the same reason. -/
+@[total]
+def total_choose : total (choose lo hi h) := ⟨TGen.choose lo hi h, rfl⟩
 
 @[total]
 def totalList_nil : totalList ([] : List (PGen α)) := ⟨[], rfl⟩
