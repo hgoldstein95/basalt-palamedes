@@ -23,7 +23,7 @@ open Palamedes
 
 /--
 info: Try this:
-  [apply] exact if h : decide (lo ≤ hi) = true then (TGen.choose lo hi).run else pure none
+  [apply] exact if h : decide (lo ≤ hi) = true then chooseNat lo hi else pure none
 -/
 #guard_msgs in
 def genBetweenLoAndHi (lo hi : Nat) [Gen G] : G (Option Nat) := by
@@ -37,7 +37,7 @@ pin a second time as an ordinary `def` is what closes that gap.
 
 `Corpus/List/IdxOf/` does the same for the total shape. Both are needed: the shapes are emitted by
 different passes and print different vocabulary — a witness projected to `TGen.run` there, the
-guard's `dite` and a dropped `choose` side condition here. -/
+guard's `dite` and a dropped `chooseNat` side condition here. -/
 
 def genBetweenLoAndHiPasted (lo hi : Nat) [Gen G] : G (Option Nat) :=
-  if h : decide (lo ≤ hi) = true then (TGen.choose lo hi).run else pure none
+  if h : decide (lo ≤ hi) = true then chooseNat lo hi else pure none

@@ -134,7 +134,7 @@ its totality witness; a filtering one is read at `OptionT G`, so a rejected draw
 ```lean4
 def genBetween (lo hi : Nat) [Gen G] : G (Option Nat) := by
   generator_search? (fun n => lo ≤ n ∧ n ≤ hi)
--- Try this: exact if h : decide (lo ≤ hi) = true then (TGen.choose lo hi).run else pure none
+-- Try this: exact if h : decide (lo ≤ hi) = true then chooseNat lo hi else pure none
 ```
 
 To draw values:

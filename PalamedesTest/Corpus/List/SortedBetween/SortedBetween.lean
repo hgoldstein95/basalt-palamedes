@@ -35,7 +35,7 @@ info: Try this:
               frequency
                 [(1, fun x => pure ListF.nil),
                   (1, fun x_1 => do
-                    let a ← (TGen.choose x.2.1 x.2.2).run
+                    let a ← chooseNat x.2.1 x.2.2
                     pure (ListF.cons a PUnit.unit))]
             else pure ListF.nil
         match a with

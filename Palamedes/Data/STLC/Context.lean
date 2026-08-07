@@ -72,7 +72,8 @@ pasted; `gen_side_condition` recovers it from the same hypothesis.
 
 Registered on `TGen.elements` as well, and that is the registration a **Basalt-shaped** generator
 actually uses: the totality witness is built from the failure-free primitive, and `extractWitness`
-stops short of unfolding it. Exactly as for `choose`; see `delabTGenChoose`. -/
+stops short of unfolding it. A range draw needs no such pair — `chooseNat` is Basalt's own, so
+`delabChooseNat` is registered once, on the constant that survives. -/
 def delabElementsFor (c : Name) : Delab :=
   delabDroppingProof c 3 [1] fun e =>
     (e.getArg! 1).isAppOf ``List.cons || isAuxProofOverLocals (e.getArg! 2)

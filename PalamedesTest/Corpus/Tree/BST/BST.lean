@@ -34,7 +34,7 @@ info: Try this:
               frequency
                 [(1, fun x => pure TreeF.leaf),
                   (1, fun x_1 => do
-                    let a ← (TGen.choose x.2.1 x.2.2).run
+                    let a ← chooseNat x.2.1 x.2.2
                     pure (TreeF.node PUnit.unit a PUnit.unit))]
             else pure TreeF.leaf
         match a with

@@ -57,9 +57,11 @@ def isResidue (c : Name) : Bool :=
     -- already catches the `▸` such a tree carries; these name the cause rather than the symptom.
     --
     -- `TGen` is deliberately **not** blanket-flagged. A `TGen`-valued *primitive* applied to `.run`
-    -- — `TGen.arbNat.run`, `(TGen.choose lo hi).run` — is not residue but the only way to spell a
+    -- — `TGen.arbNat.run`, `TGen.elements.run` — is not residue but the only way to spell a
     -- failure-free primitive at `G`: its `PGen` form is that same generator coerced, and cannot
-    -- appear in a term typed without `Fail`. What *is* residue is the witness machinery: the
+    -- appear in a term typed without `Fail`. `TGen.choose` is not one of these: it is a view of
+    -- Basalt's `chooseNat` and sits in the basis below, so a survivor of it *is* residue.
+    -- What *is* residue is the witness machinery: the
     -- `total_*` lemmas, `PGen.total` itself, and the `TGen` combinator basis `extractWitness` is
     -- supposed to have unfolded (a survivor there means extraction stopped early). `Subtype.val`
     -- above catches the rest. The basis is read from `Palamedes.tgenBasis`, the same list

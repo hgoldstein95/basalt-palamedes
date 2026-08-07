@@ -212,29 +212,16 @@ def delabDroppingProof (c : Name) (arity : Nat) (shown : List Nat) (recoverable 
   let fn := mkIdent (← unresolveNameGlobal c)
   `($fn $args*)
 
-/-- Print `choose lo hi` without its side-condition proof, so `generator_search?` output
-re-elaborates (the `gen_side_condition` autoParam recovers it). Fires only when the proof is
-recoverable: literal bounds, or an auxiliary `._proof_i` closed over local hypotheses, which is
-exactly the shape that would otherwise print as an unpasteable reference. -/
-def delabChooseFor (c : Name) : Delab :=
-  delabDroppingProof c 3 [0, 1] fun e =>
+/-- Print `chooseNat lo hi` without its side-condition proof, so `generator_search?` output
+re-elaborates (`chooseNat`'s `gen_side_condition` autoParam recovers it). -/
+@[app_delab _root_.chooseNat]
+def delabChooseNat : Delab :=
+  delabDroppingProof ``_root_.chooseNat 5 [2, 3] fun e =>
     let litBounds : Bool := Id.run do
-      let some lo := natLit? (e.getArg! 0) | return false
-      let some hi := natLit? (e.getArg! 1) | return false
+      let some lo := natLit? (e.getArg! 2) | return false
+      let some hi := natLit? (e.getArg! 3) | return false
       return lo ≤ hi
-    litBounds || isAuxProofOverLocals (e.getArg! 2)
-
-@[app_delab Palamedes.PGen.choose]
-def delabChoose : Delab := delabChooseFor ``Palamedes.PGen.choose
-
-/-- The same for the failure-free twin, which is what a **Basalt-shaped** generator emits: the
-totality witness is built from `TGen.choose`, and `extractWitness` deliberately stops short of
-unfolding it. Without this registration `genBST` at `[Gen G] : G _` prints
-`(TGen.choose lo hi (s_between_partial._proof_1 hb)).run` — a `._proof_1` reference in a term whose
-whole purpose is to be read and pasted. Exactly the reason `delabDroppingSideCondition` is
-registered on three constants rather than one. -/
-@[app_delab Palamedes.TGen.choose]
-def delabTGenChoose : Delab := delabChooseFor ``Palamedes.TGen.choose
+    litBounds || isAuxProofOverLocals (e.getArg! 4)
 
 end Delab
 
@@ -281,10 +268,11 @@ exactly these, and `PalamedesTest/Extract.lean` reads a survivor as evidence tha
 
 `TGen.toGen` is here because a datatype's assume-free primitive is defined at `TGen` and coerced, so
 unfolding the coercion turns `PGen.arbNat` into `TGen.arbNat.run` — a generator, and the point at
-which unfolding should stop. The primitive itself is never in a basis. -/
+which unfolding should stop. A datatype's primitive itself is never in a basis; `PGen.choose` is,
+because what it names is Basalt's `chooseNat` rather than a generator Palamedes defines. -/
 def pgenBasis : Array Lean.Name :=
   #[``PGen.pure, ``PGen.bind, ``PGen.pick, ``PGen.frequency, ``PGen.oneOf, ``PGen.assume,
-    ``PGen.empty, ``TGen.toGen]
+    ``PGen.empty, ``PGen.choose, ``TGen.toGen]
 
 namespace PGen
 

@@ -53,7 +53,7 @@ info: Try this:
                 frequency
                   [(1, fun x => OptionT.pure TreeF.leaf),
                     (1, fun x_1 =>
-                      OptionT.bind (TGen.choose x.2.2.1 x.2.2.2).run fun a =>
+                      OptionT.bind (chooseNat x.2.2.1 x.2.2.2) fun a =>
                         OptionT.pure (TreeF.node (PUnit.unit, PUnit.unit) a (PUnit.unit, PUnit.unit)))]
               else OptionT.pure TreeF.leaf)
               fun a =>
@@ -63,7 +63,7 @@ info: Try this:
                 OptionT.pure (TreeF.node (a1, x.2.1 - 1, x.2.2.1, a2 - 1) a2 (a3, x.2.1 - 1, a2 + 1, x.2.2.2))
           else
             if h : decide (x.2.2.1 ≤ x.2.2.2) = true then
-              OptionT.bind (TGen.choose x.2.2.1 x.2.2.2).run fun a =>
+              OptionT.bind (chooseNat x.2.2.1 x.2.2.2) fun a =>
                 OptionT.pure
                   (TreeF.node ((PUnit.unit, PUnit.unit), x.2.1 - 1, x.2.2.1, a - 1) a
                     ((PUnit.unit, PUnit.unit), x.2.1 - 1, a + 1, x.2.2.2))

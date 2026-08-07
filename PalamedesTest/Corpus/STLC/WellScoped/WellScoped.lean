@@ -37,7 +37,7 @@ info: Try this:
               frequency
                 [(1, fun x => pure TermF.unit),
                   (1, fun x_1 => do
-                    let a ← (TGen.choose 0 (x.2 - 1) (PGen.lt._proof_1 x.2)).run
+                    let a ← chooseNat 0 (x.2 - 1) (PGen.lt._proof_1 x.2)
                     pure (TermF.var a)),
                   (1, fun x => do
                     let a ← TGen.arbTy.run

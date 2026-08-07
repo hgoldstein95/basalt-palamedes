@@ -373,7 +373,7 @@ was not, the equation it transports along is `rfl` and the wrapper denotes nothi
 downstream removes it — `simp` never revisits proof subterms, and `Meta.reduce` skips proofs — so
 every side-condition proof in the emitted generator ends up wrapped in an `Eq.mpr_prop (Eq.refl …)`.
 
-The cost is not only noise. A primitive's side-condition delaborator (`delabChoose`,
+The cost is not only noise. A primitive's side-condition delaborator (`delabChooseNat`,
 `delabElements`) drops the proof only when `isAuxProofOverLocals` can see that it is applied to a
 local hypothesis — the guard. Wrapped, the guard is not an argument by inspection, so the proof
 prints in full and the emitted term stops being pasteable. `genWellTyped`'s `elements` draws are
@@ -453,24 +453,7 @@ private def pushRunMatch : Simp.Simproc := fun e => do
   return .visit { expr, proof? := some proof }
 
 /-- Read a generator that kept an `assume` at `OptionT G`, where `Fail` is `pure none`, and push the
-projection down until what is left is Basalt vocabulary.
-
-`PGen.totalize g` denotes exactly this in a single constant, but it leaves the carrier wrapped
-around the generator, which would make the filtering shape the one shape whose emitted term is not
-readable as Basalt code.
-
-Three things do not push on their own. `dite`/`ite` get `PGen.run_dite`/`run_ite`; a `match` gets
-`pushRunMatch`; and a datatype's primitive gets unfolded to its `TGen` spelling, whose head
-constants are read off the `@[total]` registry — each rule is keyed by the `PGen` head it
-reconstructs, which is exactly the set to unfold. `dite`/`ite` are registered heads too and are
-excluded: delta-unfolding them exposes `Decidable.rec`, which is not a case split any more.
-
-Recursion needs nothing: `X.run_unfold` is stated at an arbitrary `G` with `Fail G`, so it fires at
-`OptionT G` like anywhere else, and `X.unfoldGo`'s own polymorphism does the short-circuiting.
-
-Returns the term and a proof that it equals `PGen.totalize gen`, which the filtering law is stated
-against. The equation is not `rfl`: `run_dite` and the match push are both case analyses on a stuck
-scrutinee. -/
+projection down until what is left is Basalt vocabulary. -/
 def extractPartialWitness (α gen G : Expr) : MetaM (Expr × Expr) := do
   let optT ← mkAppM ``OptionT #[G]
   let e ← mkAppOptM ``Palamedes.PGen.run
@@ -481,7 +464,7 @@ def extractPartialWitness (α gen G : Expr) : MetaM (Expr × Expr) := do
   let some pwExt ← getSimpExtension? `partial_witness
     | throwError "simp extension `partial_witness` not found"
   let mut thms ← pwExt.getTheorems
-  for n in Palamedes.pgenBasis ++ prims do
+  for n in Palamedes.pgenBasis ++ Palamedes.tgenBasis ++ prims do
     thms ← thms.addDeclToUnfold n
   -- `List.map_cons`/`_nil` so a choice's branch list actually computes: without them `.run` stays
   -- stuck under the `List.map` lambda `frequency`'s branches are built by, and every branch is left

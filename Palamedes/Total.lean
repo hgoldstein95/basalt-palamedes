@@ -116,7 +116,8 @@ as basis, so neither enumerates it.
 A datatype's own primitive spelled at `TGen` — `TGen.arbNat`, `TGen.elements` — is deliberately not
 here. It is the generator the Basalt shape is projected from, not machinery to be unfolded away. -/
 def tgenBasis : Array Lean.Name :=
-  #[``TGen.pure, ``TGen.bind, ``TGen.pick, ``TGen.frequency, ``TGen.map, ``TGen.toGen]
+  #[``TGen.pure, ``TGen.bind, ``TGen.pick, ``TGen.frequency, ``TGen.map, ``TGen.choose,
+    ``TGen.toGen]
 
 namespace PGen
 

@@ -16,9 +16,9 @@ Pins `#genstats` reports under `#guard_msgs`: that the flatten pass yields a *un
 and a shrinking-seed recursive generator (`genBSTFold`).
 
 `#genstats` is Basalt's own command and every generator here is Basalt-shaped, so nothing in this
-file adapts anything. `choose` reaches it as `TGen.choose`, the failure-free spelling the primitive
-is *defined* at — `.run` instantiates it at the statistics monad directly, no `Fail` instance
-required.
+file adapts anything. The range draw reaches it as Basalt's own `chooseNat`, which is what a
+synthesized generator emits for a range and is already `[Gen G] → G Nat` — there is no carrier to
+project and no `Fail` instance required.
 -/
 
 open Palamedes
@@ -49,7 +49,7 @@ info: genSmall — 1000 draws (seed 0, fuel 10000)
 #genstats genSmall
 
 /--
-info: ((TGen.choose 0 10 (by omega)).run) — 1000 draws (seed 0, fuel 10000)
+info: (chooseNat 0 10) — 1000 draws (seed 0, fuel 10000)
 
   outcomes    ok 1000 (100.0%)
   size        mean 6.1   p50 6   p95 11   max 11
@@ -73,7 +73,7 @@ info: ((TGen.choose 0 10 (by omega)).run) — 1000 draws (seed 0, fuel 10000)
     9
 -/
 #guard_msgs in
-#genstats ((TGen.choose 0 10 (by omega)).run)
+#genstats (chooseNat 0 10)
 
 /--
 info: (BSTFold.genBSTFold 0 10) — 4000 draws (seed 0, fuel 10000)
