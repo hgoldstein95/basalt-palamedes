@@ -6,7 +6,6 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 -/
 
 import Palamedes.Synthesizer
-import Palamedes.Stats
 import PalamedesTest.Corpus.STLC.WellTyped.WellTyped
 
 /-!
@@ -41,7 +40,7 @@ def genWTstlc (Γ : List Ty) [Gen G] : G Term :=
 would be critical, giving `E[size] = ∞`. -/
 
 /--
-info: (toStatGen arbTy) — 3000 draws (seed 0, fuel 10000)
+info: (TGen.arbTy.run) — 3000 draws (seed 0, fuel 10000)
 
   outcomes    ok 3000 (100.0%)
   size        mean 1.9   p50 1   p95 5   max 13
@@ -65,7 +64,7 @@ info: (toStatGen arbTy) — 3000 draws (seed 0, fuel 10000)
     Ty.unit
 -/
 #guard_msgs in
-#genstats (draws := 3000) (fuel := 10000) (toStatGen arbTy)
+#genstats (draws := 3000) (fuel := 10000) (TGen.arbTy.run)
 
 /-! Sampled uniform, `genWellTyped` diverges on ~54% of draws with a median output of a single node.
 Under the materialized `stlc` schedule (`genWTstlc`) the `outcomes` and `size` lines below are the bar

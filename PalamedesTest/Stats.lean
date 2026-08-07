@@ -4,7 +4,7 @@ Released under MIT license as described in the file LICENSE.
 Authors: Harrison Goldstein
 -/
 
-import Palamedes.Stats
+import Palamedes.Data.Nat
 import PalamedesTest.Corpus.Simple.OneOfFour
 import PalamedesTest.Corpus.Tree.BST.Fold
 
@@ -14,9 +14,14 @@ import PalamedesTest.Corpus.Tree.BST.Fold
 Pins `#genstats` reports under `#guard_msgs`: that the flatten pass yields a *uniform* choice
 (`genSmall` at ~25% per branch — a `pick` tree would show ½, ¼, ⅛, ⅛), `choose`'s uniform range,
 and a shrinking-seed recursive generator (`genBSTFold`).
+
+`#genstats` is Basalt's own command and every generator here is Basalt-shaped, so nothing in this
+file adapts anything. `choose` reaches it as `TGen.choose`, the failure-free spelling the primitive
+is *defined* at — `.run` instantiates it at the statistics monad directly, no `Fail` instance
+required.
 -/
 
-open Palamedes Palamedes.PGen
+open Palamedes
 
 /--
 info: genSmall — 1000 draws (seed 0, fuel 10000)
@@ -44,7 +49,7 @@ info: genSmall — 1000 draws (seed 0, fuel 10000)
 #genstats genSmall
 
 /--
-info: (toStatGen (choose 0 10 (by omega))) — 1000 draws (seed 0, fuel 10000)
+info: ((TGen.choose 0 10 (by omega)).run) — 1000 draws (seed 0, fuel 10000)
 
   outcomes    ok 1000 (100.0%)
   size        mean 6.1   p50 6   p95 11   max 11
@@ -68,7 +73,7 @@ info: (toStatGen (choose 0 10 (by omega))) — 1000 draws (seed 0, fuel 10000)
     9
 -/
 #guard_msgs in
-#genstats (toStatGen (choose 0 10 (by omega)))
+#genstats ((TGen.choose 0 10 (by omega)).run)
 
 /--
 info: (BSTFold.genBSTFold 0 10) — 4000 draws (seed 0, fuel 10000)

@@ -21,11 +21,11 @@ an unexpected outcome.
 The retrying assertions are statistically safe, not razor-thin: the lowest acceptance rate exercised
 here is `genAVL 4` at ~8% per draw (measured), so 1000 attempts fail with
 probability below 10⁻³⁰. Deep filtering regimes (`genRBT 3+`, `genAVL 5+`) have vanishing acceptance
-and are deliberately *not* asserted; the out-of-attempts path is pinned with `PGen.empty`, which fails
-deterministically.
+and are deliberately *not* asserted; the out-of-attempts path is pinned with `pure none`, which
+fails deterministically.
 -/
 
-open Palamedes Palamedes.PGen
+open Palamedes
 
 /- `genAVL 3` never fails (measured 100% acceptance): a draw must succeed. -/
 #eval show IO Unit from do
@@ -47,26 +47,13 @@ support. -/
   unless (RBT.isRBT t 2 0 10) do
     throw <| IO.userError s!"genRBT 2 produced a non-RBT tree"
 
-/- The out-of-attempts path, deterministically: `PGen.empty` fails every draw, so `sample?` reports
-`none` instead of hanging or crashing the build. -/
-#eval show IO Unit from do
-  match ← Palamedes.sample? (PGen.empty : PGen Nat) (maxAttempts := 10) with
-  | none => pure ()
-  | some n => throw <| IO.userError s!"sample? PGen.empty produced {n}"
+/-! ## Exhaustion
 
-/- The throwing variant `sample` reports exhaustion as an error rather than returning. -/
-#eval show IO Unit from do
-  match ← (Palamedes.sample (PGen.empty : PGen Nat) (maxAttempts := 10)).toBaseIO with
-  | .error _ => pure ()
-  | .ok n => throw <| IO.userError s!"sample PGen.empty produced {n}"
-
-/-! ## The `samplePartial` family
-
-The `Plausible.Gen (Option α)` layer, entered directly by a generator whose declared type already
-says it can fail. Same three behaviours as the `sample` family above, one layer in.
+The out-of-attempts path, deterministically: a generator whose every draw is `none` retries
+`maxAttempts` times and then reports, rather than hanging or crashing the build.
 -/
 
-/- Exhaustion at the partial layer: every draw is `none`, so `samplePartial?` returns `none`. -/
+/- `samplePartial?` returns `none`. -/
 #eval show IO Unit from do
   match ← Palamedes.samplePartial? (pure none : Plausible.Gen (Option Nat)) (maxAttempts := 10) with
   | none => pure ()

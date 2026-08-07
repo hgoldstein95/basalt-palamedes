@@ -8,13 +8,14 @@ import Palamedes.Synthesizer
 import Palamedes.Data.List
 import Palamedes.Data.Nat
 import Palamedes.Sample
-import Palamedes.Stats
 
 /-!
 # The generator API: one vocabulary across Basalt and Palamedes
 
 `generator_search` dispatches on the **declared return type**: whether a generator can fail is a
-fact about its type, visible at every use site.
+fact about its type, visible at every use site. Both declarable shapes are Basalt's — there is no
+Palamedes-flavoured third one, so a synthesized generator is always something Basalt's own tooling
+consumes with no adapter.
 
 | totality | declared | result |
 |---|---|---|
@@ -28,6 +29,10 @@ The last row is a third totality outcome, distinct from "filters": reconstructio
 because the generator genuinely filters, or because the basis could not cover it. Only the first is
 a fact about the generator. See `diagnoseTotality` (`Synthesizer/FrontEnd.lean`) and the section at
 the bottom of this file.
+
+Row 3 being an **error** rather than a warning is a property of there being no shape that accepts a
+generator with an unreconstructed witness: `G α` is `Fail`-free by construction, so there is simply
+no term to emit. A warning would be invisible to CI, which exits 0 on warnings.
 -/
 
 open Palamedes
@@ -82,9 +87,7 @@ def genBetween (lo hi : Nat) [Gen G] : G (Option Nat) := by
 
 /-! ## Row 3 — filtering, declared total: an error, naming the fix
 
-`G α` is `Fail`-free by construction, so there is no term to emit — hence an error, not a warning.
-A warning is only implementable for the synthesis-internal `Palamedes.PGen α` carrier (row 5), where
-a filtering term *does* exist. -/
+`G α` is `Fail`-free by construction, so there is no term to emit — hence an error, not a warning. -/
 
 /--
 error: generator_search: this generator filters — a `PGen.assume` survived optimization — so it cannot be emitted at
@@ -108,32 +111,9 @@ warning: this generator never fails, so the `Option` is not needed — `G (List 
 def genAllTwosOpt [Gen G] : G (Option (List Nat)) := by
   generator_search (fun xs => isAllTwos xs)
 
-/-! ## Row 5 — filtering, declared at the `Palamedes.PGen α` carrier: a warning
-
-The carrier is not `Fail`-free, so a filtering term *does* exist and can be emitted — hence a
-warning where row 3's Basalt `G α` is an error. This is the only row that fires on the carrier
-shape, and **no corpus generator is declared at the carrier at all** any more, so without this case
-the branch is unreachable from the whole build. That is the entire remaining coverage for
-`Target.palamedes`'s warning path, which is why the case is kept rather than deleted with the rest
-of the carrier's status as a recommended shape.
--/
-
-/--
-warning: this generator filters: a `PGen.assume` survived optimization, so it can fail when sampled. Declare it as `[Gen G] → G (Option _)` to reflect that in the type.
--/
-#guard_msgs in
-def genBetweenCarrier (lo hi : Nat) : Palamedes.PGen Nat := by
-  generator_search (fun n => lo ≤ n ∧ n ≤ hi)
-
--- The warning is a hint, not a rejection: the generator is emitted and filters as advertised.
-#eval show IO Unit from do
-  let n ← Palamedes.samplePartial (Palamedes.PGen.totalize (genBetweenCarrier 3 7))
-  unless 3 ≤ n && n ≤ 7 do
-    throw <| IO.userError s!"genBetweenCarrier produced {n}, outside [3,7]"
-
 /-! ## `classifyGoal` rejects goals it cannot read
 
-Three ways a goal fails to name a generator. Each is a message about the *declaration*, which is the
+The ways a goal fails to name a generator. Each is a message about the *declaration*, which is the
 point: the alternative is a mismatch surfacing later from inside the emitted `totalize`/`TGen.run`,
 which reads as a bug in emission rather than a fact about what was declared.
 -/
@@ -144,16 +124,36 @@ error: generator_search: the predicate must have type
   ℕ → Prop
 -/
 #guard_msgs in
-example : Palamedes.PGen Nat := by generator_search (fun xs => isAllTwos xs)
+example [Gen G] : G Nat := by generator_search (fun xs => isAllTwos xs)
 
 -- A goal whose type constructor has no Basalt `Gen` instance.
 /--
 error: generator_search: the goal's type constructor
   List
-is not a Basalt generator monad (no `Gen` instance), and the goal is not `Palamedes.PGen α`
+is not a Basalt generator monad (no `Gen` instance)
 -/
 #guard_msgs in
 example : List Nat := by generator_search (fun n => n = 2)
+
+-- The pipeline's internal carrier is not a shape a declaration may ask for. It is rejected at the
+-- universe check rather than the instance one: `PGen α` quantifies over `Gen`, so it lands in
+-- `Type 1` where a Basalt generator monad is `Type → Type`.
+/--
+error: generator_search: the goal's type constructor
+  PGen
+must have type `Type → Type`, but has
+  Type → Type 1
+-/
+#guard_msgs in
+example : Palamedes.PGen Nat := by generator_search (fun n => n = 2)
+
+-- A goal that is not an application at all, so there is no type constructor to look at.
+/--
+error: generator_search: the goal must be `G α` or `G (Option α)` for a Basalt `[Gen G]`, got
+  ℕ
+-/
+#guard_msgs in
+example : Nat := by generator_search (fun n => n = 2)
 
 /-! ## The predicate, not the goal, picks the reading
 
@@ -174,17 +174,18 @@ worth keeping, but the ambiguity it guards against is latent rather than live.
 /-! ## Three renderings, one per shape a printed choice can have
 
 `delabDroppingSideCondition` (`PGen.lean`) is registered on three constants, and the reason is that
-Palamedes has two output carriers, not that the code is duplicated. A carrier-shaped term is typed
-`PGen α`, so its choice *must* be a `PGen` combinator — unfolding `PGen.oneOf` to the Basalt
-`frequency` underneath gives `{ run := fun {_G} x x_1 => frequency [(1, fun x_2 => …), …] (by simp) }`,
-i.e. the `PGen.mk` wrapper, three dummy binders, and every branch eta-expanded. Strictly worse.
+an emitted term can be built from either algebra, not that the code is duplicated. A generator
+declared `G α` is projected from its `TGen` witness and so chooses with **Basalt's** `frequency`.
+One declared `G (Option α)` is `PGen.totalize` wrapped around the optimized carrier term, which
+keeps the carrier's own combinators — `PGen.oneOf` as the flatten pass leaves it, or
+`PGen.frequency` once the tuning pass has written weights into it.
 
-Basalt's `frequency` is what every corpus generator emits, the corpus being Basalt-shaped
-throughout. `PGen.oneOf` is what the *carrier* shape emits — still reachable, and still what the
-optimizer's flatten pass produces before packaging — and `PGen.frequency` arises only by writing
-one, which the tuning pass does. All three are pinned here, since the corpus witnesses only the
-first. Deleting any of them puts a `._proof_i` reference back into a term that is meant to be
-pasted. -/
+Unfolding `PGen.oneOf` to the Basalt `frequency` underneath is not an option: it gives
+`{ run := fun {_G} x x_1 => frequency [(1, fun x_2 => …), …] (by simp) }` — the `PGen.mk` wrapper,
+three dummy binders, and every branch eta-expanded. Strictly worse.
+
+The corpus witnesses only the first of the three, so all three are pinned here. Deleting any of them
+puts a `._proof_i` reference back into a term that is meant to be pasted. -/
 
 section Renderings
 

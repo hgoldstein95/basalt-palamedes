@@ -21,8 +21,13 @@ The user-facing pipeline:
 - extract a raw `PGen`;
 - optimize;
 - build a totality witness;
-- package at the declared shape (`G α` from the `TGen` witness, `G (Option α)` via `totalize`, or
-  the `Palamedes.PGen` carrier directly).
+- package at the declared shape: `G α` from the `TGen` witness, or `G (Option α)` via `totalize`.
+
+**Both declarable shapes are Basalt's.** `Palamedes.PGen` is the pipeline's internal carrier and
+nothing more; `classifyGoal` rejects a goal typed at it along with every other type that is not a
+Basalt generator monad. So a generator declared total whose totality cannot be reconstructed is an
+*error* — `G α` is `Fail`-free by construction, leaving no term to emit — rather than a warning,
+which `lake build` would exit 0 on.
 
 `runSynthesisPipeline` is the shared core; the `@[correct]` attribute (`Correct.lean`) reads the
 proofs it leaves behind.
@@ -123,8 +128,11 @@ structure SynthesisResult where
   the generator was left uniform. -/
   tuningSites : Array Palamedes.TuningSiteInfo := #[]
 
-/-- Run the synthesis pipeline against a predicate `pred : α → Prop`. -/
-def runSynthesisPipeline (α pred : Expr) (checkTotal verbose : Bool)
+/-- Run the synthesis pipeline against a predicate `pred : α → Prop`.
+
+Totality is always reconstructed: both declarable shapes are Basalt's, and which one a declaration
+may use is exactly the question the witness answers. -/
+def runSynthesisPipeline (α pred : Expr) (verbose : Bool)
     (tuningBinder : Option Expr := none) (declName : Name := `_gen) :
     TermElabM SynthesisResult := do
   -- 1. Search for an inhabitant of `CorrectGen pred`.
@@ -188,18 +196,17 @@ def runSynthesisPipeline (α pred : Expr) (checkTotal verbose : Bool)
   let mut totalWitness? : Option Expr := none
   let mut totalityFailure? : Option MessageData := none
   let mut gaps : Array Name := #[]
-  if checkTotal then
-    try
-      match ← solveGoalWithTactic?
-          (← mkAppM ``Palamedes.PGen.total #[gen'''])
-          (← `(tactic| totality)) with
-      | .ok w => totalWitness? := some w
-      | .error unsolved => gaps ← totalityGaps unsolved
-    catch e =>
-      -- Never a statement about the generator: rethrow rather than record. `catch _` here would
-      -- turn a Ctrl-C into "your generator filters".
-      if e.isInterrupt || e.isMaxHeartbeat || e.isMaxRecDepth then throw e
-      totalityFailure? := some e.toMessageData
+  try
+    match ← solveGoalWithTactic?
+        (← mkAppM ``Palamedes.PGen.total #[gen'''])
+        (← `(tactic| totality)) with
+    | .ok w => totalWitness? := some w
+    | .error unsolved => gaps ← totalityGaps unsolved
+  catch e =>
+    -- Never a statement about the generator: rethrow rather than record. `catch _` here would
+    -- turn a Ctrl-C into "your generator filters".
+    if e.isInterrupt || e.isMaxHeartbeat || e.isMaxRecDepth then throw e
+    totalityFailure? := some e.toMessageData
 
   return { gen := gen''', supportProof, totalWitness?, totalityFailure?, totalityGaps := gaps,
            tuningSites }
@@ -207,10 +214,6 @@ def runSynthesisPipeline (α pred : Expr) (checkTotal verbose : Bool)
 /-- What the declared return type says the generator should be. Whether a generator filters is a
 fact about its type, visible at every use site. -/
 inductive Target where
-  /-- `Palamedes.PGen α` — the synthesis-internal carrier. Total only; a filtering generator has to be
-  declared in the Basalt shape, because `totalize`'s result is Basalt-shaped and `Fail` must not
-  escape Palamedes. -/
-  | palamedes (α : Expr)
   /-- `G α` for a Basalt `[Gen G]`. Emitted from the `TGen` witness, so it is `Fail`-free. -/
   | basalt (G α : Expr)
   /-- `G (Option α)` for a Basalt `[Gen G]`. Emitted via `totalize`: a failed guard is a `none`. -/
@@ -218,7 +221,7 @@ inductive Target where
 
 /-- The element type the predicate must range over. -/
 def Target.elemType : Target → Expr
-  | .palamedes α | .basalt _ α | .basaltOption _ α => α
+  | .basalt _ α | .basaltOption _ α => α
 
 /-! ## The synthesis stash
 
@@ -228,12 +231,13 @@ the declaration cannot be added yet, because during the tactic that declaration 
 proof here and the attribute picks it up.
 -/
 
+/-- `Target` with the `Expr`s dropped. The stash outlives the elaboration its `Expr`s were built in,
+and the shape is all the attribute needs: it chooses which law is stated. -/
 inductive Shape where
-  | palamedes | basalt | basaltOption
+  | basalt | basaltOption
   deriving Inhabited, BEq
 
 def Target.shape : Target → Shape
-  | .palamedes _ => .palamedes
   | .basalt _ _ => .basalt
   | .basaltOption _ _ => .basaltOption
 
@@ -317,42 +321,37 @@ private def elabPredAt? (t : Lean.Term) (α : Expr) : TermElabM (Option Expr) :=
 /-- Read the target off the goal type, and the predicate against it. -/
 def classifyGoal (goalTy : Expr) (t : Lean.Term) : TermElabM (Target × Expr) := do
   match goalTy with
-  | .app (.const ``Palamedes.PGen []) τ =>
-    let some p ← elabPredAt? t τ
-      | throwError "generator_search: the predicate must have type{indentExpr τ} → Prop"
-    return (.palamedes τ, p)
-  | .app carrier τ =>
+  | .app G τ =>
     -- Basalt's `Gen` is universe-polymorphic, so an auto-bound `[Gen G]` binder elaborates `G` at
-    -- `Type → Type ?u`. Palamedes' carrier is fixed at `Type → Type`, so pin the universe here,
-    -- while `?u` is still unassigned — otherwise it only surfaces later as a mismatch inside the
-    -- emitted `totalize`/`TGen.run` application, which reads as a bug in emission rather than a
-    -- fact about the declared binder.
+    -- `Type → Type ?u`. Palamedes' own generators quantify over `G : Type → Type` exactly, so pin
+    -- the universe here, while `?u` is still unassigned — otherwise it only surfaces later as a
+    -- mismatch inside the emitted `totalize`/`TGen.run` application, which reads as a bug in
+    -- emission rather than a fact about the declared binder.
     let typeType ← mkArrow (mkSort Level.one) (mkSort Level.one)
-    unless ← isDefEq (← inferType carrier) typeType do
-      throwError "generator_search: the goal's type constructor{indentExpr carrier}\n\
-        must have type `Type → Type`, but has{indentExpr (← inferType carrier)}"
-    let some _ ← synthInstance? (← mkAppM ``Gen #[carrier])
-      | throwError "generator_search: the goal's type constructor{indentExpr carrier}\n\
-          is not a Basalt generator monad (no `Gen` instance), and the goal is not \
-          `Palamedes.PGen α`"
+    unless ← isDefEq (← inferType G) typeType do
+      throwError "generator_search: the goal's type constructor{indentExpr G}\n\
+        must have type `Type → Type`, but has{indentExpr (← inferType G)}"
+    let some _ ← synthInstance? (← mkAppM ``Gen #[G])
+      | throwError "generator_search: the goal's type constructor{indentExpr G}\n\
+          is not a Basalt generator monad (no `Gen` instance)"
     match τ with
     | .app (.const ``Option [_]) β =>
       -- Filtering reading first (see the docstring). Elaboration is too permissive to decide the
       -- other way round: `fun n => lo ≤ n ∧ n ≤ hi` typechecks at `Option Nat → Prop` too, because
       -- Mathlib gives `Option` an `LE` instance and silently coerces `lo` to `some lo`.
       if let some p ← elabPredAt? t β then
-        return (.basaltOption carrier β, p)
+        return (.basaltOption G β, p)
       let some p ← elabPredAt? t τ
         | throwError "generator_search: the predicate fits neither{indentExpr β} → Prop\n\
             (a filtering generator) nor{indentExpr τ} → Prop (a total generator of options)"
-      return (.basalt carrier τ, p)
+      return (.basalt G τ, p)
     | _ =>
       let some p ← elabPredAt? t τ
         | throwError "generator_search: the predicate must have type{indentExpr τ} → Prop"
-      return (.basalt carrier τ, p)
+      return (.basalt G τ, p)
   | _ =>
-    throwError "generator_search: the goal must be `G α`, `G (Option α)` for a Basalt \
-      `[Gen G]`, or `Palamedes.PGen α`, got{indentExpr goalTy}"
+    throwError "generator_search: the goal must be `G α` or `G (Option α)` for a Basalt \
+      `[Gen G]`, got{indentExpr goalTy}"
 
 /-- Drop the proof transports that are the identity.
 
@@ -457,15 +456,6 @@ the final packaging differs. -/
 def packageFor (target : Target) (res : SynthesisResult) (report : MessageData → TermElabM Unit) :
     TermElabM Expr := do
   match target with
-  | .palamedes _ =>
-    if res.totalWitness?.isNone then
-      match diagnoseTotality res with
-      | .filters =>
-        report m!"this generator filters: a `PGen.assume` survived optimization, so it can fail when \
-          sampled. Declare it as `[Gen G] → G (Option _)` to reflect that in the type."
-      | .gap err? gaps =>
-        report m!"could not reconstruct a totality witness.\n\n{gapMessage err? gaps}"
-    return res.gen
   | .basalt G α =>
     let some w := res.totalWitness?
       | match diagnoseTotality res with
@@ -508,20 +498,16 @@ def generatorSearchElab
 
   if verbose then do
     -- The pipeline, spelled out as the tactics a reader could run by hand. The tail differs per
-    -- declared shape, because `packageFor` emits a different term for each: the carrier directly,
-    -- the `TGen` witness projected, or `totalize`. A single template would be type-incorrect for
-    -- two of the three. What this does *not* show is `extractWitness`'s `totality_witness` normalization,
-    -- which only makes the projected term readable — the pasted version is defeq, just denser.
+    -- declared shape, because `packageFor` emits a different term for each: the `TGen` witness
+    -- projected, or `totalize`. A single template would be type-incorrect for one of the two. What
+    -- this does *not* show is `extractWitness`'s `totality_witness` normalization, which only makes
+    -- the projected term readable — the pasted version is defeq, just denser.
     let common := s!"-- generator_search ({← ppExpr mpred})
   let cg : CorrectGen ({← ppExpr mpred}) := by
     cgenerator_search
   let g : Palamedes.PGen ({← ppExpr α}) := by
     optimize_gen cg.val"
     let tail ← match target with
-      | .palamedes _ => pure "
-  let _ : Palamedes.PGen.total g := by
-    totality
-  exact g"
       | .basalt _ _ => pure "
   let w : Palamedes.PGen.total g := by
     totality
@@ -542,11 +528,9 @@ def generatorSearchElab
 
   withTraceNode `palamedes.trace (fun _ => pure m!"⟪{α}⟫⟪{prettyPred}⟫") do
 
-  -- Totality is always checked: the declared type says whether the generator may filter, and
-  -- totality is how that claim is verified.
   let declName? ← Term.getDeclName?
   let θ? ← declTuningBinder?
-  let res ← runSynthesisPipeline α mpred true verbose θ? (declName?.getD `_gen)
+  let res ← runSynthesisPipeline α mpred verbose θ? (declName?.getD `_gen)
   let emitted ← packageFor target res (fun msg => logWarning msg)
 
   -- `genFoo.sites`, the table a `SchedulePolicy` is materialized against. Emitted by the *tactic*,

@@ -34,17 +34,18 @@ lake build PalamedesTest.Corpus.Simple.Eq2     # build/elaborate a single exampl
 
 There is no separate test framework. Every file under `PalamedesTest/Corpus/` synthesizes a
 generator at elaboration time and fails to compile if synthesis fails, so a plain `lake build` (what
-CI runs) also runs the tests. Note that a totality-check failure is an **error** for a generator
-declared `G α` (there is no term to emit) but only a **warning** for the synthesis-internal
-`Palamedes.PGen α` shape — grep the build output for warnings, or you will miss the latter.
+CI runs) also runs the tests. A generator declared `G α` whose totality cannot be reconstructed is
+an **error** — `G α` is `Fail`-free by construction, so there is no term to emit. Declared
+`G (Option α)` it is a **warning**, because `totalize` accepts the generator either way; grep the
+build output for warnings, or use `--wfail`.
 
 Beyond the corpus, each file in `PalamedesTest/` guards one library module and is named after it —
 `PalamedesTest/Foo.lean` guards `Palamedes/Foo.lean`, so the two directory listings diff into a
 coverage map. The ones worth knowing about:
 
-- **`Extract.lean`** walks every generator in the corpus (both shapes — Basalt-shaped and the
-  internal carrier) and fails the build if synthesis residue (`Subtype.val`, `Eq.mpr`, `CorrectGen`,
-  a totality-witness constructor, or a bare `PGen.pick`) survived into a compiled term's data path.
+- **`Extract.lean`** walks every generator in the corpus and fails the build if synthesis residue
+  (`Subtype.val`, `Eq.mpr`, `CorrectGen`, a totality-witness constructor, or a bare `PGen.pick`)
+  survived into a compiled term's data path.
 - **`Derive.lean`** pins the signatures `derive_palamedes` generates, and `#print axioms` on the
   proofs it emits.
 - **`Stats.lean`** and **`Optimizer/Schedule.lean`** pin `#genstats` distribution reports
@@ -123,39 +124,27 @@ does not shrink terminate in practice (`genWellTyped` diverged on 54.3% of draws
 Other variants: `generator_search? P` also emits the synthesized term as a "Try this" suggestion,
 so you can see (and paste) what the search actually produced.
 
-There is a third declarable shape, `Palamedes.PGen α` — the synthesis carrier, and the semantic
-object the library's proofs are about (`support g := SPMF.support g.run`). Declare it when you want
-to reason about `support` directly rather than through Basalt's `IsSoundAndComplete`; `@[correct]`
-then emits `genFoo.total` alongside `genFoo.sound_complete`, stated at Palamedes' own vocabulary.
-It is not the shape to reach for otherwise: it is not a Basalt generator, so everything downstream
-needs an adapter, and where a Basalt `G α` makes a totality failure an error the carrier can only
-warn — and `lake build` exits 0 on warnings.
-
-```lean4
-@[correct] def genAllTwosCarrier : Palamedes.PGen (List Nat) := by
-  generator_search (fun xs => isAllTwos xs)
--- info: @[correct] genAllTwosCarrier: emitted sound_complete, total
--- genAllTwosCarrier.sound_complete : genAllTwosCarrier.support = fun xs => isAllTwos xs = true
-```
+`G α` and `G (Option α)` are the only two declarable shapes, and both are Basalt's. Palamedes has an
+internal carrier — `Palamedes.PGen`, the semantic object its proofs are about — but it is not
+something you can declare: the pipeline extracts it, optimizes it, and packages a Basalt generator
+before the goal closes. A *filtering* generator's emitted term still names it, as
+`PGen.totalize (PGen.assume …)`, which is honest about where the `Option` comes from.
 
 To draw values:
 
 ```lean4
 #eval Plausible.Gen.run genAllTwos 10               -- G α: a Plausible generator already
 #eval Palamedes.samplePartialN 10 (genBetween 3 7)  -- G (Option α): draw through the retry loop
-#eval Palamedes.sampleN 10 genAllTwosCarrier        -- Palamedes.PGen α: via `totalize`, then the loop
 ```
 
 A `G α` needs nothing from Palamedes to run — Basalt's `Gen Plausible.Gen` instance makes it a
-`Plausible.Gen`, and the second argument is Plausible's `size`. The other two go through
-`Palamedes/Sample.lean`, which redraws a failed draw (a filtering generator rejecting) up to
-`maxAttempts` times, so filtering samples rather than throwing. But **there is no fuel against
-divergence**: a generator that is not almost-surely terminating can hang. See that module's
-docstring.
+`Plausible.Gen`, and the second argument is Plausible's `size`. The filtering shape goes through
+`Palamedes/Sample.lean`, which redraws a failed draw (a rejecting `assume`) up to `maxAttempts`
+times, so filtering samples rather than throwing. But **there is no fuel against divergence**: a
+generator that is not almost-surely terminating can hang. See that module's docstring.
 
 To inspect a generator's *distribution* rather than a few samples, use Basalt's `#genstats` command.
-Both Basalt shapes are consumed directly, no adapter: `#genstats (draws := 30) genAllTwos`; a
-`Palamedes.PGen`-shaped one goes through `toStatGen` (`import Palamedes.Stats`).
+Both shapes are consumed directly, no adapter: `#genstats (draws := 30) genAllTwos`.
 
 ## Adding a datatype
 
@@ -211,8 +200,9 @@ Rejected by design, loudly: mutual, nested, and indexed inductives. (A rose tree
 - **`Palamedes/Synthesizer/Correct.lean`** — the `@[correct]` attribute: the tactic stashes the
   pipeline's proofs, and the attribute — running once the constant exists — `addDecl`s them as named
   theorems about it.
-- **`Palamedes/Sample.lean`** and **`Stats.lean`** — running a generator: as an executable sampler on
-  top of Plausible, and as a distribution report via Basalt's `#genstats`.
+- **`Palamedes/Sample.lean`** — running a *filtering* generator: the retry loop on top of Plausible
+  that redraws a `none`. A total one is a Basalt generator and needs nothing from here, and
+  distribution reports are Basalt's own `#genstats` at either shape.
 - **`Palamedes/Data/`** — the supported datatypes. The recursive ones (`List`, `Tree`, `Stack`, and
   the STLC `Ty`/`Term`) are largely a `derive_palamedes` line plus the odd fusion lemma the command
   does not yet emit. The hand-written content is the primitives the synthesizer bottoms out at

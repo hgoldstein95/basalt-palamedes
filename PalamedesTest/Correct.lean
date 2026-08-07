@@ -8,7 +8,6 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 import Palamedes.Synthesizer
 import Palamedes.Data.List
 import Palamedes.Data.Nat
-import Palamedes.Stats
 
 /-!
 # `@[correct]` regression
@@ -27,38 +26,39 @@ def isAllTwos : List Nat → Bool
   | [] => true
   | x :: xs => x = 2 && isAllTwos xs
 
-/-- info: @[correct] genAllTwos: emitted sound_complete, total -/
+/-- info: @[correct] genAllTwos: emitted sound_complete -/
 #guard_msgs in
-@[correct] def genAllTwos : Palamedes.PGen (List Nat) := by generator_search (fun xs => isAllTwos xs)
+@[correct] def genAllTwos [Gen G] : G (List Nat) := by generator_search (fun xs => isAllTwos xs)
+
+-- Nothing wraps it: this is the same `∀ {G} [Gen G], G α` a hand-written Basalt generator has.
+/-- info: @genAllTwos : {G : Type → Type} → [Gen G] → G (List ℕ) -/
+#guard_msgs in
+#check @genAllTwos
 
 -- The law is stated against the emitted *constant*, so it is a fact about `genAllTwos` rather than
--- about a copy of its body.
-/-- info: genAllTwos.sound_complete : genAllTwos.support = fun xs => isAllTwos xs = true -/
+-- about a copy of its body. It is in **Basalt's** vocabulary, and it is about `genAllTwos` at
+-- `SPMF` — `G` and its instance are supplied rather than generalized, since a law over an
+-- uninstantiated `G` would mention a binder its statement never uses.
+/-- info: genAllTwos.sound_complete : IsSoundAndComplete genAllTwos fun xs => isAllTwos xs = true -/
 #guard_msgs in
-#check genAllTwos.sound_complete
+#check @genAllTwos.sound_complete
 
 /-- info: 'genAllTwos.sound_complete' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms genAllTwos.sound_complete
 
-/-- info: 'genAllTwos.total' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in
-#print axioms genAllTwos.total
-
 -- The law is usable: a support fact now transfers from a *named* theorem rather than having to be
 -- re-established. This is the whole point of emitting it.
 example (P : List Nat → Prop) (hP : (fun xs => isAllTwos xs = true) = P) :
-    genAllTwos.support = P := by
-  rw [genAllTwos.sound_complete, hP]
+    IsSoundAndComplete (genAllTwos (G := SPMF)) P := by
+  rw [← hP]; exact genAllTwos.sound_complete
 
--- Totality is data, so the Basalt-shaped generator is a projection out of the law.
-def genAllTwosBasalt [Gen G] : G (List Nat) := genAllTwos.total.val.run
-
--- `Palamedes/Laws.lean`'s other bridge: a `support = P` law at the internal carrier converts to
--- Basalt's vocabulary on demand. `@[correct]` does not emit this form — the declared shape is
--- Palamedes', so the law it emits is too — but the conversion is one application away.
-example : IsSoundAndComplete (genAllTwos.run (G := SPMF)) (fun xs => isAllTwos xs = true) :=
-  isSoundAndComplete_of_support genAllTwos.sound_complete
+-- There is no `genAllTwos.total`: the declared type is `G (List ℕ)`, which is `Fail`-free by
+-- construction, so totality is what the *type* says and not a companion to state it again. A
+-- generator that could fail would not have elaborated at this shape at all.
+run_cmd do
+  if (← Lean.getEnv).contains `genAllTwos.total then
+    throwError "totality is the content of a `G α` declaration; no `total` companion belongs beside it"
 
 /-! ## Binders
 
@@ -67,33 +67,15 @@ Binders are Lean's, not ours — which is the point of being an attribute rather
 binders are quantified over in the emitted law.
 -/
 
-/-- info: @[correct] genBasalt: emitted sound_complete -/
-#guard_msgs in
-@[correct] def genBasalt [Gen G] : G (List Nat) := by generator_search (fun xs => isAllTwos xs)
-
--- Nothing wraps it: this is the same `∀ {G} [Gen G], G α` a hand-written Basalt generator has.
-/-- info: @genBasalt : {G : Type → Type} → [Gen G] → G (List ℕ) -/
-#guard_msgs in
-#check @genBasalt
-
--- The law is in **Basalt's** vocabulary, and it is about `genBasalt` at `SPMF` — `G` and its
--- instance are supplied rather than generalized, since a law over an uninstantiated `G` would
--- mention a binder its statement never uses.
-/-- info: genBasalt.sound_complete : IsSoundAndComplete genBasalt fun xs => isAllTwos xs = true -/
-#guard_msgs in
-#check @genBasalt.sound_complete
-
-/-- info: 'genBasalt.sound_complete' depends on axioms: [propext, Classical.choice, Quot.sound] -/
-#guard_msgs in
-#print axioms genBasalt.sound_complete
-
 -- Value binders are *kept*, and the law quantifies over them.
-/-- info: @[correct] genParam: emitted sound_complete, total -/
+/-- info: @[correct] genParam: emitted sound_complete -/
 #guard_msgs in
-@[correct] def genParam (_n : Nat) : Palamedes.PGen (List Nat) := by
+@[correct] def genParam (_n : Nat) [Gen G] : G (List Nat) := by
   generator_search (fun xs => isAllTwos xs)
 
-/-- info: genParam.sound_complete : ∀ (_n : ℕ), (genParam _n).support = fun xs => isAllTwos xs = true -/
+/--
+info: genParam.sound_complete : ∀ (_n : ℕ), IsSoundAndComplete (genParam _n) fun xs => isAllTwos xs = true
+-/
 #guard_msgs in
 #check @genParam.sound_complete
 
@@ -120,23 +102,17 @@ info: genRange.sound_complete : ∀ (lo hi : ℕ), IsSomeSoundAndComplete (genRa
 #guard_msgs in
 #print axioms genRange.sound_complete
 
--- The negative half of the emission report. `total` is a carrier-shape law and a filtering
--- generator has no totality witness to state one from, so it must be *absent* — the reported list
--- above stays honest only if nothing is emitted behind it.
-run_cmd do
-  if (← Lean.getEnv).contains `genRange.total then
-    throwError "genRange is filtering, so it has no totality witness and `genRange.total` \
-      must not be emitted"
-
 -- A non-recursive generator over a `Prop`-valued predicate. This one regression-guards the
 -- optimizer's assume-discharge: `support_assume_true` is stated at `b := true` precisely so its
 -- proof carries no unassigned metavariable, and `@[correct]` on it is what detects a relapse —
--- the kernel rejects a declaration containing metavariables, so the failure is loud.
-/-- info: @[correct] genBetween: emitted sound_complete, total -/
+-- the kernel rejects a declaration containing metavariables, so the failure is loud. The literal
+-- bounds are what make it discharge: `3 ≤ n ∧ n ≤ 7` leaves no `assume`, so this elaborates at
+-- `G ℕ` rather than `G (Option ℕ)`.
+/-- info: @[correct] genBetween: emitted sound_complete -/
 #guard_msgs in
-@[correct] def genBetween : Palamedes.PGen Nat := by generator_search (fun n => 3 ≤ n ∧ n ≤ 7)
+@[correct] def genBetween [Gen G] : G Nat := by generator_search (fun n => 3 ≤ n ∧ n ≤ 7)
 
-/-- info: genBetween.sound_complete : genBetween.support = fun n => 3 ≤ n ∧ n ≤ 7 -/
+/-- info: genBetween.sound_complete : IsSoundAndComplete genBetween fun n => 3 ≤ n ∧ n ≤ 7 -/
 #guard_msgs in
 #check genBetween.sound_complete
 

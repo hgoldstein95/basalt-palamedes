@@ -11,10 +11,10 @@ import Palamedes.SomeSupport
 # Bridging Palamedes' `support` to Basalt's law vocabulary
 
 `@[correct]` emits laws in **Basalt's** names, not Palamedes'. The pipeline proves
-`Palamedes.PGen.support g = P`; Basalt states soundness-and-completeness as
-`IsSoundAndComplete (g : SPMF α) P`, i.e. `∀ a, a ∈ SPMF.support g ↔ P a`. These two lemmas are the
-whole of the conversion, and they exist so the command can `mkAppM` them rather than assemble the
-`funext`/`propext` plumbing at the `Expr` level.
+`Palamedes.PGen.support g = P` about its internal carrier; Basalt states soundness-and-completeness
+as `IsSoundAndComplete (g : SPMF α) P`, i.e. `∀ a, a ∈ SPMF.support g ↔ P a`. One lemma per declared
+shape is the whole of the conversion, and they exist so the attribute can `mkAppM` them rather than
+assemble the `funext`/`propext` plumbing at the `Expr` level.
 
 Both are definitional on the `support` side — `PGen.support g` *is* `SPMF.support g.run` — so the only
 real content is `=` on predicates becoming a pointwise `↔`.
@@ -26,15 +26,7 @@ open Palamedes.PGen
 
 variable {α : Type} {P : α → Prop}
 
-/-- The law for a generator emitted at the synthesis-internal carrier. -/
-theorem isSoundAndComplete_of_support {g : PGen α} (h : g.support = P) :
-    IsSoundAndComplete (g.run (G := SPMF)) P := by
-  -- `IsSoundAndComplete` is a semireducible `def`; `intro` opens it (the idiom Basalt's own examples
-  -- use), where `show`/`unfold` do not.
-  intro a
-  exact iff_of_eq (congrFun h a)
-
-/-- The law for a generator emitted **Basalt-shaped**, from the totality witness.
+/-- The law for a generator emitted at `G α`, from the totality witness.
 
 This is the step that needs no parametricity: `t.toGen = g` gives `g.run (G := SPMF) = t.run
 (G := SPMF)` by congruence, because both sides are the *same* instantiation of the same polymorphic
@@ -44,6 +36,8 @@ theorem isSoundAndComplete_of_total {t : TGen α} {g : PGen α}
     (hw : t.toGen = g) (h : g.support = P) :
     IsSoundAndComplete (t.run (G := SPMF)) P := by
   subst hw
+  -- `IsSoundAndComplete` is a semireducible `def`; `intro` opens it (the idiom Basalt's own examples
+  -- use), where `show`/`unfold` do not.
   intro a
   exact iff_of_eq (congrFun h a)
 

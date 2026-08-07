@@ -6,7 +6,6 @@ Authors: Harrison Goldstein
 
 import Palamedes.Synthesizer
 import Palamedes.Data.List
-import Palamedes.Stats
 
 /-!
 # The totality witness is extractable data
@@ -22,6 +21,12 @@ three consequences that the Basalt-shaped emission stage builds on:
 
 (3) is the reason the total path can carry a `sound_complete` law while the filtering path cannot:
 `totalize` runs the generator at `OptionT SPMF`, a *different* instantiation.
+
+The three steps are spelled out here **at the internal layer**, one tactic at a time, which is not
+how a generator is declared: `generator_search` takes a Basalt goal and runs the whole pipeline, so
+the `PGen` below never surfaces and the witness is projected before the goal closes. Isolating the
+steps is the point — the corpus exercises them composed, and only composed, so a defect in any one
+of them shows up there as a wrong emitted term rather than as a failing step.
 -/
 
 open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
@@ -31,8 +36,9 @@ def isAllTwos : List Nat → Bool
   | [] => true
   | x :: xs => x = 2 && isAllTwos xs
 
+-- Stages 1–3 by hand: search for a `CorrectGen`, then extract and optimize the `PGen` inside it.
 def genAllTwos : Palamedes.PGen (List Nat) := by
-  generator_search (fun xs => isAllTwos xs)
+  optimize_gen (show CorrectGen (fun xs => isAllTwos xs = true) by cgenerator_search).val
 
 -- 1. The witness is data, so it can be given a name and a type.
 def genAllTwosWitness : PGen.total genAllTwos := by totality

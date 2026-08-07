@@ -20,10 +20,11 @@ of raw `PGen` code.
 This module walks every generator-typed definition in the example corpus and *fails to compile* if
 any synthesis residue survives in a compiled term.
 
-**It must recognise every generator shape** — `Palamedes.PGen α`, `CorrectGen P`, and the Basalt
-`{G} → [Gen G] → G α`, whose head under the telescope is a *local* `G` rather than a constant. A
-shape the walk fails to match is silently unaudited, and the `total == 0` backstop does not catch it
-so long as some other shape still matches.
+**It must recognise every generator type it might meet** — the Basalt `{G} → [Gen G] → G α` that
+`generator_search` emits, whose head under the telescope is a *local* `G` rather than a constant,
+plus the two types a synthesized generator is assembled out of and can therefore be written at by
+hand: `Palamedes.PGen α` and `CorrectGen P`. A shape the walk fails to match is silently unaudited,
+and the `total == 0` backstop does not catch it so long as some other shape still matches.
 -/
 
 open Lean Meta Elab Command
@@ -73,11 +74,16 @@ run_cmd liftTermElabM do
   for i in [0:env.header.moduleData.size] do
     let modName := env.header.moduleNames[i]!
     -- `GeneratorAPI` alongside the corpus: it holds the canonical Basalt-shaped generators, which
-    -- is the default emission shape and therefore the one most in need of auditing. `Correct` and
-    -- `Tuning` because `@[correct]` emits through raw `addDecl` — no def elaborator, so none of the
-    -- `._proof_i` abstraction the exemption above assumes, and a distinct emission path whose
-    -- residue the corpus cannot witness. (The *generator* is an ordinary `def` now that synthesis
-    -- is a tactic throughout; it is the emitted laws and companions that take the raw path.)
+    -- is the emission shape and therefore the one most in need of auditing.
+    --
+    -- `Correct` and `Tuning` are listed for the same reason and **do not currently reach this
+    -- loop**: a module is only walkable if it is in this file's import closure, and those two
+    -- cannot be imported here because they declare root-level names (`isAllTwos`, `genAllTwos`,
+    -- `genBetween`) that collide with `GeneratorAPI`'s. Closing that hole means namespacing each
+    -- test module's helpers, which moves every `#guard_msgs` pin in them. What goes unaudited
+    -- meanwhile is `@[correct]`'s raw `addDecl` path — no def elaborator, so none of the
+    -- `._proof_i` abstraction the exemption above assumes. (The *generator* is an ordinary `def`,
+    -- since synthesis is a tactic throughout; it is the emitted law that takes the raw path.)
     unless (`PalamedesTest.Corpus).isPrefixOf modName
         || modName == `PalamedesTest.GeneratorAPI
         || modName == `PalamedesTest.Correct

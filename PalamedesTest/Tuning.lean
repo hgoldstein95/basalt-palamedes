@@ -8,7 +8,6 @@ import Palamedes.Synthesizer
 import Palamedes.Data.List
 import Palamedes.Data.Nat
 import Palamedes.Sample
-import Palamedes.Stats
 
 /-!
 # Tuning regression: a `Tuning` binder is threaded through synthesis
@@ -36,110 +35,19 @@ def isAllTwos : List Nat → Bool
   | [] => true
   | x :: xs => x = 2 && isAllTwos xs
 
-/-! ## The carrier shape -/
-
-/--
-info: @[correct] genAllTwos: emitted sound_complete, total
--/
-#guard_msgs in
-@[correct] def genAllTwos (θ : Tuning := .uniform) : Palamedes.PGen (List Nat) := by
-  generator_search (fun xs => isAllTwos xs)
-
-/--
-info: @genAllTwos.sound_complete : ∀ (θ : optParam Tuning Tuning.uniform),
-  (genAllTwos θ).support = fun xs => isAllTwos xs = true
--/
-#guard_msgs in
-#check @genAllTwos.sound_complete
-/--
-info: 'genAllTwos.sound_complete' depends on axioms: [propext, Classical.choice, Quot.sound]
--/
-#guard_msgs in
-#print axioms genAllTwos.sound_complete
-/--
-info: #[{ name := `genAllTwos.site0, offset := 0, arity := 2, holes := #[0, 1] }]
--/
-#guard_msgs in
-#eval genAllTwos.sites
-/--
-info: { schedules := #[(1, 12), (3, 0)] }
--/
-#guard_msgs in
-#eval SchedulePolicy.moderate.materialize genAllTwos.sites
-
--- The law is usable at any weighting, from the one theorem.
-example (P : List Nat → Prop) (hP : (fun xs => isAllTwos xs = true) = P) (θ : Tuning) :
-    (genAllTwos θ).support = P := by rw [genAllTwos.sound_complete θ, hP]
-
--- `.uniform` is the default, so the untuned call names no tuning.
-/--
-info: (toStatGen genAllTwos) — 500 draws (seed 0, fuel 5000)
-
-  outcomes    ok 500 (100.0%)
-  size        mean 1.9   p50 1   p95 4   max 8
-  choices     mean 1.9   p50 1   p95 4   max 8
-  distinct    8 / 500
-
-  head constructor
-    nil     50.4%  (252)
-    cons    49.6%  (248)
-
-  most common
-     50.4%  (252)  []
-     23.6%  (118)  [2]
-     14.2%   (71)  [2, 2]
-      7.8%   (39)  [2, 2, 2]
-      2.0%   (10)  [2, 2, 2, 2]
-
-  samples
-    [2, 2]
-    []
-    []
--/
-#guard_msgs in
-#genstats (draws := 500) (fuel := 5000) (toStatGen genAllTwos)
-
--- A policy shifts the distribution. Support is unchanged — that is the theorem above.
-/--
-info: (toStatGen (genAllTwos (SchedulePolicy.moderate.materialize genAllTwos.sites))) — 500 draws (seed 0, fuel 5000)
-
-  outcomes    ok 500 (100.0%)
-  size        mean 1.9   p50 2   p95 3   max 4
-  choices     mean 1.9   p50 2   p95 3   max 4
-  distinct    4 / 500
-
-  head constructor
-    cons    72.4%  (362)
-    nil     27.6%  (138)
-
-  most common
-     57.4%  (287)  [2]
-     27.6%  (138)  []
-     13.8%   (69)  [2, 2]
-      1.2%    (6)  [2, 2, 2]
-
-  samples
-    [2, 2]
-    [2, 2]
-    []
--/
-#guard_msgs in
-#genstats (draws := 500) (fuel := 5000)
-  (toStatGen (genAllTwos (SchedulePolicy.moderate.materialize genAllTwos.sites)))
-
 /-! ## No `Tuning` binder is a legitimate signature: uniform, and no site table -/
 
-def genUntuned : Palamedes.PGen (List Nat) := by generator_search (fun xs => isAllTwos xs)
+def genUntuned [Gen G] : G (List Nat) := by generator_search (fun xs => isAllTwos xs)
 
 run_cmd do
   if (← Lean.getEnv).contains `genUntuned.sites then
     throwError "genUntuned declared no `Tuning` binder, so no site table should be emitted"
 
-/-! ## The Basalt shapes, tuned in place
+/-! ## The total shape, tuned in place
 
-There is no carrier companion and no re-projection: the generator is tuned *before* it is packaged,
-so the `TGen` witness is built once, over the θ-open term. `total_frequency` never inspects weights,
-which is why stage 4 closes exactly as it does for a uniform generator. -/
+There is no companion generator and no re-projection: the generator is tuned *before* it is
+packaged, so the `TGen` witness is built once, over the θ-open term. `total_frequency` never
+inspects weights, which is why stage 4 closes exactly as it does for a uniform generator. -/
 
 /--
 info: @[correct] genLawfulB: emitted sound_complete
@@ -159,6 +67,24 @@ info: 'genLawfulB.sound_complete' depends on axioms: [propext, Classical.choice,
 -/
 #guard_msgs in
 #print axioms genLawfulB.sound_complete
+
+-- The site table `installTuning` emitted, and a policy materialized against it.
+/--
+info: #[{ name := `genLawfulB.site0, offset := 0, arity := 2, holes := #[0, 1] }]
+-/
+#guard_msgs in
+#eval genLawfulB.sites
+/--
+info: { schedules := #[(1, 12), (3, 0)] }
+-/
+#guard_msgs in
+#eval SchedulePolicy.moderate.materialize genLawfulB.sites
+
+-- The law is usable at any weighting, from the one theorem.
+example (P : List Nat → Prop) (hP : (fun xs => isAllTwos xs = true) = P) (θ : Tuning) :
+    IsSoundAndComplete (genLawfulB θ (G := SPMF)) P := by
+  rw [← hP]; exact genLawfulB.sound_complete θ
+
 /--
 info: genLawfulB — 30 draws (seed 0, fuel 10000)
 

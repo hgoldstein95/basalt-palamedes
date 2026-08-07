@@ -5,8 +5,6 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
   Leonidas Lampropoulos, Benjamin C. Pierce
 -/
 
-import Palamedes.PGen
-import Palamedes.Failure
 import Basalt.PlausibleGen
 import Plausible
 
@@ -16,23 +14,19 @@ import Plausible
 **Most generators need nothing from this module.** A generator declared at `[Gen G] : G α` is a
 Basalt generator, and Plausible runs one directly — there is no adapter, and `#genstats genFoo`
 needs none either. What is left over is the *filtering* shape, `[Gen G] : G (Option α)`, whose draws
-can be `none`; that is what `samplePartial`/`samplePartial?`/`samplePartialN` are for, and it is the
-path a reader should assume unless they are working at the carrier.
+can be `none`; that is the whole of what this module is for.
 
-The `sample`/`sample?`/`sampleN` family below takes a `Palamedes.PGen` — the synthesis carrier — and
-is the same three functions one layer out, composed with `PGen.totalize`. It exists because the
-carrier remains a declarable shape for reasoning about `support` directly, not because it is the
-recommended way to sample anything.
-
-Either way sampling interprets failure through the explicit `Option` layer at `Plausible.Gen`: a
-failed `assume` is an ordinary `none` draw — the same failure the `SPMF`/`massSome` semantics
-reasons about — rather than a separate `throw`-based `Fail` instance.
+Sampling interprets failure through the explicit `Option` layer at `Plausible.Gen`: a failed
+`assume` is an ordinary `none` draw — the same failure the `SPMF`/`massSome` semantics reasons
+about — rather than a separate `throw`-based `Fail` instance. Synthesis emits the filtering shape
+through `PGen.totalize`, so by the time a generator reaches this module that layer is already
+`Option` in its own type and these functions add only the retry.
 
 The sampler **retries on failure**: a `none` draw is redrawn whole (a global restart, via
 Plausible's `Gen.runUntil`) up to `maxAttempts` times, so a filtering generator samples instead of
-failing on the first rejected path; only exhausting every attempt throws (`sample`) or returns
-`none` (`sample?`). The acceptance rate is reported by `#genstats` (`ok` vs `failed`), so it is a
-measurable tuning objective. Deep filtering regimes (`genRBT` at height ≥ 3, `genAVL` at height
+failing on the first rejected path; only exhausting every attempt throws (`samplePartial`) or returns
+`none` (`samplePartial?`). The acceptance rate is reported by `#genstats` (`ok` vs `failed`), so it
+is a measurable tuning objective. Deep filtering regimes (`genRBT` at height ≥ 3, `genAVL` at height
 ≥ 5) have vanishing acceptance and will exhaust `maxAttempts` — reported, never a silent hang.
 
 Retry recovers from *failure*, not *divergence*: `total` means assume-free, not almost-sure
@@ -43,55 +37,22 @@ A `Tuning` binder plus a depth-decaying schedule is the practical (measured, not
 
 namespace Palamedes
 
-open Palamedes.PGen
-
-/-- Surface a `none` draw as a `GenError` so `Gen.runUntil` can retry it.
-
-This is the entry point for a generator that is **already** `Option`-reflected by its own type — the
-shape `generator_search` emits for a filtering generator. `toPlausible` is this composed with
-`totalize`, so
-the two paths share one retry story rather than duplicating it. -/
+/-- Surface a `none` draw as a `GenError` so `Gen.runUntil` can retry it. This is the only place
+failure crosses from data into Plausible's error channel; everything above it is retry. -/
 def ofOption (g : Plausible.Gen (Option α)) : Plausible.Gen α := do
   match ← g with
   | some a => return a
   | none   => throw Plausible.Gen.genericFailure
 
-/-- Interpret `g` at Plausible's `Gen` monad through the explicit `Option` layer: a failed `assume`
-  becomes a `none` value (matching the `massSome` semantics), which we surface as a `GenError` at
-  this boundary only so that `Gen.runUntil` can retry it. -/
-def toPlausible (g : PGen α) : Plausible.Gen α :=
-  ofOption (totalize g)
-
 /-- Draw a single value from `g`, **retrying on failure** up to `maxAttempts` times (a global
   restart via Plausible's `Gen.runUntil`). A filtering generator whose `assume` fails is redrawn
   rather than failing; only if all `maxAttempts` draws fail does this throw "out of attempts". -/
-def sample (g : PGen α) (size : Nat := 100) (maxAttempts : Nat := 1000) : IO α :=
-  Plausible.Gen.runUntil (some maxAttempts) (toPlausible g) size
-
-/-- Like `sample`, but returns `none` when all `maxAttempts` draws fail rather than throwing. The
-  `some`/`none` rate over many draws is an empirical acceptance rate (`massSome`). -/
-def sample? (g : PGen α) (size : Nat := 100) (maxAttempts : Nat := 1000) : IO (Option α) := do
-  try
-    return some (← sample g size maxAttempts)
-  catch _ =>
-    return none
-
-/-- Draw `n` values from `g`, each with retry. -/
-def sampleN (n : Nat) (g : PGen α) (size : Nat := 100) (maxAttempts : Nat := 1000) : IO (List α) :=
-  (List.replicate n ()).mapM (fun _ => sample g size maxAttempts)
-
-/-! ### Sampling a filtering generator
-
-The primary path, per the module docstring. A generator synthesized at `G (Option α)` has already
-been through `totalize`, so it needs the retry loop but not the reflection — these are the `sample*`
-family with the reflection step taken out rather than put in. -/
-
-/-- `sample` for a generator whose type already says it can fail. -/
 def samplePartial (g : Plausible.Gen (Option α))
     (size : Nat := 100) (maxAttempts : Nat := 1000) : IO α :=
   Plausible.Gen.runUntil (some maxAttempts) (ofOption g) size
 
-/-- `sample?` for a generator whose type already says it can fail. -/
+/-- Like `samplePartial`, but returns `none` when all `maxAttempts` draws fail rather than throwing.
+  The `some`/`none` rate over many draws is an empirical acceptance rate (`massSome`). -/
 def samplePartial? (g : Plausible.Gen (Option α))
     (size : Nat := 100) (maxAttempts : Nat := 1000) : IO (Option α) := do
   try
@@ -99,7 +60,7 @@ def samplePartial? (g : Plausible.Gen (Option α))
   catch _ =>
     return none
 
-/-- `sampleN` for a generator whose type already says it can fail. -/
+/-- Draw `n` values from `g`, each with retry. -/
 def samplePartialN (n : Nat) (g : Plausible.Gen (Option α))
     (size : Nat := 100) (maxAttempts : Nat := 1000) : IO (List α) :=
   (List.replicate n ()).mapM (fun _ => samplePartial g size maxAttempts)
