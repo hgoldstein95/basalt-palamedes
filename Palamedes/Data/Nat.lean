@@ -59,9 +59,14 @@ namespace TGen
 def arbNat : TGen Nat := ⟨fun {_G} _ => arbNatGo⟩
 
 /-- A uniform draw from `[lo, hi]`, and what a Basalt-shaped generator emits for a range; see
-`delabTGenChoose`. -/
+`delabTGenChoose`.
+
+The draw itself is Basalt's `chooseNat`, not a re-spelling of it: `TGen Nat` is exactly the type of a
+`Gen`-polymorphic `G Nat`, so viewing a Basalt primitive as failure-free costs a `TGen.mk` and
+nothing else. Re-spelling it would additionally owe an argument that the two agree, and `chooseNat`'s
+support and mass lemmas would not apply. -/
 def choose (lo hi : Nat) (h : lo ≤ hi := by gen_side_condition) : TGen Nat :=
-  ⟨fun {_G} _ => RandomChoice.choose lo hi h >>= fun r => Pure.pure r.down.val⟩
+  ⟨fun {_G} _ => chooseNat lo hi h⟩
 
 end TGen
 
@@ -193,27 +198,21 @@ theorem support_choose :
     support (choose lo hi h) = fun a => lo ≤ a ∧ a ≤ hi := by
   funext v
   apply propext
-  show v ∈ SPMF.support (RandomChoice.choose lo hi h >>= fun r => Pure.pure r.down.val) ↔ _
-  simp only [SPMF.support_bind, SPMF.mem_support_choose_iff, SPMF.support_pure]
-  constructor
-  · rintro ⟨⟨a, ha⟩, -, rfl⟩
-    exact ha
-  · intro hv
-    exact ⟨⟨v, hv⟩, trivial, rfl⟩
+  show v ∈ SPMF.support (chooseNat lo hi h) ↔ _
+  exact SPMF.mem_support_chooseNat_iff
 
 
 @[simp] theorem someSupport_choose {lo hi : Nat} {h : lo ≤ hi} :
     someSupport (choose lo hi h) = fun a => lo ≤ a ∧ a ≤ hi := by
   funext v
   apply propext
-  show some v ∈ SPMF.support (OptionT.run
-      (RandomChoice.choose lo hi h >>= fun r => Pure.pure r.down.val : OptionT SPMF Nat)) ↔ _
-  rw [mem_support_optionT_bind]
-  simp only [instRandomChoiceOptionT, mem_support_optionT_lift, support_optionT_pure,
-    SPMF.mem_support_choose_iff, Set.mem_singleton_iff]
+  show some v ∈ SPMF.support (OptionT.run (chooseNat lo hi h : OptionT SPMF Nat)) ↔ _
+  rw [show (chooseNat lo hi h : OptionT SPMF Nat)
+      = (·.down.val) <$> RandomChoice.choose lo hi h from rfl, mem_support_optionT_map]
+  simp only [instRandomChoiceOptionT, mem_support_optionT_lift, SPMF.mem_support_choose_iff]
   constructor
-  · rintro ⟨⟨a, ha⟩, -, hv⟩
-    cases Option.some.inj hv; exact ha
+  · rintro ⟨⟨a, ha⟩, -, rfl⟩
+    exact ha
   · intro hv
     exact ⟨⟨v, hv⟩, trivial, rfl⟩
 @[simp]
