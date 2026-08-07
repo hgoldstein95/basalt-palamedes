@@ -90,27 +90,11 @@ combinator's autoparam.
 
 The same problem and the same fix apply to a *primitive* whose side condition is an ordinary explicit
 argument — `choose`'s `lo ≤ hi`, `elements`' `xs.length > 0`. Those live in `Data/`, so
-`delabDroppingProof` and `gen_side_condition` below are the shared pieces they register against;
-`delabDroppingSideCondition` stays private because the three combinators it serves are all here. -/
-
-/-- Discharge a generator primitive's side condition, for its `autoParam`.
-
-Two cases, and a primitive's delaborator drops the proof exactly when one of them will fire on the
-pasted term: the condition holds outright (literal bounds, a literal branch list), or it follows
-from a decidable guard already in context — which is the shape a floated `assume` leaves, since the
-optimizer turns it into a `dite` binding `decide P = true`.
-
-Each branch is `done`-terminated, so a branch that makes progress without closing the goal falls
-through to the next rather than committing. `elements`' condition is where that bites: `simp` turns
-`(Γ.idxsOf τ).length > 0` into `τ ∈ Γ` and stops, which is progress, and the guard in context is
-about the length. -/
-syntax "gen_side_condition" : tactic
-macro_rules
-  | `(tactic| gen_side_condition) =>
-    `(tactic| first
-        | (simp; done)
-        | (simp_all only [decide_eq_true_eq]; done)
-        | (simp_all; done))
+`delabDroppingProof` below is the shared piece they register against, and the autoParam that puts a
+dropped proof back is Basalt's `gen_side_condition`, the same one its own combinators use — a
+primitive whose delaborator drops more than that tactic can rebuild emits text that does not
+re-elaborate. `delabDroppingSideCondition` stays private because the three combinators it serves are
+all here. -/
 
 def natLit? (e : Expr) : Option Nat :=
   match e.nat? with
