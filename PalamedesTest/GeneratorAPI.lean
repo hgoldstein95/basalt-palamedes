@@ -20,19 +20,19 @@ consumes with no adapter.
 | totality | declared | result |
 |---|---|---|
 | succeeds | `G α` | emitted from the `TGen` witness |
-| filters | `G (Option α)` | emitted via `totalize` |
+| filters | `G (Option α)` | emitted by reading the carrier at `OptionT G` |
 | filters | `G α` | error — declare `G (Option α)` |
 | succeeds | `G (Option α)` | warning — it never fails, `G α` will do |
 | *gap* | either | error / warning naming the **basis gap**, never advising `Option` |
+
+Both emitted shapes are Basalt vocabulary throughout. `G α` is the `TGen` witness projected;
+`G (Option α)` is the carrier read at `OptionT G`, so a rejecting `assume` becomes an ordinary
+`pure none` draw and no `Palamedes.PGen` constant survives into the term.
 
 The last row is a third totality outcome, distinct from "filters": reconstruction can come up empty
 because the generator genuinely filters, or because the basis could not cover it. Only the first is
 a fact about the generator. See `diagnoseTotality` (`Synthesizer/FrontEnd.lean`) and the section at
 the bottom of this file.
-
-Row 3 being an **error** rather than a warning is a property of there being no shape that accepts a
-generator with an unreconstructed witness: `G α` is `Fail`-free by construction, so there is simply
-no term to emit. A warning would be invisible to CI, which exits 0 on warnings.
 -/
 
 open Palamedes
@@ -74,7 +74,7 @@ info: genAllTwos — 30 draws (seed 0, fuel 10000)
 #guard_msgs in
 #genstats (draws := 30) genAllTwos
 
-/-! ## Row 2 — filtering, declared filtering: emitted via `totalize` -/
+/-! ## Row 2 — filtering, declared filtering: emitted at `OptionT G` -/
 
 def genBetween (lo hi : Nat) [Gen G] : G (Option Nat) := by
   generator_search (fun n => lo ≤ n ∧ n ≤ hi)
@@ -87,7 +87,8 @@ def genBetween (lo hi : Nat) [Gen G] : G (Option Nat) := by
 
 /-! ## Row 3 — filtering, declared total: an error, naming the fix
 
-`G α` is `Fail`-free by construction, so there is no term to emit — hence an error, not a warning. -/
+`G α` is `Fail`-free by construction, so there is no term to emit — hence an error, not a warning,
+which CI would exit 0 on. -/
 
 /--
 error: generator_search: this generator filters — a `PGen.assume` survived optimization — so it cannot be emitted at
@@ -101,8 +102,8 @@ example (lo hi : Nat) [Gen G] : G Nat := by
 
 /-! ## Row 4 — total, declared filtering: a hint, and the generator still works
 
-The `Option` is not wrong, only unnecessary — there is a term to emit (via `totalize`), so unlike
-row 3 this stays a warning. -/
+The `Option` is not wrong, only unnecessary — reading the carrier at `OptionT G` works whether or
+not it can fail, so there is a term to emit and, unlike row 3, this stays a warning. -/
 
 /--
 warning: this generator never fails, so the `Option` is not needed — `G (List ℕ)` will do.
@@ -114,8 +115,8 @@ def genAllTwosOpt [Gen G] : G (Option (List Nat)) := by
 /-! ## `classifyGoal` rejects goals it cannot read
 
 The ways a goal fails to name a generator. Each is a message about the *declaration*, which is the
-point: the alternative is a mismatch surfacing later from inside the emitted `totalize`/`TGen.run`,
-which reads as a bug in emission rather than a fact about what was declared.
+point: the alternative is a mismatch surfacing later from inside the emitted term, which reads as a
+bug in emission rather than a fact about what was declared.
 -/
 
 -- A predicate whose domain is not the goal's element type.
@@ -171,21 +172,24 @@ and `CorrectGen (P : Option β → Prop)` cannot be solved regardless of dispatc
 worth keeping, but the ambiguity it guards against is latent rather than live.
 -/
 
-/-! ## Three renderings, one per shape a printed choice can have
+/-! ## Three renderings, two algebras
 
-`delabDroppingSideCondition` (`PGen.lean`) is registered on three constants, and the reason is that
-an emitted term can be built from either algebra, not that the code is duplicated. A generator
-declared `G α` is projected from its `TGen` witness and so chooses with **Basalt's** `frequency`.
-One declared `G (Option α)` is `PGen.totalize` wrapped around the optimized carrier term, which
-keeps the carrier's own combinators — `PGen.oneOf` as the flatten pass leaves it, or
-`PGen.frequency` once the tuning pass has written weights into it.
+`delabDroppingSideCondition` (`PGen.lean`) is registered on three constants because Palamedes has
+two generator algebras a reader can meet, not because the code is duplicated.
 
-Unfolding `PGen.oneOf` to the Basalt `frequency` underneath is not an option: it gives
-`{ run := fun {_G} x x_1 => frequency [(1, fun x_2 => …), …] (by simp) }` — the `PGen.mk` wrapper,
-three dummy binders, and every branch eta-expanded. Strictly worse.
+**Basalt's `frequency`** is what every *emitted* term chooses with, at both declared shapes: `G α` is
+projected from its `TGen` witness, and `G (Option α)` is the carrier read at `OptionT G`, which
+pushes through the carrier's own choices rather than leaving them.
 
-The corpus witnesses only the first of the three, so all three are pinned here. Deleting any of them
-puts a `._proof_i` reference back into a term that is meant to be pasted. -/
+**The carrier's `oneOf` and `frequency`** are what the *pipeline* chooses with, and are read just as
+often: `set_option palamedes.debug true` prints the optimized generator, `optimize_gen` returns one,
+and `PalamedesTest/Optimizer/Rewrites.lean` pins a page of them. The flatten pass produces `oneOf`;
+`frequency` arises once tuning has written weights into it. Unfolding either to the Basalt
+`frequency` underneath would print `{ run := fun {_G} x x_1 => frequency [(1, fun x_2 => …), …] (by
+simp) }` — the `PGen.mk` wrapper, three dummy binders, and every branch eta-expanded.
+
+All three are pinned here. Deleting any of them puts a `._proof_i` reference back into a term that
+is meant to be read, and for the first, pasted. -/
 
 section Renderings
 
@@ -200,7 +204,8 @@ fun {G} [Gen G] => frequency [(1, fun x => pure 1), (2, fun x => pure 2)]
 #guard_msgs in
 #print renderBasalt
 
--- The carrier's two: dropped outright, since their autoParam is `by simp` and does close it.
+-- The carrier's two: the argument is dropped outright, since their autoParam is `by simp` and does
+-- close it.
 def renderOneOf : PGen Nat := PGen.oneOf [pure 1, pure 2]
 
 /--
@@ -226,7 +231,7 @@ end Renderings
 `totality` is `repeat' first | …`, and `repeat'` does not fail — so a datatype with no `@[total]`
 lemma does not throw, it simply leaves goals, exactly like a generator that genuinely filters.
 Control flow alone cannot separate them, and reading the empty result as "it filters" sends the user
-to add an `Option` their generator does not need. `totalize` accepts it, the "never fails" check is
+to add an `Option` their generator does not need. `OptionT G` accepts it, the "never fails" check is
 silent (it keys on a witness that is absent either way), and the law emitted for the declaration
 weakens from `IsSoundAndComplete` to `IsSomeSoundAndComplete`. The bad diagnosis is actionable, the
 action succeeds, and the evidence is buried.

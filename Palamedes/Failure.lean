@@ -27,4 +27,14 @@ def totalize (g : PGen α) : ∀ {G : Type → Type} [Gen G], G (Option α) :=
 
 end PGen
 
+/-- Failure at `OptionT`, as the `Option`-valued draw it is: this is where reading a generator at
+`OptionT G` turns its `Fail` capability into data.
+
+An equation, so that one rewrite takes a rejecting branch all the way to Basalt vocabulary. Reducing
+the instance instead — `Fail.fail`, `instFailOptionT`, `OptionT.fail` — stops at
+`OptionT.mk (pure none)`, leaving the transformer's own constructor in a term that is meant to read
+as a generator. -/
+theorem run_fail {G : Type → Type} [Monad G] {α : Type} :
+    (Fail.fail : OptionT G α) = (pure none : G (Option α)) := rfl
+
 end Palamedes

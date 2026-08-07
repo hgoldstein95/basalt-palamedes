@@ -11,10 +11,9 @@ import Palamedes.Support
 # The support of a *filtering* generator
 
 `PGen.support g` reads a generator at `SPMF`, where `Fail` is `⊥`, so it describes the values a
-generator produces *when it does not fail*. A filtering generator is emitted as `totalize g`, which
-runs it at `OptionT SPMF` instead — a different instantiation of the same polymorphic term. This
-file gives the support notion for *that* interpretation, and the three lemmas the per-datatype twins
-need.
+generator produces *when it does not fail*. A filtering generator's emitted definition runs it at
+`OptionT SPMF` instead — a different instantiation of the same polymorphic term. This file gives the
+support notion for *that* interpretation, and the three lemmas the per-datatype twins need.
 
 `someSupport` and `PGen.support` agree on every generator built from the combinator basis (each such
 equation is a one-liner from the two `bind`/`pure` lemmas below), and the agreement propagates

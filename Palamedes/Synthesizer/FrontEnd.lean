@@ -21,7 +21,8 @@ The user-facing pipeline:
 - extract a raw `PGen`;
 - optimize;
 - build a totality witness;
-- package at the declared shape: `G α` from the `TGen` witness, or `G (Option α)` via `totalize`.
+- package at the declared shape: `G α` from the `TGen` witness, or `G (Option α)` by reading the
+  carrier at `OptionT G`.
 
 **Both declarable shapes are Basalt's.** `Palamedes.PGen` is the pipeline's internal carrier and
 nothing more; `classifyGoal` rejects a goal typed at it along with every other type that is not a
@@ -216,7 +217,8 @@ fact about its type, visible at every use site. -/
 inductive Target where
   /-- `G α` for a Basalt `[Gen G]`. Emitted from the `TGen` witness, so it is `Fail`-free. -/
   | basalt (G α : Expr)
-  /-- `G (Option α)` for a Basalt `[Gen G]`. Emitted via `totalize`: a failed guard is a `none`. -/
+  /-- `G (Option α)` for a Basalt `[Gen G]`. Emitted by reading the carrier at `OptionT G`, where a
+  failed guard is a `none`. -/
   | basaltOption (G α : Expr)
 
 /-- The element type the predicate must range over. -/
@@ -261,6 +263,13 @@ structure SynthesisStash where
   supportProof : Expr
   /-- `fun xs => (w : PGen.total gen)`, when the totality stage produced one. -/
   totalWitness? : Option Expr
+  /-- `fun xs => (h : emitted = PGen.totalize gen)`, at the filtering shape.
+
+  The emitted term is the carrier read at `OptionT G` with the projection pushed inward, which is
+  the *same generator* but not definitionally the same term — pushing past a `dite` or a `match` is
+  a case analysis on a stuck scrutinee. The law is stated about `totalize`, so this is what carries
+  it across. `none` at the total shape, which needs no such step. -/
+  partialEq? : Option Expr
 
 initialize synthesisExt : EnvExtension (NameMap SynthesisStash) ←
   registerEnvExtension (pure {})
@@ -288,7 +297,8 @@ def declTuningBinder? : MetaM (Option Expr) := do
 
 /-- Record a completed synthesis for `@[correct]`, if we are elaborating into a named declaration.
 -/
-def stashSynthesis (target : Target) (pred : Expr) (res : SynthesisResult) : TermElabM Unit := do
+def stashSynthesis (target : Target) (pred : Expr) (res : SynthesisResult)
+    (partialEq? : Option Expr) : TermElabM Unit := do
   let some declName ← Term.getDeclName? | return
   let xs ← declBinders
   let close (e : Expr) : TermElabM Expr := do
@@ -304,7 +314,8 @@ def stashSynthesis (target : Target) (pred : Expr) (res : SynthesisResult) : Ter
     pred := ← close pred
     gen := ← close res.gen
     supportProof := ← close res.supportProof
-    totalWitness? := ← res.totalWitness?.mapM close }
+    totalWitness? := ← res.totalWitness?.mapM close
+    partialEq? := ← partialEq?.mapM close }
   modifyEnv (synthesisExt.modifyState · (·.insert declName stash))
 
 /-- Elaborate `t` as a predicate `α → Prop`, returning `none` if it does not fit that type. -/
@@ -397,6 +408,116 @@ def extractWitness (e : Expr) : MetaM Expr := do
   let (r, _) ← simp e ctx
   dropIdentityTransports r.expr
 
+/-- Push `PGen.run` through a `match`: rebuild the matcher at the run-type motive with each arm
+projected, and prove the two equal by instantiating the *same* matcher a third time, at a `Prop`
+motive where every arm is `rfl` — substituting an arm's own pattern for the discriminants makes both
+matchers iota-reduce to that arm.
+
+A simproc on both counts. There is no per-datatype `X.run_cases` to write instead: a matcher
+auxiliary is generated per elaboration and only *defeq* to any other, while simp matches at
+`reducible`, so a lemma stated about one would never fire on another's (`X.total_cases` has the same
+constraint, and answers it by being `apply`d from a keyed descent). Nor can this be a
+`Meta.transform`: pushing a projection into a match arm is not definitional for a stuck scrutinee,
+so each step has to carry an equation for simp to compose up through the surrounding term.
+
+Both rebuilds retarget `uElimPos?`, the matcher's motive universe: the arms were elaborated at
+`PGen α : Type 1` and are being re-elaborated at `G (Option α) : Type` and at `Prop`. Reusing the
+levels unchanged is what makes the kernel reject the result with a motive arity mismatch. -/
+private def pushRunMatch : Simp.Simproc := fun e => do
+  let_expr Palamedes.PGen.run α scrut G gi fi := e | return .continue
+  let some m ← matchMatcherApp? scrut | return .continue
+  let some uPos := m.uElimPos? | return .continue
+  let runOf (g : Expr) : Expr := mkAppN (mkConst ``Palamedes.PGen.run) #[α, g, G, gi, fi]
+  let resTy := mkApp G α
+  let atLevel (l : Level) := (m.matcherLevels.set! uPos l).toList
+  let matcherAt (l : Level) (motive : Expr) (alts : Array Expr) :=
+    mkAppN (mkConst m.matcherName (atLevel l)) (m.params ++ #[motive] ++ m.discrs ++ alts)
+  let motive' ← lambdaTelescope m.motive fun xs _ => mkLambdaFVars xs resTy
+  let alts' ← m.alts.mapIdxM fun i alt =>
+    lambdaBoundedTelescope alt m.altNumParams[i]! fun xs body => mkLambdaFVars xs (runOf body)
+  let lvl ← getLevel resTy
+  let expr := matcherAt lvl motive' alts'
+  let eqMotive ← lambdaTelescope m.motive fun xs _ => do
+    let orig := mkAppN (mkConst m.matcherName m.matcherLevels.toList)
+      (m.params ++ #[m.motive] ++ xs ++ m.alts)
+    let pushed := mkAppN (mkConst m.matcherName (atLevel lvl))
+      (m.params ++ #[motive'] ++ xs ++ alts')
+    mkLambdaFVars xs (← mkEq (runOf orig) pushed)
+  let eqAlts ← m.alts.mapIdxM fun i alt =>
+    lambdaBoundedTelescope alt m.altNumParams[i]! fun xs body => do
+      mkLambdaFVars xs (← mkEqRefl (runOf body))
+  let proof := matcherAt Level.zero eqMotive eqAlts
+  -- A motive rebuilt at the wrong universe, or an arm whose `rfl` does not in fact hold, produces a
+  -- term the kernel rejects much later and far from here.
+  unless ← isDefEq (← inferType proof) (← mkEq e expr) do return .continue
+  return .visit { expr, proof? := some proof }
+
+/-- Read a generator that kept an `assume` at `OptionT G`, where `Fail` is `pure none`, and push the
+projection down until what is left is Basalt vocabulary.
+
+`PGen.totalize g` denotes exactly this in a single constant, but it leaves the carrier wrapped
+around the generator, which would make the filtering shape the one shape whose emitted term is not
+readable as Basalt code.
+
+Three things do not push on their own. `dite`/`ite` get `PGen.run_dite`/`run_ite`; a `match` gets
+`pushRunMatch`; and a datatype's primitive gets unfolded to its `TGen` spelling, whose head
+constants are read off the `@[total]` registry — each rule is keyed by the `PGen` head it
+reconstructs, which is exactly the set to unfold. `dite`/`ite` are registered heads too and are
+excluded: delta-unfolding them exposes `Decidable.rec`, which is not a case split any more.
+
+Recursion needs nothing: `X.run_unfold` is stated at an arbitrary `G` with `Fail G`, so it fires at
+`OptionT G` like anywhere else, and `X.unfoldGo`'s own polymorphism does the short-circuiting.
+
+Returns the term and a proof that it equals `PGen.totalize gen`, which the filtering law is stated
+against. The equation is not `rfl`: `run_dite` and the match push are both case analyses on a stuck
+scrutinee. -/
+def extractPartialWitness (α gen G : Expr) : MetaM (Expr × Expr) := do
+  let optT ← mkAppM ``OptionT #[G]
+  let e ← mkAppOptM ``Palamedes.PGen.run
+    #[α, gen, optT, ← synthInstance (← mkAppM ``Gen #[optT]),
+      ← synthInstance (← mkAppM ``Palamedes.Fail #[optT])]
+  let prims := (Palamedes.totalRules (← getEnv)).map (·.head)
+    |>.filter (fun n => n != ``dite && n != ``ite)
+  let some pwExt ← getSimpExtension? `partial_witness
+    | throwError "simp extension `partial_witness` not found"
+  let mut thms ← pwExt.getTheorems
+  for n in Palamedes.pgenBasis ++ prims do
+    thms ← thms.addDeclToUnfold n
+  -- `List.map_cons`/`_nil` so a choice's branch list actually computes: without them `.run` stays
+  -- stuck under the `List.map` lambda `frequency`'s branches are built by, and every branch is left
+  -- as a bare `PGen.mk`.
+  for n in [``Palamedes.PGen.run_dite, ``Palamedes.PGen.run_ite, ``Palamedes.run_fail,
+            ``List.map_cons, ``List.map_nil] do
+    thms ← thms.addConst n
+  -- `proj := true` cancels the `PGen.mk`/`.run` pair and computes the `Prod` projections a choice's
+  -- branch list is built from. It also reduces `Pure.pure`/`Bind.bind` through the
+  -- `Gen (OptionT G)` instance, so the result names `OptionT.pure`/`OptionT.bind` — the honest
+  -- reading, since the term *is* at `OptionT G`.
+  let ctx ← Simp.mkContext
+    (config := { proj := true, zetaDelta := true })
+    (simpTheorems := #[thms])
+    (congrTheorems := ← getSimpCongrTheorems)
+  -- The simproc's index key. Built from metavariables rather than `mkAppOptM`, which would try to
+  -- *synthesize* the `Gen`/`Fail` instances of a `G` that is only a pattern here.
+  let key ← withReducible do
+    let β ← mkFreshExprMVar (mkSort 1)
+    let g ← mkFreshExprMVar (mkApp (mkConst ``Palamedes.PGen) β)
+    let Gp ← mkFreshExprMVar (← mkArrow (mkSort 1) (mkSort 1))
+    let gi ← mkFreshExprMVar (← mkAppM ``Gen #[Gp])
+    let fi ← mkFreshExprMVar (← mkAppM ``Palamedes.Fail #[Gp])
+    DiscrTree.mkPath (mkAppN (mkConst ``Palamedes.PGen.run) #[β, g, Gp, gi, fi])
+  let sprocs : Simp.Simprocs :=
+    ({} : Simp.Simprocs).addCore key `pushRunMatch true (.inl pushRunMatch)
+  let (r, _) ← simp e ctx #[sprocs]
+  let proof ← match r.proof? with
+    | some p => mkEqSymm p
+    | none => mkEqRefl e
+  let expr ← dropIdentityTransports r.expr
+  -- `dropIdentityTransports` rewrites proof subterms only, so the equation still holds of the
+  -- result; retype it rather than rebuilding it.
+  let totalized ← mkAppOptM ``Palamedes.PGen.totalize #[some α, some gen, some G, none]
+  return (expr, ← mkExpectedTypeHint proof (← mkEq expr totalized))
+
 /-- Why the totality stage produced no witness, as far as the evidence actually supports. -/
 inductive TotalityDiagnosis where
   /-- The generator genuinely filters: an `assume` is present and reconstruction stopped at it. -/
@@ -445,16 +566,20 @@ def gapMessage (err? : Option MessageData) (gaps : Array Name := #[]) : MessageD
         `PGen.assume` — so there is nothing in it that can fail, and the usual cause is a datatype \
         with no `@[total]` lemma registered."
   m!"{cause}\n\nThis is a gap in the reconstruction basis, **not** evidence that the generator \
-    filters. Declaring it at `G (Option _)` would compile — `totalize` accepts any generator — but \
+    filters. Declaring it at `G (Option _)` would compile — that shape accepts any generator — but \
     it would bury the gap behind an `Option` the generator does not need, and weaken the emitted \
     law from `IsSoundAndComplete` to `IsSomeSoundAndComplete`. Fix the registration instead."
 
 /-- Package the pipeline's result at the shape the declaration asked for.
 
 This is the whole of "Basalt owns the vocabulary": the pipeline is identical in every case and only
-the final packaging differs. -/
+the final packaging differs.
+
+The second component is the filtering shape's `emitted = PGen.totalize gen` equation, which
+`@[correct]` needs to state its law against the constant. `none` at the total shape, whose emitted
+term is defeq to what its law is about. -/
 def packageFor (target : Target) (res : SynthesisResult) (report : MessageData → TermElabM Unit) :
-    TermElabM Expr := do
+    TermElabM (Expr × Option Expr) := do
   match target with
   | .basalt G α =>
     let some w := res.totalWitness?
@@ -468,20 +593,24 @@ def packageFor (target : Target) (res : SynthesisResult) (report : MessageData �
           throwError "generator_search: could not reconstruct a totality witness, so this \
             generator cannot be emitted at{indentExpr (mkApp G α)}.\n\n{gapMessage err? gaps}"
     let tgen ← mkAppOptM ``Subtype.val #[none, none, w]
-    extractWitness (← mkAppOptM ``Palamedes.TGen.run #[some α, some tgen, some G, none])
+    return (← extractWitness (← mkAppOptM ``Palamedes.TGen.run #[some α, some tgen, some G, none]),
+            none)
   | .basaltOption G α =>
-    if res.totalWitness?.isSome then
+    match res.totalWitness? with
+    | some _ =>
       report m!"this generator never fails, so the `Option` is not needed — `{← ppExpr (mkApp G α)}` will do."
-    -- `totalize` accepts any generator, so this shape cannot tell a genuine filter from a
-    -- reconstruction gap on its own — which is precisely how an `Option` added on a bad diagnosis
-    -- would stay forever. Say so, since the check above is silent in exactly this case.
-    if res.totalWitness?.isNone then
+    | none =>
+      -- Reading a generator at `OptionT` works whether or not it can fail, so this shape cannot
+      -- tell a genuine filter from a reconstruction gap on its own — which is precisely how an
+      -- `Option` added on a bad diagnosis would stay forever. Say so, since the "never fails" check
+      -- above is silent in exactly this case.
       if let .gap err? gaps := diagnoseTotality res then
         report m!"the `Option` in this generator's type may be unnecessary: nothing here \
-          established that the generator can actually fail, and `totalize` accepts it either \
-          way. If the gap below is fixed and the generator turns out to be total, declare it at \
-          `{← ppExpr (mkApp G α)}` instead.\n\n{gapMessage err? gaps}"
-    mkAppOptM ``Palamedes.PGen.totalize #[some α, some res.gen, some G, none]
+          established that the generator can actually fail, and reading it at `OptionT` accepts it \
+          either way. If the gap below is fixed and the generator turns out to be total, declare \
+          it at `{← ppExpr (mkApp G α)}` instead.\n\n{gapMessage err? gaps}"
+    let (e, h) ← extractPartialWitness α res.gen G
+    return (e, some h)
 
 def generatorSearchElab
     (stx : Syntax)
@@ -498,10 +627,10 @@ def generatorSearchElab
 
   if verbose then do
     -- The pipeline, spelled out as the tactics a reader could run by hand. The tail differs per
-    -- declared shape, because `packageFor` emits a different term for each: the `TGen` witness
-    -- projected, or `totalize`. A single template would be type-incorrect for one of the two. What
-    -- this does *not* show is `extractWitness`'s `totality_witness` normalization, which only makes
-    -- the projected term readable — the pasted version is defeq, just denser.
+    -- declared shape, because `packageFor` emits a different term for each, and a single template
+    -- would be type-incorrect for one of the two. What this does *not* show is the normalization
+    -- that follows — `extractWitness` on the total side, the `.run` push on the filtering one. Both
+    -- only make the term readable, so the tails below close the same goals, just densely.
     let common := s!"-- generator_search ({← ppExpr mpred})
   let cg : CorrectGen ({← ppExpr mpred}) := by
     cgenerator_search
@@ -531,7 +660,7 @@ def generatorSearchElab
   let declName? ← Term.getDeclName?
   let θ? ← declTuningBinder?
   let res ← runSynthesisPipeline α mpred verbose θ? (declName?.getD `_gen)
-  let emitted ← packageFor target res (fun msg => logWarning msg)
+  let (emitted, partialEq?) ← packageFor target res (fun msg => logWarning msg)
 
   -- `genFoo.sites`, the table a `SchedulePolicy` is materialized against. Emitted by the *tactic*,
   -- while `genFoo` itself is still being elaborated, because the table is closed data that does not
@@ -547,7 +676,7 @@ def generatorSearchElab
   -- Leave the proofs where `@[correct]` can find them. Unconditional: the tactic cannot know
   -- whether the declaration is tagged (attributes run later), and stashing an untagged declaration
   -- costs one `NameMap` entry in a non-persistent extension.
-  stashSynthesis target mpred res
+  stashSynthesis target mpred res partialEq?
 
   if tryThis then
     withOptions ((pp.proofs.set · true) ∘ (pp.fieldNotation.generalized.set · false)) do

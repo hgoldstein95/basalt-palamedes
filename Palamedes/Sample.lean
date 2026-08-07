@@ -18,9 +18,8 @@ can be `none`; that is the whole of what this module is for.
 
 Sampling interprets failure through the explicit `Option` layer at `Plausible.Gen`: a failed
 `assume` is an ordinary `none` draw — the same failure the `SPMF`/`massSome` semantics reasons
-about — rather than a separate `throw`-based `Fail` instance. Synthesis emits the filtering shape
-through `PGen.totalize`, so by the time a generator reaches this module that layer is already
-`Option` in its own type and these functions add only the retry.
+about — rather than a separate `throw`-based `Fail` instance. That layer is already in the declared
+type by the time a generator reaches this module, so these functions add only the retry.
 
 The sampler **retries on failure**: a `none` draw is redrawn whole (a global restart, via
 Plausible's `Gen.runUntil`) up to `maxAttempts` times, so a filtering generator samples instead of

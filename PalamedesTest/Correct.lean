@@ -19,7 +19,7 @@ The synthesizer's proofs survive into the environment. Every law below is **kern
 from one that merely elaborated.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 @[simp]
 def isAllTwos : List Nat → Bool
@@ -79,7 +79,7 @@ info: genParam.sound_complete : ∀ (_n : ℕ), IsSoundAndComplete (genParam _n)
 #guard_msgs in
 #check @genParam.sound_complete
 
--- The filtering shape takes binders too, and it now carries a law of its own.
+-- The filtering shape takes binders too, and carries a law of its own.
 /-- info: @[correct] genRange: emitted sound_complete -/
 #guard_msgs in
 @[correct] def genRange (lo hi : Nat) [Gen G] : G (Option Nat) := by

@@ -68,44 +68,55 @@ def isResidue (c : Name) : Bool :=
     Palamedes.tgenBasis.contains c ||
     c == ``Palamedes.PGen.total || c.toString.endsWith "total_unfold"
 
+/-- Residue of the **filtering** path, which only a Basalt-shaped term can carry.
+
+A generator declared `G (Option _)` is the optimized `PGen` read at `OptionT G` with the projection
+pushed inward, so a carrier combinator surviving means the push stopped early — most often at a case
+split it could not distribute through, which leaves the branches underneath as bare `PGen.mk`s.
+
+Kept separate from `isResidue` because the same constants are perfectly good in a term that is
+*declared* at the carrier: `derive_palamedes` emits a `PGen`-valued recursion scheme built from
+`PGen.mk`, and `GeneratorAPI`'s rendering fixtures are hand-written `PGen.oneOf`s. Neither went
+through the pipeline. -/
+def isCarrierResidue (c : Name) : Bool :=
+  Palamedes.pgenBasis.contains c ||
+  c == ``Palamedes.PGen.mk || c == ``Palamedes.PGen.run || c == ``Palamedes.PGen.totalize
+
 run_cmd liftTermElabM do
   let env ← getEnv
   let mut total := 0
   for i in [0:env.header.moduleData.size] do
     let modName := env.header.moduleNames[i]!
-    -- `GeneratorAPI` alongside the corpus: it holds the canonical Basalt-shaped generators, which
-    -- is the emission shape and therefore the one most in need of auditing.
+    -- `GeneratorAPI` alongside the corpus: it holds the canonical Basalt-shaped generators.
     --
-    -- `Correct` and `Tuning` are listed for the same reason and **do not currently reach this
-    -- loop**: a module is only walkable if it is in this file's import closure, and those two
-    -- cannot be imported here because they declare root-level names (`isAllTwos`, `genAllTwos`,
-    -- `genBetween`) that collide with `GeneratorAPI`'s. Closing that hole means namespacing each
-    -- test module's helpers, which moves every `#guard_msgs` pin in them. What goes unaudited
-    -- meanwhile is `@[correct]`'s raw `addDecl` path — no def elaborator, so none of the
-    -- `._proof_i` abstraction the exemption above assumes. (The *generator* is an ordinary `def`,
-    -- since synthesis is a tactic throughout; it is the emitted law that takes the raw path.)
+    -- Only modules in *this file's import closure* are walkable at all, which is what leaves
+    -- `@[correct]`'s raw `addDecl` path unaudited: `Correct` and `Tuning` declare root-level names
+    -- (`isAllTwos`, `genAllTwos`, `genBetween`) that collide with `GeneratorAPI`'s, so importing
+    -- them here is what would have to change first.
     unless (`PalamedesTest.Corpus).isPrefixOf modName
-        || modName == `PalamedesTest.GeneratorAPI
-        || modName == `PalamedesTest.Correct
-        || modName == `PalamedesTest.Tuning do continue
+        || modName == `PalamedesTest.GeneratorAPI do continue
     for n in env.header.moduleData[i]!.constNames do
       let some ci := env.find? n | continue
       let some val := ci.value? | continue
-      let isGen ← forallTelescope ci.type fun args body => do
+      -- `none` for a non-generator; otherwise whether the shape is Basalt's, which is what decides
+      -- if the carrier constants count as residue.
+      let basaltShaped? ← forallTelescope ci.type fun args body => do
         -- The synthesis-internal carrier...
-        if body.getAppFn.constName? == some ``Palamedes.PGen then return true
+        if body.getAppFn.constName? == some ``Palamedes.PGen then return some false
         -- ...or bundled: a `CorrectGen`-typed def's *data* component is a generator, and skipping
         -- the bundle entirely is how this audit would go quiet at the next representation change.
         -- Only when no *argument* is `CorrectGen`-typed: a def consuming `CorrectGen`s is a
         -- combinator (`s_unfold` &c.), whose business is exactly the `.val` projections and
         -- `CorrectGen` mentions this audit calls residue in a synthesized generator.
         if body.getAppFn.constName? == some ``Palamedes.CorrectGen then
-          return !(← args.anyM fun a => do
-            return (← inferType a).getUsedConstants.contains ``Palamedes.CorrectGen)
+          if ← args.anyM (fun a => do
+              return (← inferType a).getUsedConstants.contains ``Palamedes.CorrectGen) then
+            return none
+          return some false
         -- ...or Basalt-shaped, `G α` for a `G` bound by this very telescope.
         let hd := body.getAppFn
-        return hd.isFVar && args.any (· == hd)
-      unless isGen do continue
+        if hd.isFVar && args.any (· == hd) then return some true else return none
+      let some isBasalt := basaltShaped? | continue
       total := total + 1
       -- Scan the **data** path only. Proof subterms are compiler-erased and legitimately sit in
       -- argument positions of a generator (`frequency`'s positivity side condition, `choose`'s
@@ -115,7 +126,8 @@ run_cmd liftTermElabM do
       let cleaned ← Meta.transform val (pre := fun e => do
         if !e.isApp && !e.isLambda && !e.isForall && !e.isLet then return .continue
         if ← Meta.isProof e then return .done (mkConst ``True.intro) else return .continue)
-      let bad := cleaned.getUsedConstants.filter isResidue
+      let bad := cleaned.getUsedConstants.filter
+        (fun c => isResidue c || (isBasalt && isCarrierResidue c))
       unless bad.isEmpty do
         logError m!"extraction left synthesis residue in {n}: {bad.toList}"
   if total == 0 then

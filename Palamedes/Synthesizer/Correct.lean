@@ -16,6 +16,11 @@ keeps that proof: it emits `genFoo.sound_complete` as an ordinary theorem about 
 in **Basalt's** law vocabulary — `IsSoundAndComplete` for a generator declared `G α`,
 `IsSomeSoundAndComplete` for one declared `G (Option α)`.
 
+That is the only law, at either shape. There is no `genFoo.total` companion: `PGen.total` is a
+statement about the pipeline's internal carrier, and a Basalt-shaped generator has no `Fail` to be
+free of — its totality is the content of its declared type, which is why `G α` is an *error* for a
+generator that filters rather than a shape carrying extra evidence.
+
 ## Why an attribute rather than a command
 
 A theorem about `genFoo` cannot be added while `genFoo` is still being elaborated, and
@@ -68,11 +73,15 @@ IsSoundAndComplete (f lo hi) P`, with no vestigial `{G} [Gen G]` that the statem
 The remaining binders stay, since the predicate may well depend on them.
 
 A `G` that is not a binder — a generator declared directly at some concrete monad — is already at
-its own semantics, so there is nothing to instantiate and every binder is kept. -/
+its own semantics, so there is nothing to instantiate and every binder is kept.
+
+The third component is the telescope with that substitution applied. Any *other* term the tactic
+stashed against the same telescope has to be re-opened at these arguments rather than at `xs`, or it
+still mentions the `G` the statement no longer does. -/
 private def applyAt (declName : Name) (lvls : List Name) (xs : Array Expr) (G : Expr) :
-    MetaM (Expr × Array Expr) := do
+    MetaM (Expr × Array Expr × Array Expr) := do
   let c := Lean.mkConst declName (lvls.map .param)
-  unless G.isFVar do return (mkAppN c xs, xs)
+  unless G.isFVar do return (mkAppN c xs, xs, xs)
   let spmf := Lean.mkConst ``SPMF [Level.zero]
   let inst ← synthInstance (← mkAppM ``Gen #[spmf])
   let mut args := #[]
@@ -87,11 +96,10 @@ private def applyAt (declName : Name) (lvls : List Name) (xs : Array Expr) (G : 
     else
       args := args.push x
       keep := keep.push x
-  return (mkAppN c args, keep)
+  return (mkAppN c args, keep, args)
 
-/-- Emit the law for `declName` from its stashed synthesis. Returns its name, for the report — what
-was emitted is something to read rather than assume. -/
-def emitCorrectLaws (declName : Name) : TermElabM String := do
+/-- Emit `declName.sound_complete` from its stashed synthesis. -/
+def emitCorrectLaw (declName : Name) : TermElabM Unit := do
   let some stash := (synthesisExt.getState (← getEnv)).find? declName
     | throwError "@[correct]: `{declName}` was not synthesized by `generator_search`, so there is \
         no support proof to emit a law from.\n\n\
@@ -128,7 +136,7 @@ def emitCorrectLaws (declName : Name) : TermElabM String := do
       -- before `extractWitness` performed the projections.
       let hw ← mkAppOptM ``Subtype.property #[none, none, w]
       let proof ← mkAppM ``Palamedes.isSoundAndComplete_of_total #[hw, supportProof]
-      let (atSPMF, keep) ← applyAt declName lvls xs G
+      let (atSPMF, keep, _) ← applyAt declName lvls xs G
       let stmt ← mkAppM ``IsSoundAndComplete #[atSPMF, pred]
       emitLaw (declName ++ `sound_complete) lvls keep stmt proof
     | .basaltOption =>
@@ -201,25 +209,27 @@ def emitCorrectLaws (declName : Name) : TermElabM String := do
             second.\n{e.toMessageData}"
       let hsome ← mkAppM ``Eq.trans #[bridge, supportProof]
       let proof ← mkAppM ``Palamedes.isSomeSoundAndComplete_of_someSupport #[hsome]
-      let (atSPMF, keep) ← applyAt declName lvls xs G
+      let (atSPMF, keep, args) ← applyAt declName lvls xs G
       let stmt ← mkAppM ``Palamedes.IsSomeSoundAndComplete #[atSPMF, pred]
-      emitLaw (declName ++ `sound_complete) lvls keep stmt proof
-
-    -- There is no `f.total` companion, at either shape: `PGen.total` is a statement about the
-    -- pipeline's internal carrier, and a Basalt-shaped generator has no `Fail` to be free of. Its
-    -- totality is already the content of its declared type, which is why `G α` is an error for a
-    -- generator that filters rather than a shape carrying extra evidence.
-    return "sound_complete"
+      -- The proof is about `totalize gen`; the constant is the same generator with the projection
+      -- pushed inward, which is only propositionally equal to it. `partialEq?` is that equation,
+      -- re-opened at `args` so its `G` is the `SPMF` the statement uses rather than the declaration's
+      -- binder.
+      let some hEq := stash.partialEq?.map (·.beta args)
+        | throwError "@[correct]: internal — filtering shape without a `totalize` equation"
+      let cast ← mkCongrArg (← withLocalDeclD `g (← inferType atSPMF) fun g => do
+        mkLambdaFVars #[g] (← mkAppM ``Palamedes.IsSomeSoundAndComplete #[g, pred])) hEq
+      emitLaw (declName ++ `sound_complete) lvls keep stmt (← mkAppM ``Eq.mpr #[cast, proof])
 
 initialize registerBuiltinAttribute {
   name := `correct
-  descr := "keep the support proof `generator_search` computed, as named theorems about this \
+  descr := "keep the support proof `generator_search` computed, as a named theorem about this \
     declaration"
-  -- The laws are *about* the constant, so they cannot be added until it exists.
+  -- The law is *about* the constant, so it cannot be added until it exists.
   applicationTime := .afterCompilation
   add := fun declName _ _ => do
-    let emitted ← MetaM.run' <| TermElabM.run' <| emitCorrectLaws declName
-    logInfo m!"@[correct] {declName}: emitted {emitted}"
+    MetaM.run' <| TermElabM.run' <| emitCorrectLaw declName
+    logInfo m!"@[correct] {declName}: emitted sound_complete"
 }
 
 end Palamedes

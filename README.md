@@ -36,7 +36,7 @@ There is no separate test framework. Every file under `PalamedesTest/Corpus/` sy
 generator at elaboration time and fails to compile if synthesis fails, so a plain `lake build` (what
 CI runs) also runs the tests. A generator declared `G α` whose totality cannot be reconstructed is
 an **error** — `G α` is `Fail`-free by construction, so there is no term to emit. Declared
-`G (Option α)` it is a **warning**, because `totalize` accepts the generator either way; grep the
+`G (Option α)` it is a **warning**, because that shape accepts the generator either way; grep the
 build output for warnings, or use `--wfail`.
 
 Beyond the corpus, each file in `PalamedesTest/` guards one library module and is named after it —
@@ -126,9 +126,16 @@ so you can see (and paste) what the search actually produced.
 
 `G α` and `G (Option α)` are the only two declarable shapes, and both are Basalt's. Palamedes has an
 internal carrier — `Palamedes.PGen`, the semantic object its proofs are about — but it is not
-something you can declare: the pipeline extracts it, optimizes it, and packages a Basalt generator
-before the goal closes. A *filtering* generator's emitted term still names it, as
-`PGen.totalize (PGen.assume …)`, which is honest about where the `Option` comes from.
+something you can declare, and it does not appear in what you get: the pipeline extracts it,
+optimizes it, and packages a Basalt generator before the goal closes. A total one is projected from
+its totality witness; a filtering one is read at `OptionT G`, so a rejected draw is an ordinary
+`pure none`:
+
+```lean4
+def genBetween (lo hi : Nat) [Gen G] : G (Option Nat) := by
+  generator_search? (fun n => lo ≤ n ∧ n ≤ hi)
+-- Try this: exact if h : decide (lo ≤ hi) = true then (TGen.choose lo hi).run else pure none
+```
 
 To draw values:
 

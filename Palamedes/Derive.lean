@@ -499,9 +499,12 @@ def genUnfoldFamily (ctx : Ctx) : CommandElabM Unit := do
         ($f : Nat → $β → Palamedes.TGen $baseβ) ($b : $β) $d₀Binder:bracketedBinder :
         Palamedes.TGen $self :=
       ⟨fun {_G} _ => $goRef (fun $d $x => ($f $d $x).run) $d₀ $b⟩))
-  -- run_unfold
+  -- run_unfold. `@[partial_witness]` as well as `@[simp]`: stated at an arbitrary `G` with `Fail G`,
+  -- it fires at `OptionT G` too, which is why a *filtering* recursive generator needs no second
+  -- recursion scheme — `unfoldGo` is already polymorphic, so reading it there short-circuits on
+  -- `none` by itself.
   addCmd (← `(command|
-    @[simp] theorem $(ctx.declId "run_unfold"):ident $uBinders:bracketedBinder*
+    @[simp, partial_witness] theorem $(ctx.declId "run_unfold"):ident $uBinders:bracketedBinder*
         ($f : Nat → $β → Palamedes.PGen $baseβ) ($b : $β) ($d₀ : Nat)
         ($G : Type → Type) [Gen $G] [Palamedes.Fail $G] :
         ($unfoldRef $f $b $d₀).run (G := $G) = $goRef (fun $d $x => ($f $d $x).run) $d₀ $b := rfl))

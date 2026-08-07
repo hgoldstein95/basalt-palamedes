@@ -25,8 +25,6 @@ and are deliberately *not* asserted; the out-of-attempts path is pinned with `pu
 fails deterministically.
 -/
 
-open Palamedes
-
 /- `genAVL 3` never fails (measured 100% acceptance): a draw must succeed. -/
 #eval show IO Unit from do
   let t ← Palamedes.samplePartial (AVL.genAVL 3 0 10)
@@ -66,7 +64,7 @@ The out-of-attempts path, deterministically: a generator whose every draw is `no
   | .error _ => pure ()
   | .ok n => throw <| IO.userError s!"samplePartial (pure none) produced {n}"
 
-/- `samplePartialN` draws exactly `n`, retrying each independently. `genRangeB`-style filtering is
+/- `samplePartialN` draws exactly `n`, retrying each independently. `genRange`-style filtering is
 covered in `Tuning`; here the point is the count and that every element cleared the filter. -/
 #eval show IO Unit from do
   let ts ← Palamedes.samplePartialN 3 (RBT.genRBT 2 0 10)

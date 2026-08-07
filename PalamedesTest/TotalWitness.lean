@@ -19,17 +19,18 @@ three consequences that the Basalt-shaped emission stage builds on:
 3. `w.property` **transfers the support fact** from the Palamedes generator to the emitted one,
    without any parametricity assumption — both sides are the *same* instantiation, at `SPMF`.
 
-(3) is the reason the total path can carry a `sound_complete` law while the filtering path cannot:
-`totalize` runs the generator at `OptionT SPMF`, a *different* instantiation.
+(3) is why the total path's law is Basalt's `IsSoundAndComplete` where the filtering path's is
+`IsSomeSoundAndComplete`: a filtering generator is read at `OptionT SPMF`, a *different*
+instantiation, so the transfer does not go through and the law is stated at that interpretation's
+own support notion instead.
 
-The three steps are spelled out here **at the internal layer**, one tactic at a time, which is not
-how a generator is declared: `generator_search` takes a Basalt goal and runs the whole pipeline, so
-the `PGen` below never surfaces and the witness is projected before the goal closes. Isolating the
-steps is the point — the corpus exercises them composed, and only composed, so a defect in any one
-of them shows up there as a wrong emitted term rather than as a failing step.
+The three steps are spelled out here **at the internal layer**, one tactic at a time. That is not
+how a generator is declared — `generator_search` takes a Basalt goal and runs the whole pipeline, so
+the `PGen` below never surfaces — and isolating them is the point: the corpus exercises the steps
+only composed, where a defect in any one shows up as a wrong emitted term rather than a failing step.
 -/
 
-open Palamedes Palamedes.PGen Palamedes.PGen.CorrectGen
+open Palamedes
 
 @[simp]
 def isAllTwos : List Nat → Bool

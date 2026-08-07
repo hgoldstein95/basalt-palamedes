@@ -216,6 +216,44 @@ def assume (b : Bool) (f : b → PGen α) : PGen α :=
 
 noncomputable instance : Fail SPMF := ⟨Lean.Order.bot⟩
 
+/-! ## Distributing `.run` over a case split
+
+A generator built by `assume` or by a `dite`-guarded synthesis rule has its case split *outside* the
+`PGen.mk`, so `.run` sits on top of the `dite` rather than inside each arm and the wrapper never
+cancels. These push it inward, for `extractPartialWitness` (`Synthesizer/FrontEnd.lean`), the only
+consumer. `TGen` needs no counterpart: `Total.lean`'s discipline puts every case split *inside*
+`TGen.mk`, which a `total_*` lemma can do because it chooses how to spell its witness, whereas a
+`PGen` is whatever synthesis built.
+
+Deliberately **not** `@[simp]`. Pushing `.run` inward is the normal form one stage wants, not one
+the library wants everywhere — every `support` proof in `Data/` reasons about a generator with the
+projection where synthesis left it. -/
+
+theorem run_dite {c : Prop} [Decidable c] {a : c → PGen α} {b : ¬c → PGen α}
+    {G : Type → Type} [Gen G] [Fail G] :
+    (dite c a b).run (G := G) = dite c (fun h => (a h).run) (fun h => (b h).run) := by
+  split <;> rfl
+
+theorem run_ite {c : Prop} [Decidable c] {a b : PGen α}
+    {G : Type → Type} [Gen G] [Fail G] :
+    (ite c a b).run (G := G) = ite c a.run b.run := by
+  split <;> rfl
+
+end PGen
+
+/-- The carrier's combinator basis, plus the coercion that ends it. `tgenBasis` (`Total.lean`) is
+its counterpart on the totality path, and has the same contract: `extractPartialWitness` unfolds
+exactly these, and `PalamedesTest/Extract.lean` reads a survivor as evidence that it stopped early.
+
+`TGen.toGen` is here because a datatype's assume-free primitive is defined at `TGen` and coerced, so
+unfolding the coercion turns `PGen.choose lo hi` into `(TGen.choose lo hi ⋯).run` — a generator, and
+the point at which unfolding should stop. The primitive itself is never in a basis. -/
+def pgenBasis : Array Lean.Name :=
+  #[``PGen.pure, ``PGen.bind, ``PGen.pick, ``PGen.frequency, ``PGen.oneOf, ``PGen.assume,
+    ``PGen.empty, ``TGen.toGen]
+
+namespace PGen
+
 /-! ## Support
 
 `support g` is the set of values `g` can produce. -/

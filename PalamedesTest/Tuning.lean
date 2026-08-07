@@ -50,43 +50,43 @@ packaged, so the `TGen` witness is built once, over the θ-open term. `total_fre
 inspects weights, which is why stage 4 closes exactly as it does for a uniform generator. -/
 
 /--
-info: @[correct] genLawfulB: emitted sound_complete
+info: @[correct] genLawful: emitted sound_complete
 -/
 #guard_msgs in
-@[correct] def genLawfulB (θ : Tuning := .uniform) [Gen G] : G (List Nat) := by
+@[correct] def genLawful (θ : Tuning := .uniform) [Gen G] : G (List Nat) := by
   generator_search (fun xs => isAllTwos xs)
 
 /--
-info: @genLawfulB.sound_complete : ∀ (θ : optParam Tuning Tuning.uniform),
-  IsSoundAndComplete (genLawfulB θ) fun xs => isAllTwos xs = true
+info: @genLawful.sound_complete : ∀ (θ : optParam Tuning Tuning.uniform),
+  IsSoundAndComplete (genLawful θ) fun xs => isAllTwos xs = true
 -/
 #guard_msgs in
-#check @genLawfulB.sound_complete
+#check @genLawful.sound_complete
 /--
-info: 'genLawfulB.sound_complete' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'genLawful.sound_complete' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
-#print axioms genLawfulB.sound_complete
+#print axioms genLawful.sound_complete
 
 -- The site table `installTuning` emitted, and a policy materialized against it.
 /--
-info: #[{ name := `genLawfulB.site0, offset := 0, arity := 2, holes := #[0, 1] }]
+info: #[{ name := `genLawful.site0, offset := 0, arity := 2, holes := #[0, 1] }]
 -/
 #guard_msgs in
-#eval genLawfulB.sites
+#eval genLawful.sites
 /--
 info: { schedules := #[(1, 12), (3, 0)] }
 -/
 #guard_msgs in
-#eval SchedulePolicy.moderate.materialize genLawfulB.sites
+#eval SchedulePolicy.moderate.materialize genLawful.sites
 
 -- The law is usable at any weighting, from the one theorem.
 example (P : List Nat → Prop) (hP : (fun xs => isAllTwos xs = true) = P) (θ : Tuning) :
-    IsSoundAndComplete (genLawfulB θ (G := SPMF)) P := by
-  rw [← hP]; exact genLawfulB.sound_complete θ
+    IsSoundAndComplete (genLawful θ (G := SPMF)) P := by
+  rw [← hP]; exact genLawful.sound_complete θ
 
 /--
-info: genLawfulB — 30 draws (seed 0, fuel 10000)
+info: genLawful — 30 draws (seed 0, fuel 10000)
 
   outcomes    ok 30 (100.0%)
   size        mean 1.8   p50 1   p95 4   max 5
@@ -115,9 +115,9 @@ info: genLawfulB — 30 draws (seed 0, fuel 10000)
         productive      — (not proved)
 -/
 #guard_msgs in
-#genstats (draws := 30) genLawfulB
+#genstats (draws := 30) genLawful
 /--
-info: (genLawfulB (SchedulePolicy.moderate.materialize genLawfulB.sites)) — 30 draws (seed 0, fuel 10000)
+info: (genLawful (SchedulePolicy.moderate.materialize genLawful.sites)) — 30 draws (seed 0, fuel 10000)
 
   outcomes    ok 30 (100.0%)
   size        mean 1.9   p50 2   p95 3   max 3
@@ -145,7 +145,7 @@ info: (genLawfulB (SchedulePolicy.moderate.materialize genLawfulB.sites)) — 30
         productive      — (not proved)
 -/
 #guard_msgs in
-#genstats (draws := 30) (genLawfulB (SchedulePolicy.moderate.materialize genLawfulB.sites))
+#genstats (draws := 30) (genLawful (SchedulePolicy.moderate.materialize genLawful.sites))
 
 /-! ## A tuned generator still prints as a generator
 
@@ -173,7 +173,7 @@ info: Try this:
       0 (PUnit.unit, PUnit.unit)
 -/
 #guard_msgs in
-def genPinnedB (θ : Tuning := .uniform) [Gen G] : G (List Nat) := by
+def genPinned (θ : Tuning := .uniform) [Gen G] : G (List Nat) := by
   generator_search? (fun xs => isAllTwos xs)
 
 /-! ## The filtering shape
@@ -189,30 +189,30 @@ twins there means case-splitting the step generator's nested conditionals, not m
 for each combinator. See `Synthesizer/Correct.lean`. -/
 
 /--
-info: @[correct] genRangeB: emitted sound_complete
+info: @[correct] genRange: emitted sound_complete
 -/
 #guard_msgs in
-@[correct] def genRangeB (lo hi : Nat) [Gen G] : G (Option Nat) := by
+@[correct] def genRange (lo hi : Nat) [Gen G] : G (Option Nat) := by
   generator_search (fun n => lo ≤ n ∧ n ≤ hi)
 
 run_cmd do
-  if (← Lean.getEnv).contains `genRangeB.sites then
-    throwError "genRangeB has no choice sites, so no site table should be emitted"
+  if (← Lean.getEnv).contains `genRange.sites then
+    throwError "genRange has no choice sites, so no site table should be emitted"
 
 /--
-info: genRangeB.sound_complete : ∀ (lo hi : ℕ), IsSomeSoundAndComplete (genRangeB lo hi) fun n => lo ≤ n ∧ n ≤ hi
+info: genRange.sound_complete : ∀ (lo hi : ℕ), IsSomeSoundAndComplete (genRange lo hi) fun n => lo ≤ n ∧ n ≤ hi
 -/
 #guard_msgs in
-#check @genRangeB.sound_complete
+#check @genRange.sound_complete
 /--
-info: 'genRangeB.sound_complete' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'genRange.sound_complete' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
-#print axioms genRangeB.sound_complete
+#print axioms genRange.sound_complete
 
 #eval show IO Unit from do
-  let n ← Palamedes.samplePartial (genRangeB 3 7)
-  unless 3 ≤ n && n ≤ 7 do throw <| IO.userError s!"genRangeB produced {n}, outside [3,7]"
+  let n ← Palamedes.samplePartial (genRange 3 7)
+  unless 3 ≤ n && n ≤ 7 do throw <| IO.userError s!"genRange produced {n}, outside [3,7]"
 
 /-! ## Binder order
 
@@ -220,15 +220,15 @@ info: 'genRangeB.sound_complete' depends on axioms: [propext, Classical.choice, 
 `declBinders` and `forallTelescope` both order the same way. -/
 
 /--
-info: @[correct] genFlipB: emitted sound_complete
+info: @[correct] genFlip: emitted sound_complete
 -/
 #guard_msgs in
-@[correct] def genFlipB [Gen G] (_n : Nat) (θ : Tuning := .uniform) : G (List Nat) := by
+@[correct] def genFlip [Gen G] (_n : Nat) (θ : Tuning := .uniform) : G (List Nat) := by
   generator_search (fun xs => isAllTwos xs)
 
 /--
-info: @genFlipB.sound_complete : ∀ (_n : ℕ) (θ : optParam Tuning Tuning.uniform),
-  IsSoundAndComplete (genFlipB _n θ) fun xs => isAllTwos xs = true
+info: @genFlip.sound_complete : ∀ (_n : ℕ) (θ : optParam Tuning Tuning.uniform),
+  IsSoundAndComplete (genFlip _n θ) fun xs => isAllTwos xs = true
 -/
 #guard_msgs in
-#check @genFlipB.sound_complete
+#check @genFlip.sound_complete
