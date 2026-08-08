@@ -306,7 +306,7 @@ private partial def transformChildren (pass : HeadRewrite) (table : Array CongrR
   -- Under a registered `X.unfold`, the argument descended into is its step, whose binder 0 is the
   -- recursion's depth.
   let entering := (unfoldNameMap (← getEnv))[head]?
-  let some (_, congrName, diff) := table.find? (·.1 == head)
+  let some rule := table.find? (·.head == head)
     | do
       -- Matchers/recursors carry PGen-valued arms but aren't descended structurally; don't flag.
       let isRec := match (← getEnv).find? head with
@@ -325,7 +325,7 @@ private partial def transformChildren (pass : HeadRewrite) (table : Array CongrR
   let mut newArgs := args
   let mut hyps := #[]
   let mut changed := false
-  for i in diff do
+  for i in rule.diff do
     let (arg', h?) ← transformBinder pass table depth entering args[i]!
     newArgs := newArgs.set! i arg'
     match h? with
@@ -333,7 +333,7 @@ private partial def transformChildren (pass : HeadRewrite) (table : Array CongrR
     | none   => hyps := hyps.push (← mkBinderRefl args[i]!)
   unless changed do return { expr := e, proof? := none }
   let node' := mkAppN e.getAppFn newArgs
-  return { expr := node', proof? := some (← mkCongrProof congrName e node' hyps) }
+  return { expr := node', proof? := some (← mkCongrProof rule.lemmaName e node' hyps) }
 
 /-- Transform a child argument under its leading binders, returning the rebuilt argument and (when
 changed) `∀ xs, support (arg xs) = support (arg' xs)`. -/

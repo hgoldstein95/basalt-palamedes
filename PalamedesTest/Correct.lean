@@ -8,6 +8,7 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 import Palamedes.Synthesizer
 import Palamedes.Data.List
 import Palamedes.Data.Nat
+import PalamedesTest.Harness
 
 /-!
 # `@[correct]` regression
@@ -56,9 +57,9 @@ example (P : List Nat → Prop) (hP : (fun xs => isAllTwos xs = true) = P) :
 -- There is no `genAllTwos.total`: the declared type is `G (List ℕ)`, which is `Fail`-free by
 -- construction, so totality is what the *type* says and not a companion to state it again. A
 -- generator that could fail would not have elaborated at this shape at all.
-run_cmd do
-  if (← Lean.getEnv).contains `genAllTwos.total then
-    throwError "totality is the content of a `G α` declaration; no `total` companion belongs beside it"
+run_cmd
+  PalamedesTest.assertNotDeclared `genAllTwos.total
+    "totality is the content of a `G α` declaration, not a companion beside it"
 
 /-! ## Binders
 

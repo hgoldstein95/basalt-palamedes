@@ -5,9 +5,7 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
   Leonidas Lampropoulos, Benjamin C. Pierce
 -/
 
-import Palamedes.Total
 import Palamedes.CorrectGen
-import Palamedes.Optimizer
 import Palamedes.RuleSets
 
 /-!

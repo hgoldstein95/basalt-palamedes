@@ -21,9 +21,14 @@ is not of the expected form is rejected at that point rather than being silently
 
 open Lean Meta
 
-/-- A congruence rule the optimizer can descend through: the head constant of the term it applies
-to, the `@[gen_congr]` lemma's name, and the argument positions to recurse into (ascending). -/
-abbrev CongrRule := Name × Name × Array Nat
+/-- A congruence rule the optimizer can descend through. -/
+structure CongrRule where
+  /-- The head constant of the terms the rule applies to. -/
+  head : Name
+  /-- The `@[gen_congr]` lemma that justifies the descent. -/
+  lemmaName : Name
+  /-- The argument positions to recurse into, ascending. -/
+  diff : Array Nat
 
 /-- Read a `@[gen_congr]` lemma's statement `support (H …) = support (H …)` to recover its head
 constant `H` and the argument positions that differ between the two sides — i.e. the children to
@@ -45,7 +50,7 @@ def analyzeCongr (lemmaName : Name) : MetaM (Option CongrRule) := do
       unless argsL[i]! == argsR[i]! do diff := diff.push i
     -- A congruence lemma with no differing arguments tells the optimizer nothing.
     if diff.isEmpty then return none
-    return some (head, lemmaName, diff)
+    return some { head, lemmaName, diff }
 
 /-- Parsed `CongrRule`s for all `@[gen_congr]`-tagged lemmas, accumulated across imported modules. -/
 initialize genCongrExt : SimplePersistentEnvExtension CongrRule (Array CongrRule) ←
@@ -78,9 +83,9 @@ initialize registerBuiltinAttribute {
           `support (H …) = support (H …)` with at least one differing argument"
     -- One rule per head, checked at tag time: the descent selects by head and keeps the first
     -- match, so a second registration would be silently unreachable.
-    for (prevHead, prevDecl, _) in getGenCongrRules (← getEnv) do
-      if prevHead == rule.1 then
-        throwError "`@[gen_congr]`: `{decl}` and `{prevDecl}` both descend through `{prevHead}`, \
-          so the optimizer would have to choose between them. Keep one."
+    for prev in getGenCongrRules (← getEnv) do
+      if prev.head == rule.head then
+        throwError "`@[gen_congr]`: `{decl}` and `{prev.lemmaName}` both descend through \
+          `{prev.head}`, so the optimizer would have to choose between them. Keep one."
     modifyEnv (genCongrExt.addEntry · rule)
 }

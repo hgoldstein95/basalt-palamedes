@@ -5,6 +5,7 @@ Authors: Harrison Goldstein
 -/
 
 import Palamedes
+import PalamedesTest.Harness
 
 /-!
 # `someSupport` twin inventory
@@ -36,24 +37,24 @@ open Lean Meta Elab Command
 
 namespace PalamedesTest.SomeSupportInventory
 
-run_cmd liftTermElabM do
-  let env ← getEnv
-  let mut total := 0
-  for i in [0:env.header.moduleData.size] do
-    let modName := env.header.moduleNames[i]!
-    unless (`Palamedes.Data).isPrefixOf modName do continue
-    for n in env.header.moduleData[i]!.constNames do
-      let .str ns s := n | continue
-      unless s.startsWith "support_" do continue
-      let x := (s.drop "support_".length).toString
-      if s.endsWith "_congr" || (x.toLower.splitOn "case").length > 1 then continue
-      total := total + 1
-      let twin := Name.str ns ("someSupport_" ++ x)
-      let some twinInfo := env.find? twin
+/-- The case-split combinators, which state a *relative* fact about their arms rather than
+characterizing a support. Naming them one by one is what makes each addition a decision. -/
+def exemptCaseSplits : Array Name := #[``Palamedes.PGen.support_Ty_caseTy]
+
+run_cmd
+  liftTermElabM <| auditConstants
+      (`Palamedes.Data).isPrefixOf
+      "someSupport inventory found no `support_` lemmas; are the `Data` modules imported?"
+      fun n => do
+      let .str ns s := n | return false
+      unless s.startsWith "support_" do return false
+      if s.endsWith "_congr" || exemptCaseSplits.contains n then return false
+      let twin := Name.str ns ("someSupport_" ++ (s.drop "support_".length).toString)
+      let some twinInfo := (← getEnv).find? twin
         | logError m!"{n} has no `someSupport` twin ({twin}): the first filtering `@[correct]` \
             whose generator uses this primitive will fail at the law bridge. Add the twin beside \
             the `support_` lemma (see `Data/Nat.lean` for the pattern)."
-          continue
+          return true
       -- The twin must state a rewrite whose left side is *about* `someSupport` — that is what the
       -- bridge's simp set fires on. A lemma that merely carries the name rewrites nothing. Both
       -- shapes in use qualify: `someSupport g = P`, and the pointwise `someSupport g v ↔ …` that a
@@ -64,7 +65,6 @@ run_cmd liftTermElabM do
       unless ok do
         logError m!"{twin} does not rewrite `someSupport`, so it cannot discharge the law bridge \
           for {n} even though it is named as its twin."
-  if total == 0 then
-    logError "someSupport inventory found no `support_` lemmas; are the `Data` modules imported?"
+      return true
 
 end PalamedesTest.SomeSupportInventory

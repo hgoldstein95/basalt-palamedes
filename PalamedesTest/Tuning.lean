@@ -8,6 +8,7 @@ import Palamedes.Synthesizer
 import Palamedes.Data.List
 import Palamedes.Data.Nat
 import Palamedes.Sample
+import PalamedesTest.Harness
 
 /-!
 # Tuning regression: a `Tuning` binder is threaded through synthesis
@@ -39,9 +40,9 @@ def isAllTwos : List Nat → Bool
 
 def genUntuned [Gen G] : G (List Nat) := by generator_search (fun xs => isAllTwos xs)
 
-run_cmd do
-  if (← Lean.getEnv).contains `genUntuned.sites then
-    throwError "genUntuned declared no `Tuning` binder, so no site table should be emitted"
+run_cmd
+  PalamedesTest.assertNotDeclared `genUntuned.sites
+    "genUntuned declared no `Tuning` binder, so it ships uniform"
 
 /-! ## The total shape, tuned in place
 
@@ -195,9 +196,9 @@ info: @[correct] genRange: emitted sound_complete
 @[correct] def genRange (lo hi : Nat) [Gen G] : G (Option Nat) := by
   generator_search (fun n => lo ≤ n ∧ n ≤ hi)
 
-run_cmd do
-  if (← Lean.getEnv).contains `genRange.sites then
-    throwError "genRange has no choice sites, so no site table should be emitted"
+run_cmd
+  PalamedesTest.assertNotDeclared `genRange.sites
+    "genRange has no choice sites to tune"
 
 /--
 info: genRange.sound_complete : ∀ (lo hi : ℕ), IsSomeSoundAndComplete (genRange lo hi) fun n => lo ≤ n ∧ n ≤ hi

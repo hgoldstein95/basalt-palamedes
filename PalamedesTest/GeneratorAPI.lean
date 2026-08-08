@@ -148,6 +148,17 @@ must have type `Type → Type`, but has
 #guard_msgs in
 example : Palamedes.PGen Nat := by generator_search (fun n => n = 2)
 
+-- An `Option` goal whose predicate fits neither reading: not the element type, and not the option
+-- type either.
+/--
+error: generator_search: the predicate fits neither
+  ℕ → Prop
+(a filtering generator) nor
+  Option ℕ → Prop (a total generator of options)
+-/
+#guard_msgs in
+example [Gen G] : G (Option Nat) := by generator_search (fun xs => isAllTwos xs)
+
 -- A goal that is not an application at all, so there is no type constructor to look at.
 /--
 error: generator_search: the goal must be `G α` or `G (Option α)` for a Basalt `[Gen G]`, got
@@ -287,3 +298,43 @@ run_cmd Lean.Elab.Command.liftTermElabM do
   match diagnoseNoWitness (Lean.mkConst ``Nat.zero) none #[`Palamedes.PGen.mod2] with
   | .stuck why => Lean.logInfo why
   | _ => throwError "expected reconstruction to be stuck on an unregistered head"
+
+/-! ### Row 5 — stuck, at both shapes
+
+No corpus generator leaves reconstruction stuck, so the two renderings are driven directly: a
+`Totality.stuck` result carried into `packageFor` at each `Target`. `G` is a local binder, which is
+how a declaration spells it. -/
+
+opaque PalamedesTest.stuckGen : Palamedes.PGen Nat
+
+open Lean Meta in
+private def withStuckResult (mk : Expr → Expr → Target) : Lean.Elab.TermElabM Unit := do
+  withLocalDeclD `G (← mkArrow (mkSort 1) (mkSort 1)) fun G => do
+    withLocalDecl `inst .instImplicit (← mkAppM ``Gen #[G]) fun _ => do
+      let res : SynthesisResult := {
+        gen := mkConst ``PalamedesTest.stuckGen
+        supportProof := mkConst ``trivial
+        totality := diagnoseNoWitness (mkConst ``Nat.zero) none #[`Palamedes.PGen.mod2] }
+      discard <| packageFor (mk G (mkConst ``Nat)) res
+
+/--
+error: generator_search: could not reconstruct a totality witness, so this generator cannot be emitted at
+  G ℕ.
+
+Totality reconstruction has no `@[total]` rule for `Palamedes.PGen.mod2`, so it could not descend past that node.
+
+Being stuck here is a fact about the reconstruction basis, **not** evidence that the generator filters. Declaring it at `G (Option _)` would compile — that shape accepts any generator — but it would bury the missing registration behind an `Option` the generator does not need, and weaken the emitted law from `IsSoundAndComplete` to `IsSomeSoundAndComplete`. Fix the registration instead.
+-/
+#guard_msgs in
+run_cmd Lean.Elab.Command.liftTermElabM (withStuckResult .basalt)
+
+/--
+warning: the `Option` in this generator's type may be unnecessary: nothing here established that the generator can actually fail, and reading it at `OptionT` accepts it either way. If what is described below is fixed and the generator turns out to be total, declare it at `G
+  ℕ` instead.
+
+Totality reconstruction has no `@[total]` rule for `Palamedes.PGen.mod2`, so it could not descend past that node.
+
+Being stuck here is a fact about the reconstruction basis, **not** evidence that the generator filters. Declaring it at `G (Option _)` would compile — that shape accepts any generator — but it would bury the missing registration behind an `Option` the generator does not need, and weaken the emitted law from `IsSoundAndComplete` to `IsSomeSoundAndComplete`. Fix the registration instead.
+-/
+#guard_msgs in
+run_cmd Lean.Elab.Command.liftTermElabM (withStuckResult .basaltOption)

@@ -44,24 +44,38 @@ register_option palamedes.debug : Bool := {
   descr := "enable debug messages from palamedes"
 }
 
+/-- Rewrite `e` with the simp set `ext`, additionally delta-unfolding `unfold` and using `extra` as
+rewrite rules. Returns the result and the proof `e = result`.
+
+The three extraction stages share this: each is one registry-backed simp set plus a list of
+constants to unfold, and each needs the `rfl` proof when simp changed nothing. -/
+private def runExtractionSimp (ext : Name) (e : Expr) (config : Simp.Config)
+    (unfold : Array Name := #[]) (extra : Array Name := #[])
+    (simprocs : Simp.SimprocsArray := #[]) : MetaM (Expr × Expr) := do
+  let some simpExt ← getSimpExtension? ext
+    | throwError "simp extension `{ext}` not found"
+  let mut thms ← simpExt.getTheorems
+  for n in unfold do
+    thms ← thms.addDeclToUnfold n
+  for n in extra do
+    thms ← thms.addConst n
+  let ctx ← Simp.mkContext config
+    (simpTheorems := #[thms])
+    (congrTheorems := ← getSimpCongrTheorems)
+  let (result, _) ← simp e ctx simprocs
+  let proof ← match result.proof? with
+    | some p => pure p
+    | none => mkEqRefl e
+  return (result.expr, proof)
+
 /-- Pull the raw `PGen` out of a synthesized `CorrectGen` term by rewriting with the `extract` simp
 set, which holds one `.val` equation per synthesis combinator. Unlike delta-reduction via
 `withReducible (reduce ·)`, this unfolds exactly the combinator wrappers and nothing else, so the
 combinators don't need to be `@[reducible]`.
 
 Returns the extracted generator and the proof `e = extracted`. -/
-def extractGen (e : Expr) : MetaM (Expr × Expr) := do
-  let some ext ← getSimpExtension? `extract
-    | throwError "simp extension `extract` not found"
-  let ctx ← Simp.mkContext
-    (config := { zetaDelta := true })
-    (simpTheorems := #[← ext.getTheorems])
-    (congrTheorems := ← getSimpCongrTheorems)
-  let (result, _) ← simp e ctx
-  let proof ← match result.proof? with
-    | some p => pure p
-    | none => mkEqRefl e
-  return (result.expr, proof)
+def extractGen (e : Expr) : MetaM (Expr × Expr) :=
+  runExtractionSimp `extract e { zetaDelta := true }
 
 /-- Extract and optimize `t`, closing the goal with the result. A debugging entry point into stages
 2 and 3; the synthesis pipeline calls their `MetaM` implementations directly. -/
@@ -74,16 +88,8 @@ elab "optimize_gen " t:term : tactic =>
     let gen''' ← withReducible (reduce gen'')
     closeMainGoal `optimize_gen gen'''
 
-/-- Run `tactic` against a fresh goal of type `goalType` and return the resulting term. -/
-def solveGoalWithTactic (goalType : Expr) (tactic : TSyntax `tactic) : TermElabM Expr := do
-  let m ← mkFreshExprMVar goalType
-  let unsolved ← Tactic.run m.mvarId! (Tactic.evalTactic tactic)
-  if unsolved.length > 0 then do
-    throwError "goals left unsolved: {unsolved}"
-  instantiateMVars m
-
-/-- `solveGoalWithTactic`, but *running to completion and leaving goals* is reported as the leftover
-goals rather than as an exception.
+/-- Run `tactic` against a fresh goal of type `goalType`, reporting *running to completion and
+leaving goals* as the leftover goals rather than as an exception.
 
 The distinction matters wherever an unclosed goal is itself a meaningful answer. Catching the
 exception instead would lump it together with the tactic *throwing* — a heartbeat blowout, a
@@ -96,6 +102,14 @@ def solveGoalWithTactic? (goalType : Expr) (tactic : TSyntax `tactic) :
   let unsolved ← Tactic.run m.mvarId! (Tactic.evalTactic tactic)
   if unsolved.length > 0 then return .error unsolved
   return .ok (← instantiateMVars m)
+
+/-- `solveGoalWithTactic?` for callers that treat a leftover goal as a failure; `caller` labels the
+resulting error, which both call sites wrap in a message of their own. -/
+def solveGoalWithTactic (caller : String) (goalType : Expr) (tactic : TSyntax `tactic) :
+    TermElabM Expr := do
+  match ← solveGoalWithTactic? goalType tactic with
+  | .ok e => return e
+  | .error unsolved => throwError "{caller}: goals left unsolved: {unsolved}"
 
 /-- The head constants a totality goal is stuck on: those with no `@[total]` rule. -/
 def missingTotalRules (goals : List MVarId) : MetaM (Array Name) := do
@@ -154,6 +168,10 @@ def SynthesisResult.totalWitness? (res : SynthesisResult) : Option Expr :=
   | .witness w => some w
   | _ => none
 
+/-- Run a pipeline stage, naming it in whatever the stage throws. -/
+private def wrapStage {α : Type} (stage : String) (k : TermElabM α) : TermElabM α := do
+  try k catch e => throwError m!"Failed during {stage}.\n{e.toMessageData}"
+
 /-- Run the synthesis pipeline against a predicate `pred : α → Prop`.
 
 Totality is always reconstructed: both declarable shapes are Basalt's, and which one a declaration
@@ -162,13 +180,10 @@ def runSynthesisPipeline (α pred : Expr) (verbose : Bool)
     (tuningBinder : Option Expr := none) (declName : Name := `_gen) :
     TermElabM SynthesisResult := do
   -- 1. Search for an inhabitant of `CorrectGen pred`.
-  let cgen ←
-    try
-      solveGoalWithTactic
-        (mkAppN (.const ``Palamedes.CorrectGen []) #[α, pred])
-        (← `(tactic| cgenerator_search))
-    catch e =>
-      throwError m!"Failed during generator synthesis.\n{e.toMessageData}"
+  let searchTac ← `(tactic| cgenerator_search)
+  let cgen ← wrapStage "generator synthesis" <|
+    solveGoalWithTactic "cgenerator_search"
+      (mkAppN (.const ``Palamedes.CorrectGen []) #[α, pred]) searchTac
 
   -- 2. Extract the raw `PGen`, keeping the rewrite that justifies it.
   let genTy := mkApp (Expr.const ``Palamedes.PGen []) α
@@ -182,11 +197,7 @@ def runSynthesisPipeline (α pred : Expr) (verbose : Bool)
     logInfo m!"Synthesized generator:\n{(← ppExpr gen)}"
 
   -- 3. Optimize, keeping the support-preservation proof.
-  let (gen', optProof) ←
-    try
-      Palamedes.optimizeGen gen
-    catch e =>
-      throwError m!"Failed during optimization.\n{e.toMessageData}"
+  let (gen', optProof) ← wrapStage "optimization" <| Palamedes.optimizeGen gen
   let gen'' ← withReducible (reduce gen')
   if verbose then
     logInfo m!"Optimized generator:\n{(← ppExpr gen'')}"
@@ -196,13 +207,11 @@ def runSynthesisPipeline (α pred : Expr) (verbose : Bool)
     match tuningBinder with
     | none => pure (gen'', none, #[])
     | some θ =>
-      try
+      wrapStage "tuning installation" do
         let r ← Palamedes.installTuning declName θ gen''
         if verbose then
           logInfo m!"Tuned generator ({r.sites.size} sites):\n{(← ppExpr r.gen)}"
         pure (r.gen, r.supportProof?, r.sites)
-      catch e =>
-        throwError m!"Failed while installing tuning.\n{e.toMessageData}"
 
   -- 3b. Rebuild the support proof.
   let supportProof ← do
@@ -260,7 +269,6 @@ proof here and the attribute picks it up.
 and the shape is all the attribute needs: it chooses which law is stated. -/
 inductive Shape where
   | basalt | basaltOption
-  deriving Inhabited, BEq
 
 def Target.shape : Target → Shape
   | .basalt _ _ => .basalt
@@ -349,7 +357,11 @@ private def elabPredAt? (t : Lean.Term) (α : Expr) : TermElabM (Option Expr) :=
       let e ← instantiateMVars e
       if e.hasSorry || e.hasExprMVar then return none
       return some e
-  catch _ => return none
+  catch e =>
+    -- Swallowing an interrupt or an exhaustion here would report it as "the predicate does not fit
+    -- this type", which at an `Option` goal silently selects the other reading.
+    if e.isInterrupt || e.isMaxHeartbeat || e.isMaxRecDepth then throw e
+    return none
 
 /-- Read the target off the goal type, and the predicate against it. -/
 def classifyGoal (goalTy : Expr) (t : Lean.Term) : TermElabM (Target × Expr) := do
@@ -396,17 +408,8 @@ def extractWitness (e : Expr) : MetaM Expr := do
   -- through the `Eq.rec` the totality tactic's `split` leaves around each match arm), then add the
   -- constructors to delta-unfold. `List.map_cons`/`_nil` are needed so the branch lists of a
   -- `frequency` actually compute — otherwise `.run` stays stuck under a `List.map` lambda.
-  let some twExt ← getSimpExtension? `totality_witness
-    | throwError "simp extension `totality_witness` not found"
-  let mut thms ← twExt.getTheorems
-  for n in names do
-    thms ← thms.addDeclToUnfold n
-  let ctx ← Simp.mkContext
-    (config := { proj := true, zetaDelta := true })
-    (simpTheorems := #[thms])
-    (congrTheorems := ← getSimpCongrTheorems)
-  let (r, _) ← simp e ctx
-  return r.expr
+  return (← runExtractionSimp `totality_witness e { proj := true, zetaDelta := true }
+    (unfold := names)).1
 
 /-- Push `PGen.run` through a `match`: rebuild the matcher at the run-type motive with each arm
 projected, and prove the two equal by instantiating the *same* matcher a third time, at a `Prop`
@@ -452,8 +455,8 @@ private def pushRunMatch : Simp.Simproc := fun e => do
   unless ← isDefEq (← inferType proof) (← mkEq e expr) do return .continue
   return .visit { expr, proof? := some proof }
 
-/-- Read a generator that kept an `assume` at `OptionT G`, where `Fail` is `pure none`, and push the
-projection down until what is left is Basalt vocabulary. -/
+/-- Read a generator that kept an `assume` at `OptionT G` and push the projection as far down as
+possible. -/
 def extractPartialWitness (α gen G : Expr) : MetaM (Expr × Expr) := do
   let optT ← mkAppM ``OptionT #[G]
   let e ← mkAppOptM ``Palamedes.PGen.run
@@ -461,25 +464,6 @@ def extractPartialWitness (α gen G : Expr) : MetaM (Expr × Expr) := do
       ← synthInstance (← mkAppM ``Palamedes.Fail #[optT])]
   let prims := (Palamedes.totalRules (← getEnv)).map (·.head)
     |>.filter (fun n => n != ``dite && n != ``ite)
-  let some pwExt ← getSimpExtension? `partial_witness
-    | throwError "simp extension `partial_witness` not found"
-  let mut thms ← pwExt.getTheorems
-  for n in Palamedes.pgenBasis ++ Palamedes.tgenBasis ++ prims do
-    thms ← thms.addDeclToUnfold n
-  -- `List.map_cons`/`_nil` so a choice's branch list actually computes: without them `.run` stays
-  -- stuck under the `List.map` lambda `frequency`'s branches are built by, and every branch is left
-  -- as a bare `PGen.mk`.
-  for n in [``Palamedes.PGen.run_dite, ``Palamedes.PGen.run_ite, ``Palamedes.run_fail,
-            ``List.map_cons, ``List.map_nil] do
-    thms ← thms.addConst n
-  -- `proj := true` cancels the `PGen.mk`/`.run` pair and computes the `Prod` projections a choice's
-  -- branch list is built from. It also reduces `Pure.pure`/`Bind.bind` through the
-  -- `Gen (OptionT G)` instance, so the result names `OptionT.pure`/`OptionT.bind` — the honest
-  -- reading, since the term *is* at `OptionT G`.
-  let ctx ← Simp.mkContext
-    (config := { proj := true, zetaDelta := true })
-    (simpTheorems := #[thms])
-    (congrTheorems := ← getSimpCongrTheorems)
   -- The simproc's index key. Built from metavariables rather than `mkAppOptM`, which would try to
   -- *synthesize* the `Gen`/`Fail` instances of a `G` that is only a pattern here.
   let key ← withReducible do
@@ -491,15 +475,21 @@ def extractPartialWitness (α gen G : Expr) : MetaM (Expr × Expr) := do
     DiscrTree.mkPath (mkAppN (mkConst ``Palamedes.PGen.run) #[β, g, Gp, gi, fi])
   let sprocs : Simp.Simprocs :=
     ({} : Simp.Simprocs).addCore key `pushRunMatch true (.inl pushRunMatch)
-  let (r, _) ← simp e ctx #[sprocs]
-  let proof ← match r.proof? with
-    | some p => mkEqSymm p
-    | none => mkEqRefl e
+  -- `proj := true` cancels the `PGen.mk`/`.run` pair and computes the `Prod` projections a choice's
+  -- branch list is built from.
+  -- NOTE: This also reduces `Pure.pure`/`Bind.bind` through the `Gen (OptionT G)` instance, leaving
+  -- `OptionT.pure`/`OptionT.bind` in the term. I'm not sure we want this behavior long term.
+  let (result, proof) ← runExtractionSimp `partial_witness e { proj := true, zetaDelta := true }
+    (unfold := Palamedes.pgenBasis ++ Palamedes.tgenBasis ++ prims)
+    -- We add `List.map_cons`/`_nil` so we can simplify under a `oneOf` or `frequency`.
+    (extra := #[``Palamedes.PGen.run_dite, ``Palamedes.PGen.run_ite, ``Palamedes.run_fail,
+                ``List.map_cons, ``List.map_nil])
+    (simprocs := #[sprocs])
   -- `simp` rewrote from the `.run` at `OptionT G` that `totalize` unfolds to, so the equation it
   -- returns is already about the right generator; the hint restates it at `totalize` itself, which
   -- is the spelling `@[correct]` needs and is defeq to the starting point.
   let totalized ← mkAppOptM ``Palamedes.PGen.totalize #[some α, some gen, some G, none]
-  return (r.expr, ← mkExpectedTypeHint proof (← mkEq r.expr totalized))
+  return (result, ← mkExpectedTypeHint (← mkEqSymm proof) (← mkEq result totalized))
 
 /-- Appended to a `Totality.stuck` message at both shapes, after its account of *how* it got stuck.
 -/
@@ -582,17 +572,16 @@ def generatorSearchElab
   exact Palamedes.PGen.totalize g"
     TryThis.addSuggestion stx (common ++ tail)
 
-  let prettyPred ←
-    try
-      lambdaBoundedTelescope mpred 1 fun fvs body =>
-        let a := fvs[0]!
-        let subst := FVarSubst.empty
-        let tgt := Expr.fvar (FVarId.mk `TARGET)
-        return (subst.insert a.fvarId! tgt).apply body
-    catch _ =>
-      pure mpred
+  -- `scripts/profile.py` parses this label, keying its benchmarks on the `⟪type⟫⟪predicate⟫` pair
+  -- and on the binder printing as `TARGET`.
+  let label ← lambdaBoundedTelescope mpred 1 fun fvs body => do
+    match fvs[0]? with
+    | some a =>
+      withLocalDeclD `TARGET (← inferType a) fun tgt =>
+        addMessageContext m!"⟪{α}⟫⟪{body.replaceFVar a tgt}⟫"
+    | none => addMessageContext m!"⟪{α}⟫⟪{mpred}⟫"
 
-  withTraceNode `palamedes.trace (fun _ => pure m!"⟪{α}⟫⟪{prettyPred}⟫") do
+  withTraceNode `palamedes.trace (fun _ => pure label) do
 
   let declName? ← Term.getDeclName?
   let θ? ← declTuningBinder?
@@ -643,19 +632,14 @@ def genRBT [Gen G] (lo hi : Nat) (θ : Tuning) : G (Tree Nat) := by
 -/
 syntax (name := generatorSearch) "generator_search " term : tactic
 
-@[tactic generatorSearch]
-def expandGeneratorSearch : Tactic := fun stx => do
-  match stx with
-  | `(tactic| generator_search $t) => generatorSearchElab stx t false
-  | _ => throwError "invalid syntax"
-
 /-- `generator_search?` is `generator_search` that additionally emits the synthesized generator as a
 "Try this" suggestion, so the term can be pasted in place of the tactic call. Useful for inspecting
 what the search actually produced, and the escape hatch into editing it by hand. -/
 syntax (name := generatorSearch?) "generator_search? " term : tactic
 
-@[tactic generatorSearch?]
-def expandGeneratorSearch? : Tactic := fun stx => do
+@[tactic generatorSearch, tactic generatorSearch?]
+def expandGeneratorSearch : Tactic := fun stx => do
   match stx with
+  | `(tactic| generator_search $t) => generatorSearchElab stx t false
   | `(tactic| generator_search? $t) => generatorSearchElab stx t true
   | _ => throwError "invalid syntax"

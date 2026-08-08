@@ -162,7 +162,7 @@ def emitCorrectLaw (declName : Name) : TermElabM Unit := do
       -- this fix: nothing here mentions a datatype, so a type declared in a test file gets it free.
       let bridge ←
         try
-          solveGoalWithTactic bridgeGoal
+          solveGoalWithTactic "someSupport bridge" bridgeGoal
             (← `(tactic|
               (simp
                try (congr 1; funext d x b; (repeat' split); all_goals simp)

@@ -6,6 +6,7 @@ Authors: Harrison Goldstein
 
 import PalamedesTest.Corpus
 import PalamedesTest.GeneratorAPI
+import PalamedesTest.Harness
 
 /-!
 # Extraction audit
@@ -34,19 +35,18 @@ namespace PalamedesTest.ExtractionAudit
 /-- Constants that should never survive extraction into a synthesized generator: the
 `CorrectGen` combinators themselves, the `Subtype.val` projection that extraction is supposed
 to eliminate, and `Eq` casts (which would mean a rewrite leaked out of a `convert` proof
-argument into the generator). Matcher auxiliaries (e.g. `PGen.CorrectGen.List.s_unfold.match_1`)
-are exempt: they are ordinary case splits that legitimately appear in `s_unfold` generators.
-Proof auxiliaries (`…._proof_i`, abstracted out of combinator bodies by the definition
-elaborator) are exempt too: they are compiler-erased proofs of `Prop`s, never a combinator
-wrapper (those are `Type`-valued).
+argument into the generator). Compiler-generated auxiliaries are exempt wholesale, since none of
+them can be a combinator wrapper: matchers (`PGen.CorrectGen.List.s_unfold.match_1`) are ordinary
+case splits that legitimately appear in `s_unfold` generators, and the proof auxiliaries the
+definition elaborator abstracts out of combinator bodies (`…._proof_i`) are erased proofs of
+`Prop`s, while a wrapper is `Type`-valued.
 
 `PGen.pick` is residue too, of the optimizer rather than of extraction: the flatten pass rewrites
 every `pick` tree into a uniform n-ary `oneOf`, so a `pick` surviving in a compiled
 synthesized generator means a chain escaped flattening — and with it the `½, ¼, ⅛, …` distribution
 skew the pass exists to remove. -/
 def isResidue (c : Name) : Bool :=
-  if (c.toString.splitOn ".match_").length > 1 then false
-  else if (c.toString.splitOn "._proof_").length > 1 then false
+  if c.isInternalDetail then false
   else
     c == ``Subtype.val || c == ``Eq.mpr || c == ``Eq.rec || c == ``Palamedes.CorrectGen ||
     c == ``Palamedes.PGen.pick ||
@@ -84,22 +84,19 @@ def isCarrierResidue (c : Name) : Bool :=
   Palamedes.pgenBasis.contains c ||
   c == ``Palamedes.PGen.mk || c == ``Palamedes.PGen.run || c == ``Palamedes.PGen.totalize
 
-run_cmd liftTermElabM do
-  let env ← getEnv
-  let mut total := 0
-  for i in [0:env.header.moduleData.size] do
-    let modName := env.header.moduleNames[i]!
-    -- `GeneratorAPI` alongside the corpus: it holds the canonical Basalt-shaped generators.
-    --
-    -- Only modules in *this file's import closure* are walkable at all, which is what leaves
-    -- `@[correct]`'s raw `addDecl` path unaudited: `Correct` and `Tuning` declare root-level names
-    -- (`isAllTwos`, `genAllTwos`, `genBetween`) that collide with `GeneratorAPI`'s, so importing
-    -- them here is what would have to change first.
-    unless (`PalamedesTest.Corpus).isPrefixOf modName
-        || modName == `PalamedesTest.GeneratorAPI do continue
-    for n in env.header.moduleData[i]!.constNames do
-      let some ci := env.find? n | continue
-      let some val := ci.value? | continue
+-- `GeneratorAPI` alongside the corpus: it holds the canonical Basalt-shaped generators.
+--
+-- Only modules in *this file's import closure* are walkable at all, which is what leaves
+-- `@[correct]`'s raw `addDecl` path unaudited: `Correct` and `Tuning` declare root-level names
+-- (`isAllTwos`, `genAllTwos`, `genBetween`) that collide with `GeneratorAPI`'s, so importing them
+-- here is what would have to change first.
+run_cmd
+  liftTermElabM <| auditConstants
+      (fun m => (`PalamedesTest.Corpus).isPrefixOf m || m == `PalamedesTest.GeneratorAPI)
+      "extraction audit found no generators to check; is the example corpus imported?"
+      fun n => do
+      let some ci := (← getEnv).find? n | return false
+      let some val := ci.value? | return false
       -- `none` for a non-generator; otherwise whether the shape is Basalt's, which is what decides
       -- if the carrier constants count as residue.
       let basaltShaped? ← forallTelescope ci.type fun args body => do
@@ -118,8 +115,7 @@ run_cmd liftTermElabM do
         -- ...or Basalt-shaped, `G α` for a `G` bound by this very telescope.
         let hd := body.getAppFn
         if hd.isFVar && args.any (· == hd) then return some true else return none
-      let some isBasalt := basaltShaped? | continue
-      total := total + 1
+      let some isBasalt := basaltShaped? | return false
       -- Scan the **data** path only. Proof subterms are compiler-erased and legitimately sit in
       -- argument positions of a generator (`frequency`'s positivity side condition, `choose`'s
       -- bounds); flagging those would make every raw-`addDecl` emission a
@@ -132,7 +128,6 @@ run_cmd liftTermElabM do
         (fun c => isResidue c || (isBasalt && isCarrierResidue c))
       unless bad.isEmpty do
         logError m!"extraction left synthesis residue in {n}: {bad.toList}"
-  if total == 0 then
-    logError "extraction audit found no generators to check; is the example corpus imported?"
+      return true
 
 end PalamedesTest.ExtractionAudit

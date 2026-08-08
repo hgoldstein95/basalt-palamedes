@@ -182,11 +182,11 @@ section UnfoldPipeline
 open Lean
 
 /- The generic fold → accuM normalization pipeline. -/
-syntax "norm_for_unfold" ident term:max ("mergeVia " term:max)?
+syntax "norm_for_unfold" ident term:max "mergeVia " term:max
   "convertVia " "[" term,* "]" ("condVia " term:max)? : tactic
 
 macro_rules
-  | `(tactic| norm_for_unfold $fh:ident $co:term $[mergeVia $m:term]?
+  | `(tactic| norm_for_unfold $fh:ident $co:term mergeVia $m:term
         convertVia [ $ls:term,* ] $[condVia $cnd:term]?) => do
       let mut alts : Array (TSyntax ``Lean.Parser.Tactic.tacticSeq) := #[]
       for l in ls.getElems do
@@ -198,15 +198,9 @@ macro_rules
         (first
           | (coerce_fold $fh $co; $convertStep)
           | (simp; coerce_fold $fh $co; $convertStep)))
-      match m with
-      | some mlem =>
-          `(tactic|
-            (preprocess
-             (repeat' (rw_merge $mlem)) <;> $core))
-      | none =>
-          `(tactic|
-            (preprocess
-             $core))
+      `(tactic|
+        (preprocess
+         (repeat' (rw_merge $m)) <;> $core))
 
 end UnfoldPipeline
 
@@ -257,7 +251,7 @@ macro "normalize_and_apply" : tactic =>
         case pf => norm_for_pure
       | case' arg => apply s_bind _ _
         first
-        | case pf => norm_for_bind' -- TODO Fix this
+        | case pf => norm_for_bind'
         | case pf => norm_for_bind
       | case' arg => apply s_pick _ _
         case pf => norm_for_pick
@@ -360,7 +354,9 @@ def caseSplitRuleTac : RuleTac := fun input => do
         let postState ← saveState
         apps := apps.push
           { postState, goals := subgoals, scriptSteps? := none, successProbability? := none }
-      catch _ => pure ()
+      catch e =>
+        -- A failure here means "this scrutinee does not work"; exhaustion and interrupts do not.
+        if e.isInterrupt || e.isMaxHeartbeat || e.isMaxRecDepth then throw e
       initialState.restore
     if apps.isEmpty then
       throwError "caseSplitRuleTac: no applicable scrutinee"

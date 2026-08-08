@@ -21,3 +21,9 @@ jobs:
         run: |
           lake clean palamedes
           lake build --wfail
+
+      # `PalamedesExperiments` is excluded from the default build, so nothing else notices when a
+      # spike stops elaborating against the current library. Reported, not enforced.
+      - name: Build the experiment spikes
+        continue-on-error: true
+        run: lake build PalamedesExperiments

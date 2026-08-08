@@ -234,21 +234,20 @@ private def mainPass : HeadRewrite := fun _depth e => do
   | none => return none
   | some (e', lemmaName) => return some (e', ← mkLeafProof lemmaName e e')
 
-/-- The pick-collapsing pass. With `distribute`, first push a choice into a `dite` arm (before
-`flattenPick?` would bury it) so each constructor gets its own flat `oneOf`; the pass then flattens
-the resulting `pick` arms. -/
-private def flattenPass (distribute : Bool) : HeadRewrite := fun depth e => do
-  if distribute then
-    if let some r ← distributeChoiceDite? depth e then return some r
+/-- The pick-collapsing pass. A choice is pushed into a `dite` arm first, before `flattenPick?`
+would bury it, so each constructor gets its own flat `oneOf`; the pass then flattens the resulting
+`pick` arms. -/
+private def flattenPass : HeadRewrite := fun depth e => do
+  if let some r ← distributeChoiceDite? depth e then return some r
   flattenPick? e
 
 /-- Optimize a raw `PGen`, returning the optimized term with a proof its `support` is unchanged.
-`mainPass` to a fixed point, then `flattenPass true` — which also distributes choices into `dite`
+`mainPass` to a fixed point, then `flattenPass` — which also distributes choices into `dite`
 arms so each constructor is a separately addressable `oneOf`, the shape the tuning pass needs. -/
 def optimizeGen (e : Expr) : MetaM (Expr × Expr) := do
   let table := getGenCongrRules (← getEnv)
   let r1 ← transform mainPass table none e
-  let r2 ← transform (flattenPass true) table none r1.expr
+  let r2 ← transform flattenPass table none r1.expr
   let expr := r2.expr
   let proof ←
     match ← chainProofs #[r1.proof?, r2.proof?] with
