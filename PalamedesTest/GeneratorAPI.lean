@@ -37,6 +37,8 @@ the bottom of this file.
 
 open Palamedes
 
+namespace PalamedesTest.GeneratorAPI
+
 @[simp]
 def isAllTwos : List Nat → Bool
   | [] => true
@@ -194,7 +196,7 @@ pushes through the carrier's own choices rather than leaving them.
 
 **The carrier's `oneOf` and `frequency`** are what the *pipeline* chooses with, and are read just as
 often: `set_option palamedes.debug true` prints the optimized generator, `optimize_gen` returns one,
-and `PalamedesTest/Optimizer/Rewrites.lean` pins a page of them. The flatten pass produces `oneOf`;
+and `PalamedesTest/Optimizer.lean` pins a page of them. The flatten pass produces `oneOf`;
 `frequency` arises once tuning has written weights into it. Unfolding either to the Basalt
 `frequency` underneath would print `{ run := fun {_G} x x_1 => frequency [(1, fun x_2 => …), …] (by
 simp) }` — the `PGen.mk` wrapper, three dummy binders, and every branch eta-expanded.
@@ -214,7 +216,7 @@ section Renderings
 def renderBasalt [Gen G] : G Nat := frequency [(1, fun _ => pure 1), (2, fun _ => pure 2)] (by simp)
 
 /--
-info: def renderBasalt.{u_1} : {G : Type → Type u_1} → [Gen G] → G ℕ :=
+info: def PalamedesTest.GeneratorAPI.renderBasalt.{u_1} : {G : Type → Type u_1} → [Gen G] → G ℕ :=
 fun {G} [Gen G] => frequency [(1, fun x => pure 1), (2, fun x => pure 2)]
 -/
 #guard_msgs in
@@ -223,7 +225,7 @@ fun {G} [Gen G] => frequency [(1, fun x => pure 1), (2, fun x => pure 2)]
 def renderOneOf : PGen Nat := PGen.oneOf [pure 1, pure 2]
 
 /--
-info: def renderOneOf : PGen ℕ :=
+info: def PalamedesTest.GeneratorAPI.renderOneOf : PGen ℕ :=
 PGen.oneOf [pure 1, pure 2]
 -/
 #guard_msgs in
@@ -232,7 +234,7 @@ PGen.oneOf [pure 1, pure 2]
 def renderFrequency : PGen Nat := PGen.frequency [(3, pure 1), (1, pure 2)]
 
 /--
-info: def renderFrequency : PGen ℕ :=
+info: def PalamedesTest.GeneratorAPI.renderFrequency : PGen ℕ :=
 PGen.frequency [(3, pure 1), (1, pure 2)]
 -/
 #guard_msgs in
@@ -248,7 +250,7 @@ def renderUnrecoverable : PGen Nat :=
   PGen.frequency [(hiddenWeight, pure 1)] (by simpa [List.sum] using hiddenWeight_pos)
 
 /--
-info: def renderUnrecoverable : PGen ℕ :=
+info: def PalamedesTest.GeneratorAPI.renderUnrecoverable : PGen ℕ :=
 PGen.frequency [(hiddenWeight, pure 1)] renderUnrecoverable._proof_1
 -/
 #guard_msgs in
@@ -305,14 +307,14 @@ No corpus generator leaves reconstruction stuck, so the two renderings are drive
 `Totality.stuck` result carried into `packageFor` at each `Target`. `G` is a local binder, which is
 how a declaration spells it. -/
 
-opaque PalamedesTest.stuckGen : Palamedes.PGen Nat
+opaque stuckGen : Palamedes.PGen Nat
 
 open Lean Meta in
 private def withStuckResult (mk : Expr → Expr → Target) : Lean.Elab.TermElabM Unit := do
   withLocalDeclD `G (← mkArrow (mkSort 1) (mkSort 1)) fun G => do
     withLocalDecl `inst .instImplicit (← mkAppM ``Gen #[G]) fun _ => do
       let res : SynthesisResult := {
-        gen := mkConst ``PalamedesTest.stuckGen
+        gen := mkConst ``stuckGen
         supportProof := mkConst ``trivial
         totality := diagnoseNoWitness (mkConst ``Nat.zero) none #[`Palamedes.PGen.mod2] }
       discard <| packageFor (mk G (mkConst ``Nat)) res
@@ -338,3 +340,5 @@ Being stuck here is a fact about the reconstruction basis, **not** evidence that
 -/
 #guard_msgs in
 run_cmd Lean.Elab.Command.liftTermElabM (withStuckResult .basaltOption)
+
+end PalamedesTest.GeneratorAPI

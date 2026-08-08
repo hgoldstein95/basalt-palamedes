@@ -15,10 +15,10 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 import Palamedes.Data.Bool
 import Palamedes.Data.Color
 import Palamedes.Data.List
+import Palamedes.Data.List.Elements
 import Palamedes.Data.Nat
 import Palamedes.Data.Stack.Atom
 import Palamedes.Data.Stack.Stack
-import Palamedes.Data.STLC.Context
 import Palamedes.Data.STLC.Term
 import Palamedes.Data.STLC.Ty
 import Palamedes.Data.Tree

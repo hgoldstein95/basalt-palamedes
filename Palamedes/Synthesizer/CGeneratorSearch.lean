@@ -11,10 +11,10 @@ import Palamedes.RuleSets
 import Palamedes.CaseSplit
 import Palamedes.Total
 import Palamedes.Data.List
+import Palamedes.Data.List.Elements
 import Palamedes.Data.Stack.Stack
 import Palamedes.Data.STLC.Term
 import Palamedes.Data.STLC.Ty
-import Palamedes.Data.STLC.Context
 import Palamedes.Data.Tree
 import Palamedes.Data.Unit
 import Palamedes.Data.Nat
@@ -238,7 +238,7 @@ macro "norm_for_elements" : tactic =>
      accu_simp
      first
        | rfl
-       | rw [getElem?_eq_some_iff_indexesOf_getElem?_eq_some]))
+       | rw [getElem?_eq_some_iff_mem_idxsOf]))
 
 macro "normalize_and_apply" : tactic =>
    `(tactic| (

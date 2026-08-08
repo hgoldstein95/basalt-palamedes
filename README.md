@@ -43,12 +43,12 @@ Beyond the corpus, each file in `PalamedesTest/` guards one library module and i
 `PalamedesTest/Foo.lean` guards `Palamedes/Foo.lean`, so the two directory listings diff into a
 coverage map. The ones worth knowing about:
 
-- **`Extract.lean`** walks every generator in the corpus and fails the build if synthesis residue
-  (`Subtype.val`, `Eq.mpr`, `CorrectGen`, a totality-witness constructor, or a bare `PGen.pick`)
-  survived into a compiled term's data path.
+- **`Extract.lean`** walks every generator in the corpus and in the `@[correct]` fixtures, and fails
+  the build if synthesis residue (`Subtype.val`, `Eq.mpr`, `CorrectGen`, a totality-witness
+  constructor, or a bare `PGen.pick`) survived into a compiled term's data path.
 - **`Derive.lean`** pins the signatures `derive_palamedes` generates, and `#print axioms` on the
   proofs it emits.
-- **`Stats.lean`** and **`Optimizer/Schedule.lean`** pin `#genstats` distribution reports
+- **`Stats.lean`** and **`Schedule.lean`** pin `#genstats` distribution reports
   under `#guard_msgs` — respectively, that the optimizer's flatten pass really does produce a
   *uniform* choice, and that depth schedules really do make a recursive generator terminate.
 

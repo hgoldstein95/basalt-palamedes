@@ -94,7 +94,7 @@ def optimizeBind? (x f : Expr) : MetaM (Option GenRewriteResult) :=
     let (trueCase', falseCase') ← mkDiteArms P (fun h => mkAppM ``bind #[.app trueCase h, f])
                                               (fun h => mkAppM ``bind #[.app falseCase h, f])
     unless (← assumeUnderBinder trueCase' #[]) || (← assumeUnderBinder falseCase' #[]) do return none
-    return some (← mkAppM ``dite #[P, trueCase', falseCase'], ``support_if_bind)
+    return some (← mkAppM ``dite #[P, trueCase', falseCase'], ``support_dite_bind)
   | ite _ P _ trueCase falseCase => do
     let trueCase' ← mkAppM ``bind #[trueCase, f]
     let falseCase' ← mkAppM ``bind #[falseCase, f]

@@ -25,7 +25,7 @@ itself, are due to Kyle Miller.)
 
 open Lean Elab Meta Tactic
 
-def ensureLHSIsMVar (g : MVarId) : MetaM (Expr × Expr × MVarId) :=
+private def ensureLHSIsMVar (g : MVarId) : MetaM (Expr × Expr × MVarId) :=
   g.withContext do
     let gty ← g.getType'
     let some (_, lhs, rhs) := gty.eq? | throwError "goal must be eq"
@@ -44,7 +44,8 @@ and then creates a lambda that closes the fvars.
 Throws an error if the result is not type correct.
 Returns a lambda, like `mkLambdaFVars fvars e`.
 -/
-def mkLambdaGeneralizeFVars (exprs : Array Expr) (fvars : Array Expr) (e : Expr) : MetaM Expr := do
+private def mkLambdaGeneralizeFVars (exprs : Array Expr) (fvars : Array Expr) (e : Expr) :
+    MetaM Expr := do
   let e ← (exprs.zip fvars).foldrM (init := e) fun (expr, fvar) e => do
     let e' ← kabstract e expr
     pure <| e'.instantiate1 fvar

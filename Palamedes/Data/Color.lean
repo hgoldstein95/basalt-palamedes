@@ -16,7 +16,8 @@ import Palamedes.SomeSupport
 # `Color` primitives
 
 The two-constructor `Color` type (red/black, for red-black trees), `arbColor`, its
-support/totality facts, and the synthesis rules `s_arbColor` and `s_caseColor`.
+support/totality facts, the synthesis rules `s_arbColor` and `s_caseColor`, and a `ToString`
+instance.
 -/
 
 section TypeDef
@@ -32,13 +33,6 @@ theorem Color.exists_color {P : Color → Prop} : (∃ c, P c) ↔ P .red ∨ P 
   . let ⟨c, h⟩ := h
     cases c <;> aesop
   . cases h <;> aesop
-
-def Color.toString : Color → String
-  | .red => "red"
-  | .black => "black"
-
-instance : ToString Color where
-  toString := Color.toString
 
 end TypeDef
 
@@ -91,14 +85,25 @@ def total_arbColor : total (arbColor : PGen Color) :=
 
 /-- Same hazard as `total_Bool_rec`; see there. -/
 @[total]
-def total_color_rec (hf : total gr) (ht : total gb) : total (Color.rec gr gb c) :=
-  ⟨⟨fun {_G} _ => match c with | .red => hf.val.run | .black => ht.val.run⟩, by
+def total_Color_rec (hr : total gr) (hb : total gb) : total (Color.rec gr gb c) :=
+  ⟨⟨fun {_G} _ => match c with | .red => hr.val.run | .black => hb.val.run⟩, by
     cases c
-    · exact hf.property
-    · exact ht.property⟩
+    · exact hr.property
+    · exact hb.property⟩
 
 end Total
 
 end PGen
 
 end Palamedes
+
+namespace PrettyPrint
+
+def Color.toString : Color → String
+  | .red => "red"
+  | .black => "black"
+
+instance : ToString Color where
+  toString := Color.toString
+
+end PrettyPrint

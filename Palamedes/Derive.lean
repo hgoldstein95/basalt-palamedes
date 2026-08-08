@@ -972,8 +972,7 @@ def genMergeAccuM (ctx : Ctx) : CommandElabM Unit := do
     mergedFs := mergedFs.push (← `(fun $lams* $p => $body))
   let mergedArgs := mergedSts ++ mergedFs
   -- proof
-  let cases ← (Array.range ctx.ctors.size).mapM fun ci => do
-    let c := ctx.ctors[ci]!
+  let cases ← ctx.ctors.mapIdxM fun ci c => do
     let k := c.recFields.size
     let ihs := ihIdsFor k
     let bs ← toBinderIds (c.fieldIds ++ ihs)
@@ -1200,8 +1199,7 @@ def genFoldAccuTrue (ctx : Ctx) : CommandElabM Unit := do
       accuArgs := accuArgs.push
         (← `(fun $lams* _ => guard ($(gIds[ci]!.get!) $(c.nonRecIds)*)))
   -- proof
-  let cases ← (Array.range ctx.ctors.size).mapM fun ci => do
-    let c := ctx.ctors[ci]!
+  let cases ← ctx.ctors.mapIdxM fun ci c => do
     let k := c.recFields.size
     let ihs := ihIdsFor k
     let bs ← toBinderIds (c.fieldIds ++ ihs)
@@ -1290,8 +1288,7 @@ def genFoldAccuFunction (ctx : Ctx) : CommandElabM Unit := do
     else
       accuArgs := accuArgs.push ((gIds[ci]!.get! : Term))
   -- proof
-  let cases ← (Array.range ctx.ctors.size).mapM fun ci => do
-    let c := ctx.ctors[ci]!
+  let cases ← ctx.ctors.mapIdxM fun ci c => do
     let k := c.recFields.size
     let ihs := ihIdsFor k
     let bs ← toBinderIds (c.fieldIds ++ ihs)
@@ -1407,8 +1404,7 @@ def genFoldAccuFunctionTrue (ctx : Ctx) : CommandElabM Unit := do
       accuArgs := accuArgs.push
         (← `(fun $lams* $sv => guard ($(gIds[ci]!.get!) $(c.nonRecIds)* $sv)))
   -- proof
-  let cases ← (Array.range ctx.ctors.size).mapM fun ci => do
-    let c := ctx.ctors[ci]!
+  let cases ← ctx.ctors.mapIdxM fun ci c => do
     let k := c.recFields.size
     let ihs := ihIdsFor k
     let bs ← toBinderIds (c.fieldIds ++ ihs)
@@ -1457,8 +1453,7 @@ def genSUnfold (ctx : Ctx) : CommandElabM Unit := do
   -- `normalize_and_apply`'s `s_bind` decomposition commits to one `∃`-splitting per goal, so
   -- the order the statement fixes is the order the search explores; emitting a different one
   -- means re-tuning the search, not just the inputs.
-  let disjuncts ← (Array.range ctx.ctors.size).mapM fun ci => do
-    let c := ctx.ctors[ci]!
+  let disjuncts ← ctx.ctors.mapIdxM fun ci c => do
     let fC : Ident := fIds[ci]!
     let inner ← `($fC $(c.fieldIds)* $sg = some $bg ∧ $tv = $(c.fCtor) $(c.fieldIds)*)
     mkExists (c.nonRecIds ++ c.recFields.map (·.id)) inner
@@ -1467,8 +1462,7 @@ def genSUnfold (ctx : Ctx) : CommandElabM Unit := do
   let gTy ← `(($bg : $β) → ($sg : $σ) → Palamedes.CorrectGen fun ($tv : $baseβ) => $disj)
   binders := binders.push (← expB g gTy)
   -- the step generator
-  let alts ← (Array.range ctx.ctors.size).mapM fun ci => do
-    let c := ctx.ctors[ci]!
+  let alts ← ctx.ctors.mapIdxM fun ci c => do
     let k := c.recFields.size
     let pat ← `($(c.fCtor) $(c.fieldIds)*)
     let rhs ←
@@ -1498,8 +1492,7 @@ def genSUnfold (ctx : Ctx) : CommandElabM Unit := do
   let stfArgs : Array Term :=
     (sts.filterMap id).map (fun i => (i : Term)) ++ fIds.map (fun i => (i : Term))
   -- the correctness proof
-  let cases ← (Array.range ctx.ctors.size).mapM fun ci => do
-    let c := ctx.ctors[ci]!
+  let cases ← ctx.ctors.mapIdxM fun ci c => do
     let k := c.recFields.size
     let ihs := ihIdsFor k
     let bs ← toBinderIds (c.fieldIds ++ ihs)

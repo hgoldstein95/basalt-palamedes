@@ -35,7 +35,7 @@ branch.
 
 open Lean Meta Elab Command
 
-namespace PalamedesTest.SomeSupportInventory
+namespace PalamedesTest.SomeSupport
 
 /-- The case-split combinators, which state a *relative* fact about their arms rather than
 characterizing a support. Naming them one by one is what makes each addition a decision. -/
@@ -67,4 +67,4 @@ run_cmd
           for {n} even though it is named as its twin."
       return true
 
-end PalamedesTest.SomeSupportInventory
+end PalamedesTest.SomeSupport

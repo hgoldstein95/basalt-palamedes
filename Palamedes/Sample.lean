@@ -31,7 +31,7 @@ is a measurable tuning objective. Deep filtering regimes (`genRBT` at height ≥
 Retry recovers from *failure*, not *divergence*: `total` means assume-free, not almost-sure
 termination, and a total but non-a.s.-terminating generator can still hang when sampled.
 A `Tuning` binder plus a depth-decaying schedule is the practical (measured, not proved) fix — see
-`PalamedesTest/Optimizer/Schedule.lean`.
+`PalamedesTest/Schedule.lean`.
 -/
 
 namespace Palamedes

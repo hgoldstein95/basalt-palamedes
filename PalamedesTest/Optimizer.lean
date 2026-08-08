@@ -48,8 +48,8 @@ def expandAssertOptimizes : CommandElab := fun stx =>
         throwError "carried proof does not type-check\n{e.toMessageData}"
   | _ => throwError "invalid syntax {stx}"
 
-private axiom g : PGen Nat
-private axiom f : Nat → PGen Nat
+private opaque g : PGen Nat
+private opaque f : Nat → PGen Nat
 
 #assert_optimizes!
   (pure 5 : PGen Nat) >>= fun x => pure (x + 1)

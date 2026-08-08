@@ -36,7 +36,7 @@ theorem support_pick_bind :
     support (pick (x >>= f) (y >>= f)) = support (pick x y >>= f) := by
   aesop
 
-theorem support_if_bind
+theorem support_dite_bind
     {x : b = true → PGen α}
     {y : ¬ (b = true) → PGen α} :
     support (if h : b then x h >>= f else y h >>= f) = support ((if h : b then x h else y h) >>= f) := by
@@ -65,7 +65,7 @@ theorem support_pick_congr
   aesop
 
 @[gen_congr]
-theorem support_if_congr
+theorem support_dite_congr
     {P : Prop}
     [Decidable P]
     {x x' : P → PGen α}
@@ -75,7 +75,7 @@ theorem support_if_congr
     support (if h : P then x h else y h) = support (if h : P then x' h else y' h) := by
   aesop
 
-/-- Non-dependent `if`-congruence. The dependent twin (`support_if_congr`) does not cover the plain
+/-- Non-dependent `if`-congruence. The dependent twin (`support_dite_congr`) does not cover the plain
 `ite` nodes the optimizer produces via `support_ite_bind`, so without this the optimizer could not
 descend into `ite` branches. -/
 @[gen_congr]

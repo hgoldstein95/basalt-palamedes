@@ -31,6 +31,8 @@ Two properties carry the design, and both are pinned below:
 
 open Palamedes
 
+namespace PalamedesTest.Tuning
+
 @[simp]
 def isAllTwos : List Nat → Bool
   | [] => true
@@ -41,7 +43,7 @@ def isAllTwos : List Nat → Bool
 def genUntuned [Gen G] : G (List Nat) := by generator_search (fun xs => isAllTwos xs)
 
 run_cmd
-  PalamedesTest.assertNotDeclared `genUntuned.sites
+  PalamedesTest.assertNotDeclared `PalamedesTest.Tuning.genUntuned.sites
     "genUntuned declared no `Tuning` binder, so it ships uniform"
 
 /-! ## The total shape, tuned in place
@@ -51,7 +53,7 @@ packaged, so the `TGen` witness is built once, over the θ-open term. `total_fre
 inspects weights, which is why stage 4 closes exactly as it does for a uniform generator. -/
 
 /--
-info: @[correct] genLawful: emitted sound_complete
+info: @[correct] PalamedesTest.Tuning.genLawful: emitted sound_complete
 -/
 #guard_msgs in
 @[correct] def genLawful (θ : Tuning := .uniform) [Gen G] : G (List Nat) := by
@@ -64,14 +66,14 @@ info: @genLawful.sound_complete : ∀ (θ : optParam Tuning Tuning.uniform),
 #guard_msgs in
 #check @genLawful.sound_complete
 /--
-info: 'genLawful.sound_complete' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'PalamedesTest.Tuning.genLawful.sound_complete' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms genLawful.sound_complete
 
 -- The site table `installTuning` emitted, and a policy materialized against it.
 /--
-info: #[{ name := `genLawful.site0, offset := 0, arity := 2, holes := #[0, 1] }]
+info: #[{ name := `PalamedesTest.Tuning.genLawful.site0, offset := 0, arity := 2, holes := #[0, 1] }]
 -/
 #guard_msgs in
 #eval genLawful.sites
@@ -154,7 +156,7 @@ The pin below is on the *emitted term*, and specifically on the `frequency` bran
 with no side-condition argument after it. `delabDroppingProof` drops that argument only when the
 combinator's autoParam can rebuild it, and a tuned generator's weights are `Tuning.weight θ i d` —
 opaque in `θ`, so the goal `0 < Σ wⱼ(d)` reduces to `0 < θ.weight 0 d ∨ …` and stops unless
-`Tuning.weight_pos` is available to `simp`. Untag it (`Tuning.lean`) and this term regrows a
+`Tuning.weight_pos` is available to `simp`. Untag it (`Schedule.lean`) and this term regrows a
 ~25-line `Eq.trans`/`congrArg` tower over `TGen.frequency._proof_1`. That is the one printing hazard
 a tuning binder introduces, and only a pin on a *tuned* generator can see it — this one and
 `genWellTyped`, the corpus's other tuned pin. -/
@@ -190,14 +192,14 @@ twins there means case-splitting the step generator's nested conditionals, not m
 for each combinator. See `Synthesizer/Correct.lean`. -/
 
 /--
-info: @[correct] genRange: emitted sound_complete
+info: @[correct] PalamedesTest.Tuning.genRange: emitted sound_complete
 -/
 #guard_msgs in
 @[correct] def genRange (lo hi : Nat) [Gen G] : G (Option Nat) := by
   generator_search (fun n => lo ≤ n ∧ n ≤ hi)
 
 run_cmd
-  PalamedesTest.assertNotDeclared `genRange.sites
+  PalamedesTest.assertNotDeclared `PalamedesTest.Tuning.genRange.sites
     "genRange has no choice sites to tune"
 
 /--
@@ -206,7 +208,7 @@ info: genRange.sound_complete : ∀ (lo hi : ℕ), IsSomeSoundAndComplete (genRa
 #guard_msgs in
 #check @genRange.sound_complete
 /--
-info: 'genRange.sound_complete' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'PalamedesTest.Tuning.genRange.sound_complete' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms genRange.sound_complete
@@ -221,7 +223,7 @@ info: 'genRange.sound_complete' depends on axioms: [propext, Classical.choice, Q
 `declBinders` and `forallTelescope` both order the same way. -/
 
 /--
-info: @[correct] genFlip: emitted sound_complete
+info: @[correct] PalamedesTest.Tuning.genFlip: emitted sound_complete
 -/
 #guard_msgs in
 @[correct] def genFlip [Gen G] (_n : Nat) (θ : Tuning := .uniform) : G (List Nat) := by
@@ -233,3 +235,5 @@ info: @genFlip.sound_complete : ∀ (_n : ℕ) (θ : optParam Tuning Tuning.unif
 -/
 #guard_msgs in
 #check @genFlip.sound_complete
+
+end PalamedesTest.Tuning

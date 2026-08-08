@@ -146,8 +146,8 @@ def autoParamRecovers (c : Name) (e : Expr) : MetaM Bool :=
 Every constant an emitted term can name while carrying a side-condition `autoParam` needs a
 registration: the choice combinators at each spelling a reader meets — Basalt's `frequency`, which
 both emitted shapes choose with, plus `PGen.oneOf`/`PGen.frequency`, which `palamedes.debug`, the
-`optimize_gen` tactic and `PalamedesTest/Optimizer/Rewrites.lean` print — and the primitives, Basalt's
-`chooseNat` and Palamedes' own `elements` (`Data/STLC/Context.lean`) at both its spellings. Miss one
+`optimize_gen` tactic and `PalamedesTest/Optimizer.lean` print — and the primitives, Basalt's
+`chooseNat` and Palamedes' own `elements` (`Data/List/Elements.lean`) at both its spellings. Miss one
 and a `._proof_i` reference reappears in a pinned term. The proof itself is erased either way; this
 is a printing concern, solved in the printer. -/
 def delabDroppingProof (c : Name) (arity : Nat) (shown : List Nat) : Delab := do
@@ -351,6 +351,6 @@ end Support
 
 end PGen
 
-end Palamedes
+scoped notation v " ∈ " "〚" g "〛" => Palamedes.PGen.support g v
 
-notation v " ∈ " "〚" g "〛" => Palamedes.PGen.support g v
+end Palamedes

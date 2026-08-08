@@ -44,6 +44,8 @@ register_option palamedes.debug : Bool := {
   descr := "enable debug messages from palamedes"
 }
 
+namespace Palamedes
+
 /-- Rewrite `e` with the simp set `ext`, additionally delta-unfolding `unfold` and using `extra` as
 rewrite rules. Returns the result and the proof `e = result`.
 
@@ -643,3 +645,5 @@ def expandGeneratorSearch : Tactic := fun stx => do
   | `(tactic| generator_search $t) => generatorSearchElab stx t false
   | `(tactic| generator_search? $t) => generatorSearchElab stx t true
   | _ => throwError "invalid syntax"
+
+end Palamedes

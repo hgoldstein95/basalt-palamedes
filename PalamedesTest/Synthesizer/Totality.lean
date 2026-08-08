@@ -38,7 +38,7 @@ run_cmd do
       {table.size} heads, so some rule is shadowed and unreachable"
   -- ...and the basis is registered rather than named in the tactic, so it is in here too.
   for n in [``PGen.Total.total_oneOf, ``PGen.Total.total_frequency, ``PGen.Total.total_bind,
-            ``PGen.Total.total_color_rec] do
+            ``PGen.Total.total_Color_rec] do
     unless rules.any (·.decl == n) do
       throwError "`{n}` is not in the `@[total]` registry, so `totality` cannot dispatch to it"
 

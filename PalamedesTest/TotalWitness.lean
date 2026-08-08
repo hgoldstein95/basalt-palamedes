@@ -32,6 +32,8 @@ only composed, where a defect in any one shows up as a wrong emitted term rather
 
 open Palamedes
 
+namespace PalamedesTest.TotalWitness
+
 @[simp]
 def isAllTwos : List Nat → Bool
   | [] => true
@@ -80,3 +82,5 @@ info: genAllTwosBasalt — 50 draws (seed 0, fuel 10000)
 -/
 #guard_msgs in
 #genstats (draws := 50) genAllTwosBasalt
+
+end PalamedesTest.TotalWitness

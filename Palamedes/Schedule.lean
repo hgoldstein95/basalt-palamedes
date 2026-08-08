@@ -21,6 +21,11 @@ table into a Basalt `Tuning`. The `installTuning` optimizer pass that *reads* su
 depends on the optimizer.
 -/
 
+/-- When tunings are left empty, the system defaults to uniform. -/
+def Tuning.uniform : Tuning := ⟨#[]⟩
+
+attribute [simp] Tuning.weight_pos
+
 namespace Palamedes
 
 /-- An affine weight schedule `d ↦ base + growth · d`. Invariant: `base ≥ 1`. The `(base, growth)`
@@ -69,7 +74,7 @@ single child grows more slowly, and a branch with two or more is held constant �
 to* the others, never toward zero.
 
 The coefficients are hand-tuned on `genWellTyped`, and its distribution is pinned in
-`PalamedesTest/Optimizer/Schedule.lean`; this is *not* a good general default (it encodes an arity preference
+`PalamedesTest/Schedule.lean`; this is *not* a good general default (it encodes an arity preference
 specific to STLC's term type). Materialize it against a generator's sites with
 `SchedulePolicy.stlc.materialize gen.sites` and pass the result to the generator's own `Tuning`
 binder (see `Palamedes.Tuning`).

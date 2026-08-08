@@ -7,6 +7,8 @@ Authors: Harrison Goldstein
 import PalamedesTest.Corpus
 import PalamedesTest.GeneratorAPI
 import PalamedesTest.Harness
+import PalamedesTest.Synthesizer.Correct
+import PalamedesTest.Tuning
 
 /-!
 # Extraction audit
@@ -18,8 +20,8 @@ support-preservation proof still holds trivially, and a `totality` failure is on
 result is a definition that elaborates fine but contains `(… : CorrectGen P).val` wrappers instead
 of raw `PGen` code.
 
-This module walks every generator-typed definition in the example corpus and *fails to compile* if
-any synthesis residue survives in a compiled term.
+This module walks every generator-typed definition in the example corpus and in the `@[correct]`
+fixtures, and *fails to compile* if any synthesis residue survives in a compiled term.
 
 **It must recognise every generator type it might meet** — the Basalt `{G} → [Gen G] → G α` that
 `generator_search` emits, whose head under the telescope is a *local* `G` rather than a constant,
@@ -84,15 +86,17 @@ def isCarrierResidue (c : Name) : Bool :=
   Palamedes.pgenBasis.contains c ||
   c == ``Palamedes.PGen.mk || c == ``Palamedes.PGen.run || c == ``Palamedes.PGen.totalize
 
--- `GeneratorAPI` alongside the corpus: it holds the canonical Basalt-shaped generators.
+-- Alongside the corpus: `GeneratorAPI` holds the canonical Basalt-shaped generators, and
+-- `Synthesizer.Correct` and `Tuning` are what put `@[correct]`'s emission path under the walk.
 --
--- Only modules in *this file's import closure* are walkable at all, which is what leaves
--- `@[correct]`'s raw `addDecl` path unaudited: `Correct` and `Tuning` declare root-level names
--- (`isAllTwos`, `genAllTwos`, `genBetween`) that collide with `GeneratorAPI`'s, so importing them
--- here is what would have to change first.
+-- Only modules in *this file's import closure* are walkable at all, so each has to be imported
+-- above as well as accepted here. `TotalWitness` is deliberately absent: it spells the pipeline out
+-- one tactic at a time, so its `genAllTwosBasalt` *is* an unreduced `witness.val.run` — residue
+-- everywhere else, and the point of the file there.
 run_cmd
   liftTermElabM <| auditConstants
-      (fun m => (`PalamedesTest.Corpus).isPrefixOf m || m == `PalamedesTest.GeneratorAPI)
+      (fun m => (`PalamedesTest.Corpus).isPrefixOf m || m == `PalamedesTest.GeneratorAPI ||
+        m == `PalamedesTest.Synthesizer.Correct || m == `PalamedesTest.Tuning)
       "extraction audit found no generators to check; is the example corpus imported?"
       fun n => do
       let some ci := (← getEnv).find? n | return false

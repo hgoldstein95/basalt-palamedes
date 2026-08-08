@@ -22,12 +22,14 @@ from one that merely elaborated.
 
 open Palamedes
 
+namespace PalamedesTest.Synthesizer.Correct
+
 @[simp]
 def isAllTwos : List Nat → Bool
   | [] => true
   | x :: xs => x = 2 && isAllTwos xs
 
-/-- info: @[correct] genAllTwos: emitted sound_complete -/
+/-- info: @[correct] PalamedesTest.Synthesizer.Correct.genAllTwos: emitted sound_complete -/
 #guard_msgs in
 @[correct] def genAllTwos [Gen G] : G (List Nat) := by generator_search (fun xs => isAllTwos xs)
 
@@ -44,7 +46,7 @@ def isAllTwos : List Nat → Bool
 #guard_msgs in
 #check @genAllTwos.sound_complete
 
-/-- info: 'genAllTwos.sound_complete' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'PalamedesTest.Synthesizer.Correct.genAllTwos.sound_complete' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms genAllTwos.sound_complete
 
@@ -58,7 +60,7 @@ example (P : List Nat → Prop) (hP : (fun xs => isAllTwos xs = true) = P) :
 -- construction, so totality is what the *type* says and not a companion to state it again. A
 -- generator that could fail would not have elaborated at this shape at all.
 run_cmd
-  PalamedesTest.assertNotDeclared `genAllTwos.total
+  PalamedesTest.assertNotDeclared `PalamedesTest.Synthesizer.Correct.genAllTwos.total
     "totality is the content of a `G α` declaration, not a companion beside it"
 
 /-! ## Binders
@@ -69,7 +71,7 @@ binders are quantified over in the emitted law.
 -/
 
 -- Value binders are *kept*, and the law quantifies over them.
-/-- info: @[correct] genParam: emitted sound_complete -/
+/-- info: @[correct] PalamedesTest.Synthesizer.Correct.genParam: emitted sound_complete -/
 #guard_msgs in
 @[correct] def genParam (_n : Nat) [Gen G] : G (List Nat) := by
   generator_search (fun xs => isAllTwos xs)
@@ -81,7 +83,7 @@ info: genParam.sound_complete : ∀ (_n : ℕ), IsSoundAndComplete (genParam _n)
 #check @genParam.sound_complete
 
 -- The filtering shape takes binders too, and carries a law of its own.
-/-- info: @[correct] genRange: emitted sound_complete -/
+/-- info: @[correct] PalamedesTest.Synthesizer.Correct.genRange: emitted sound_complete -/
 #guard_msgs in
 @[correct] def genRange (lo hi : Nat) [Gen G] : G (Option Nat) := by
   generator_search (fun n => lo ≤ n ∧ n ≤ hi)
@@ -99,7 +101,7 @@ info: genRange.sound_complete : ∀ (lo hi : ℕ), IsSomeSoundAndComplete (genRa
 #guard_msgs in
 #check @genRange.sound_complete
 
-/-- info: 'genRange.sound_complete' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'PalamedesTest.Synthesizer.Correct.genRange.sound_complete' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms genRange.sound_complete
 
@@ -109,14 +111,16 @@ info: genRange.sound_complete : ∀ (lo hi : ℕ), IsSomeSoundAndComplete (genRa
 -- the kernel rejects a declaration containing metavariables, so the failure is loud. The literal
 -- bounds are what make it discharge: `3 ≤ n ∧ n ≤ 7` leaves no `assume`, so this elaborates at
 -- `G ℕ` rather than `G (Option ℕ)`.
-/-- info: @[correct] genBetween: emitted sound_complete -/
+/-- info: @[correct] PalamedesTest.Synthesizer.Correct.genBetween: emitted sound_complete -/
 #guard_msgs in
 @[correct] def genBetween [Gen G] : G Nat := by generator_search (fun n => 3 ≤ n ∧ n ≤ 7)
 
-/-- info: genBetween.sound_complete : IsSoundAndComplete genBetween fun n => 3 ≤ n ∧ n ≤ 7 -/
+/-- info: PalamedesTest.Synthesizer.Correct.genBetween.sound_complete : IsSoundAndComplete genBetween fun n => 3 ≤ n ∧ n ≤ 7 -/
 #guard_msgs in
 #check genBetween.sound_complete
 
-/-- info: 'genBetween.sound_complete' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+/-- info: 'PalamedesTest.Synthesizer.Correct.genBetween.sound_complete' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms genBetween.sound_complete
+
+end PalamedesTest.Synthesizer.Correct

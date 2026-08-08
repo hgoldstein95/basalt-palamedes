@@ -20,24 +20,6 @@ populate a `θ` are `Palamedes.Schedule`.
 
 open Lean Meta
 
-/-- The uniform weighting, for any generator at all.
-
-`Tuning.weight` falls back to `(1, 0)` for an index the schedule array does not reach, so the empty
-tuning weights every branch of every site equally without having to know how many there are. This is
-what makes `(θ : Tuning := .uniform)` a signature a user can write before knowing the site count. -/
-def Tuning.uniform : Tuning := ⟨#[]⟩
-
-/-! A tuned weight is positive by construction (`Tuning.weight` clamps to at least 1), and the choice
-combinators declare their positivity side condition as a `by simp` autoParam. This tag connects the
-two, and it is what makes a *tuned* generator printable.
-
-`delabFrequency` drops that side condition exactly when the autoParam can put it back, which it
-establishes by running the tactic (`PGen.autoParamRecovers`). Without the tag it cannot: `simp`
-reduces the goal to `0 < θ.weight 0 d ∨ …` and stops. Every tuned generator would then print each
-of its choice sites with a `._proof_i` wall attached — `generator_search?` output and `#guard_msgs`
-pins alike. -/
-attribute [simp] Tuning.weight_pos
-
 namespace Palamedes
 
 /-- A `frequency` site; the internal form of Basalt's `Site`. `offset` is the site's first index into

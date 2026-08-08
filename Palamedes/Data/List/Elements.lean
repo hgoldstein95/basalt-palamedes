@@ -146,7 +146,11 @@ def total_elements {xs : List α} {h : xs.length > 0} : PGen.total (elements xs 
 
 end Total
 
-theorem getElem?_eq_some_iff_indexesOf_getElem?_eq_some
+end PGen
+
+/-- Consumed by `norm_for_elements` (`Synthesizer/CGeneratorSearch.lean`), which uses it to turn a
+positional lookup into membership in the index list `elements` draws from. -/
+theorem getElem?_eq_some_iff_mem_idxsOf
     [BEq α]
     [LawfulBEq α]
     {xs : List α}
@@ -155,7 +159,5 @@ theorem getElem?_eq_some_iff_indexesOf_getElem?_eq_some
     xs[i]? = some a ↔ i ∈ (xs.idxsOf a) := by
   rw [List.getElem?_eq_some_iff, List.mem_idxsOf_iff_exists_getElem_pos]
   simp
-
-end PGen
 
 end Palamedes
