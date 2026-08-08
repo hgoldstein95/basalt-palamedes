@@ -11,13 +11,13 @@ import Palamedes.Total
 import Palamedes.RuleSets
 import Palamedes.CaseSplit
 import Palamedes.SomeSupport
+import Palamedes.Derive.Enum
 
 /-!
 # `Color` primitives
 
-The two-constructor `Color` type (red/black, for red-black trees), `arbColor`, its
-support/totality facts, the synthesis rules `s_arbColor` and `s_caseColor`, and a `ToString`
-instance.
+The two-constructor `Color` type (red/black, for red-black trees), its derived draw layer, the
+case-split rule `s_caseColor`, and a `ToString` instance.
 -/
 
 section TypeDef
@@ -36,30 +36,15 @@ theorem Color.exists_color {P : Color → Prop} : (∃ c, P c) ↔ P .red ∨ P 
 
 end TypeDef
 
+derive_enum_gen Color
+
 namespace Palamedes
 
 open Palamedes.PGen
 
 namespace PGen
 
-def arbColor : PGen Color := pick (pure .red) (pure .black)
-
-@[simp]
-theorem support_arbColor :
-    support arbColor = fun _ => True := by
-    funext x; cases x <;> simp_all [arbColor]
-
-@[simp]
-theorem someSupport_arbColor : someSupport arbColor = fun _ => True := by
-  funext x; cases x <;> simp_all [arbColor]
-
 namespace CorrectGen
-
-@[extract, aesop safe apply (rule_sets := [synthesis])]
-def s_arbColor : @CorrectGen Color (fun _ => True) :=
-  Subtype.mk arbColor <| by
-    funext v
-    simp
 
 @[extract, case_split]
 def s_caseColor
@@ -76,22 +61,6 @@ def s_caseColor
     | .black => simp [gb.property, h]
 
 end CorrectGen
-
-namespace Total
-
-@[total]
-def total_arbColor : total (arbColor : PGen Color) :=
-  total_pick (total_pure _) (total_pure _)
-
-/-- Same hazard as `total_Bool_rec`; see there. -/
-@[total]
-def total_Color_rec (hr : total gr) (hb : total gb) : total (Color.rec gr gb c) :=
-  ⟨⟨fun {_G} _ => match c with | .red => hr.val.run | .black => hb.val.run⟩, by
-    cases c
-    · exact hr.property
-    · exact hb.property⟩
-
-end Total
 
 end PGen
 

@@ -6,6 +6,7 @@ Authors: Harrison Goldstein
 
 import Palamedes.Derive.Analyze
 import Palamedes.Derive.BaseFunctor
+import Palamedes.Derive.Enum
 import Palamedes.Derive.Recursion
 import Palamedes.Derive.Fusion
 

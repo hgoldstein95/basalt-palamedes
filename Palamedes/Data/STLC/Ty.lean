@@ -163,14 +163,16 @@ end CorrectGen
 
 namespace Total
 
-/-- Same hazard as `total_arbLabel`: the `unfold arbTy` is confined to the proof component. Opened
+/-- Same hazard as the generated `total_arbX` (`Palamedes.Derive.genEnumTotalArb`): the
+`unfold arbTy` is confined to the proof component. Opened
 by `simp only` in tactic mode instead, the whole witness ends up under an `Eq.mpr` in the **data**
 path, and `genWellScoped` prints this one node as a 150-line congruence tree. -/
 @[total]
 def total_arbTy : total arbTy := ⟨TGen.arbTy, by unfold arbTy; rfl⟩
 
-/-- The witness is a `match` on `τ` inside `TGen.mk`, **not** `by cases τ` (same hazard as
-`total_Bool_rec`): `total` is `Type`-valued, so tactic-mode `cases` is `Ty.rec` in the data path,
+/-- The witness is a `match` on `τ` inside `TGen.mk`, **not** `by cases τ` (same hazard as the
+generated `total_X_rec`, `Palamedes.Derive.genEnumTotalRec`): `total` is `Type`-valued, so
+tactic-mode `cases` is `Ty.rec` in the data path,
 and the code generator rejects the emitted generator with "does not support recursor `Ty.rec`".
 That move is available only because `caseTy`'s branches are non-dependent — see its docstring.
 `genWellTyped` is the only generator that reaches this rule, so nothing else in the corpus

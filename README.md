@@ -171,6 +171,20 @@ library has never heard of, inside a test file, and synthesizes for it. Debug wi
 Rejected by design, loudly: mutual, nested, and indexed inductives. (A rose tree — `node : List
 (Tree α) → Tree α` — is the canonical unsupported shape.)
 
+A finite enumeration has no recursion to schematise, so it gets its own one-liner instead:
+
+```lean4
+derive_enum_gen MyColor
+```
+
+which generates the uniform draw `arbMyColor`, its support/`someSupport`/totality facts, the
+synthesis rule `s_arbMyColor`, and the recursor totality rule `total_MyColor_rec`. Adding
+`primitive` spells the draw at `TGen` behind an `@[irreducible]` `PGen` coercion, so emitted terms
+name it rather than inlining its `pick` at every use site. Case analysis is *not* generated: a
+`@[case_split]` rule is written per datatype, because the shape that keeps the search finding the
+same generator differs from type to type (`Palamedes/Data/Bool.lean`'s `s_caseBool` documents the
+one measured instance).
+
 ## Layout
 
 - **`Palamedes/PGen.lean`** — the core types. `PGen α` is a *structure* wrapping a polymorphic Basalt
@@ -182,7 +196,8 @@ Rejected by design, loudly: mutual, nested, and indexed inductives. (A rose tree
 - **`Palamedes/CorrectGen.lean`** — `CorrectGen P := {g : PGen α // g.support = P}`, a generator
   bundled with a proof that its support is exactly `P`, plus the combinators the search composes.
   Synthesis is a proof search for an inhabitant of this.
-- **`Palamedes/Derive/`** — the `derive_palamedes` command (see above), split into the input check
+- **`Palamedes/Derive/`** — the `derive_palamedes` and `derive_enum_gen` commands (see above),
+  split into the input check
   (`Analyze`), the base functor, the recursion schemes and their laws, and the fusion family. This is
   where the recursion scheme lives, in exactly one place, so a change to it reaches every datatype at
   once.

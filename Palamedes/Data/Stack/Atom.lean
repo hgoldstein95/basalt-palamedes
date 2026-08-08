@@ -11,12 +11,13 @@ import Palamedes.Total
 import Palamedes.RuleSets
 import Palamedes.CaseSplit
 import Palamedes.Data.Nat
+import Palamedes.Derive.Enum
 
 /-!
 # `Label` and `Atom` primitives
 
-The IFC stack machine's atoms (adapted from QuickChick's ifc-basic example): `arbLabel`, its
-support/totality facts, and the synthesis rules `s_arbLabel`, `s_caseLabel`, and `s_arbAtom`.
+The IFC stack machine's atoms (adapted from QuickChick's ifc-basic example): `Label`'s derived draw
+layer, and the synthesis rules `s_caseLabel` and `s_arbAtom`.
 -/
 
 section TypeDef
@@ -32,47 +33,15 @@ inductive Atom where
 
 end TypeDef
 
+derive_enum_gen Label primitive
+
 namespace Palamedes
 
 open Palamedes.PGen
 
-/-! ## The primitive
-
-A label draw cannot fail, so it is spelled at the failure-free interface `TGen` and its `PGen` form
-is `TGen.toGen` of it; see the section header in `Data/Nat.lean` for why the twin belongs in
-`Palamedes.TGen` and not `Palamedes.PGen.TGen`. -/
-
-namespace TGen
-
-/-- An arbitrary security label, uniform over the two. -/
-def arbLabel : TGen Label := TGen.pick (TGen.pure .low) (TGen.pure .high)
-
-end TGen
-
 namespace PGen
 
-/-- `@[irreducible]` so the optimizer treats a label draw as an opaque primitive rather than
-descending into it and flattening the `pick` into the enclosing choice. -/
-@[irreducible]
-def arbLabel : PGen Label := TGen.arbLabel.toGen
-
-@[simp]
-theorem support_arbLabel : support arbLabel = fun _ => True := by
-  funext v
-  cases v <;> simp_all [arbLabel, TGen.arbLabel]
-
-@[simp]
-theorem someSupport_arbLabel : someSupport arbLabel = fun _ => True := by
-  funext v
-  cases v <;> simp_all [arbLabel, TGen.arbLabel]
-
 namespace CorrectGen
-
-@[extract, aesop safe apply (rule_sets := [synthesis])]
-def s_arbLabel : @CorrectGen Label (fun _ => True) :=
-  Subtype.mk arbLabel <| by
-    funext v
-    simp
 
 @[extract, case_split]
 def s_caseLabel
@@ -98,26 +67,6 @@ def s_arbAtom
     simp_all [g.property]
 
 end CorrectGen
-
-namespace Total
-
-/-- The `unfold` is confined to the proof component: written `by unfold arbLabel; exact …` instead,
-the whole term sits under an `Eq.mpr` in the **data** path, `.val` stops projecting, and the witness
-reaches the environment as a proof term. Keeping the data a bare `TGen.arbLabel` is also what makes
-`genGoodStack` print each of its four label draws as one named generator instead of an inlined
-`pick`. -/
-@[total]
-def total_arbLabel : total arbLabel := ⟨TGen.arbLabel, by unfold arbLabel; rfl⟩
-
-/-- Same hazard as `total_Bool_rec`; see there. -/
-@[total]
-def total_Label_rec (hl : total gl) (hh : total gh) : total (Label.rec gl gh l) :=
-  ⟨⟨fun {_G} _ => match l with | .low => hl.val.run | .high => hh.val.run⟩, by
-    cases l
-    · exact hl.property
-    · exact hh.property⟩
-
-end Total
 
 end PGen
 
