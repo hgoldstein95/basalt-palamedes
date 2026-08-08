@@ -239,6 +239,36 @@ def support (g : PGen α) : α → Prop := SPMF.support g.run
 
 namespace Support
 
+theorem support_ext {g : PGen α} {P : α → Prop} (h : ∀ a, a ∈ SPMF.support g.run ↔ P a) :
+    support g = P :=
+  funext fun a => propext (h a)
+
+/-- Reindexing along `frequency`'s map. -/
+theorem exists_mem_map_weighted {α : Type u} {β : Type v} {gs : List (Nat × α)} (m : α → β) {R : β → Prop} :
+    (∃ w b, (w, b) ∈ gs.map (fun p => (p.1, m p.2)) ∧ 0 < w ∧ R b)
+      ↔ ∃ w g, (w, g) ∈ gs ∧ 0 < w ∧ R (m g) := by
+  constructor
+  · rintro ⟨w, b, hmem, hw, hb⟩
+    obtain ⟨⟨w', g⟩, hmem', he⟩ := List.mem_map.mp hmem
+    simp only [Prod.mk.injEq] at he
+    obtain ⟨rfl, rfl⟩ := he
+    exact ⟨w', g, hmem', hw, hb⟩
+  · rintro ⟨w, g, hmem, hw, hg⟩
+    exact ⟨w, m g, List.mem_map.mpr ⟨(w, g), hmem, rfl⟩, hw, hg⟩
+
+/-- `exists_mem_map_weighted` at `oneOf`'s all-ones weighting, where the weight condition is
+vacuous. -/
+theorem exists_mem_map_uniform {α : Type u} {gs : List α} {R : α → Prop} :
+    (∃ w g, (w, g) ∈ gs.map (fun g => (1, g)) ∧ 0 < w ∧ R g) ↔ ∃ g ∈ gs, R g := by
+  constructor
+  · rintro ⟨w, g, hmem, _, hg⟩
+    obtain ⟨g', hmem', he⟩ := List.mem_map.mp hmem
+    simp only [Prod.mk.injEq] at he
+    obtain ⟨-, rfl⟩ := he
+    exact ⟨g', hmem', hg⟩
+  · rintro ⟨g, hmem, hg⟩
+    exact ⟨1, g, List.mem_map.mpr ⟨g, hmem, rfl⟩, Nat.one_pos, hg⟩
+
 /-- The `SPMF` interpretation of `empty` is the bottom distribution, whose support is empty. -/
 theorem support_bot : SPMF.support (Lean.Order.bot : SPMF α) = (∅ : Set α) := by
   ext a
@@ -249,16 +279,14 @@ theorem support_bot : SPMF.support (Lean.Order.bot : SPMF α) = (∅ : Set α) :
 @[simp]
 theorem support_pure :
     support (pure a) = (· = a) := by
-  funext x
-  simp only [support, Pure.pure, PGen.pure, eq_iff_iff]
+  refine support_ext fun x => ?_
   show x ∈ SPMF.support (Pure.pure a) ↔ x = a
   simp
 
 @[simp]
 theorem support_bind :
     support (x >>= f) = fun b => ∃ a, support x a ∧ support (f a) b := by
-  funext b
-  apply propext
+  refine support_ext fun b => ?_
   show b ∈ SPMF.support (x.run >>= fun a => (f a).run) ↔ _
   simp only [SPMF.support_bind, Set.mem_setOf_eq]
   rfl
@@ -266,8 +294,7 @@ theorem support_bind :
 @[simp]
 theorem support_pick :
     support (pick x y) = fun a => support x a ∨ support y a := by
-  funext a
-  apply propext
+  refine support_ext fun a => ?_
   show a ∈ SPMF.support (RandomChoice.pick (fun () => x.run) (fun () => y.run)) ↔ _
   simp only [SPMF.support_pick, Set.mem_union]
   rfl
@@ -275,37 +302,24 @@ theorem support_pick :
 @[simp]
 theorem support_frequency {gs : List (Nat × PGen α)} (h) :
     support (frequency gs h) = fun a => ∃ w g, (w, g) ∈ gs ∧ 0 < w ∧ support g a := by
-  funext a
-  apply propext
+  refine support_ext fun a => ?_
   show a ∈ SPMF.support (_root_.frequency (gs.map fun p => (p.1, fun _ => p.2.run))
       (by simpa [List.map_map, Function.comp_def] using h)) ↔ _
   rw [SPMF.support_frequency]
-  simp only [Set.mem_setOf_eq, List.mem_map, Prod.mk.injEq]
-  constructor
-  · rintro ⟨w, g, ⟨⟨w', g'⟩, hmem, hw', hg'⟩, hw, ha⟩
-    subst hw'
-    subst hg'
-    exact ⟨w', g', hmem, hw, ha⟩
-  · rintro ⟨w, g, hmem, hw, ha⟩
-    exact ⟨w, fun _ => g.run, ⟨⟨w, g⟩, hmem, rfl, rfl⟩, hw, ha⟩
+  simp only [Set.mem_setOf_eq]
+  exact exists_mem_map_weighted (m := fun (g : PGen α) (_ : Unit) => (g.run : SPMF α))
 
 @[simp]
 theorem support_oneOf {gs : List (PGen α)} (h) :
     support (oneOf gs h) = fun a => ∃ g ∈ gs, support g a := by
   funext a
-  simp only [oneOf, support_frequency, List.mem_map, eq_iff_iff, Prod.mk.injEq]
-  constructor
-  · rintro ⟨w, g, ⟨g', hmem, hw, hg⟩, _, ha⟩
-    subst hg
-    exact ⟨g', hmem, ha⟩
-  · rintro ⟨g, hmem, ha⟩
-    exact ⟨1, g, ⟨g, hmem, rfl, rfl⟩, Nat.one_pos, ha⟩
+  simp only [oneOf, support_frequency, eq_iff_iff]
+  exact exists_mem_map_uniform
 
 @[simp]
 theorem support_choose :
     support (choose lo hi h) = fun a => lo ≤ a ∧ a ≤ hi := by
-  funext v
-  apply propext
+  refine support_ext fun v => ?_
   show v ∈ SPMF.support (chooseNat lo hi h) ↔ _
   exact SPMF.mem_support_chooseNat_iff
 
@@ -328,8 +342,7 @@ theorem support_assume :
 @[simp]
 theorem support_map :
     support (f <$> x) = fun b => ∃ a, support x a ∧ b = f a := by
-  funext b
-  apply propext
+  refine support_ext fun b => ?_
   show b ∈ SPMF.support (x.run >>= fun a => Pure.pure (f a)) ↔ _
   simp only [SPMF.support_bind, SPMF.support_pure, Set.mem_setOf_eq, Set.mem_singleton_iff]
   rfl

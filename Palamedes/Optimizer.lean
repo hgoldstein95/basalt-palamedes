@@ -50,6 +50,22 @@ partial def assumeUnderBinder (f : Expr) (crossed : Array FVarId) : MetaM Bool :
 
 end
 
+/-- The two arms of a `dite P`, each built under its own hypothesis binder: `fun h : P => mkT h`
+and `fun h : ¬P => mkF h`. -/
+private def mkDiteArms (P : Expr) (mkT mkF : Expr → MetaM Expr) : MetaM (Expr × Expr) := do
+  let t ← withLocalDecl `h .default P fun h => do mkLambdaFVars #[h] (← mkT h)
+  let f ← withLocalDecl `h .default (.app (.const ``Not []) P) fun h => do
+    mkLambdaFVars #[h] (← mkF h)
+  return (t, f)
+
+/-- `dite P (fun h => mkT h) (fun h => mkF h)`. `inst?` supplies the `Decidable` instance when the
+matched term already carries one; otherwise it is synthesized. -/
+private def mkDite (P : Expr) (inst? : Option Expr) (mkT mkF : Expr → MetaM Expr) : MetaM Expr := do
+  let (t, f) ← mkDiteArms P mkT mkF
+  match inst? with
+  | some inst => mkAppOptM ``dite #[none, P, inst, t, f]
+  | none => mkAppM ``dite #[P, t, f]
+
 /-- Single head rewrite of a `bind` node `x >>= f`, with the twin `support_*` lemma justifying it. -/
 def optimizeBind? (x f : Expr) : MetaM (Option GenRewriteResult) :=
   match_expr x with
@@ -75,10 +91,8 @@ def optimizeBind? (x f : Expr) : MetaM (Option GenRewriteResult) :=
     unless (← assumeReachesHead xb #[]) || (← assumeReachesHead yb #[]) do return none
     return some (← mkAppM ``pick #[xb, yb], ``support_pick_bind)
   | dite _ P _ trueCase falseCase => do
-    let trueCase' ← withLocalDecl `h .default P fun h => do
-      mkLambdaFVars #[h] (← mkAppM ``bind #[.app trueCase h, f])
-    let falseCase' ← withLocalDecl `h .default (.app (.const ``Not []) P) fun h => do
-      mkLambdaFVars #[h] (← mkAppM ``bind #[.app falseCase h, f])
+    let (trueCase', falseCase') ← mkDiteArms P (fun h => mkAppM ``bind #[.app trueCase h, f])
+                                              (fun h => mkAppM ``bind #[.app falseCase h, f])
     unless (← assumeUnderBinder trueCase' #[]) || (← assumeUnderBinder falseCase' #[]) do return none
     return some (← mkAppM ``dite #[P, trueCase', falseCase'], ``support_if_bind)
   | ite _ P _ trueCase falseCase => do
@@ -111,77 +125,62 @@ def optimizeAssume? (b f : Expr) : MetaM (Option GenRewriteResult) := do
 def optimizePick? (x y : Expr) : MetaM (Option GenRewriteResult) :=
   match_expr x with
   | assume _ b f =>
-    match_expr y with
-    | assume _ b' g =>
-      -- Both `assume`s of the same guard lift cleanly; of different guards, `x`'s degrades to a
-      -- `dite`.
-      if b == b' then do
-        let c ← mkEq b (.const ``true [])
-        let f' ← withLocalDecl `h .default c fun h => do
-          mkLambdaFVars #[h] (← mkAppM ``pick #[.app f h, .app g h])
-        return some (← mkAppM ``assume #[b, f'], ``support_pick_assume_same)
-      else do
-        let c ← mkEq b (.const ``true [])
-        let fPos ← withLocalDecl `h .default c fun h => do
-          mkLambdaFVars #[h] (← mkAppM ``pick #[.app f h, y])
-        let fNeg ← withLocalDecl `h .default (.app (.const ``Not []) c) fun h =>
-          mkLambdaFVars #[h] y
-        return some (← mkAppM ``dite #[c, fPos, fNeg], ``support_assume_pick)
-    -- Only `x` is an `assume`: it degrades to a `dite`.
-    | _ => do
+    -- Two `assume`s of the same guard lift cleanly; any other `y` leaves `x`'s guard to degrade
+    -- into a `dite`, whose false branch keeps `y` alone.
+    let sameGuard : Option Expr :=
+      match_expr y with
+      | assume _ b' g => if b == b' then some g else none
+      | _ => none
+    match sameGuard with
+    | some g => do
       let c ← mkEq b (.const ``true [])
-      let fPos ← withLocalDecl `h .default c fun h => do
-        mkLambdaFVars #[h] (← mkAppM ``pick #[.app f h, y])
-      let fNeg ← withLocalDecl `h .default (.app (.const ``Not []) c) fun h =>
-        mkLambdaFVars #[h] y
-      return some (← mkAppM ``dite #[c, fPos, fNeg], ``support_assume_pick)
+      let f' ← withLocalDecl `h .default c fun h => do
+        mkLambdaFVars #[h] (← mkAppM ``pick #[.app f h, .app g h])
+      return some (← mkAppM ``assume #[b, f'], ``support_pick_assume_same)
+    | none => do
+      let c ← mkEq b (.const ``true [])
+      let e' ← mkDite c none (fun h => mkAppM ``pick #[.app f h, y]) (fun _ => pure y)
+      return some (e', ``support_assume_pick)
   | _ =>
     match_expr y with
     -- Only `y` is an `assume`.
     | assume _ b f => do
       let c ← mkEq b (.const ``true [])
-      let fPos ← withLocalDecl `h .default c fun h => do
-        mkLambdaFVars #[h] (← mkAppM ``pick #[x, .app f h])
-      let fNeg ← withLocalDecl `h .default (.app (.const ``Not []) c) fun h =>
-        mkLambdaFVars #[h] x
-      return some (← mkAppM ``dite #[c, fPos, fNeg], ``support_pick_assume)
+      let e' ← mkDite c none (fun h => mkAppM ``pick #[x, .app f h]) (fun _ => pure x)
+      return some (e', ``support_pick_assume)
     | _ => return none
 
 /-! ## Pick Flattening -/
 
-/-- Match `oneOf (x :: xs) h` with a literal branch list, returning the head, tail, its elements, and
-the nonemptiness proof. -/
-private def oneOfLit? (e : Expr) : Option (Expr × Expr × List Expr × Expr) :=
+/-- Match `oneOf (x :: xs) h` with a literal branch list, returning the head and the tail's
+elements. -/
+private def oneOfLit? (e : Expr) : Option (Expr × List Expr) :=
   match e.getAppFnArgs with
-  | (``PGen.oneOf, #[_, gs, h]) =>
+  | (``PGen.oneOf, #[_, gs, _]) =>
     match gs.getAppFnArgs with
     | (``List.cons, #[_, x, xs]) => do
       let elems ← listLitElems? xs
-      return (x, xs, elems, h)
+      return (x, elems)
     | _ => none
   | _ => none
 
 /-- Flatten `pick x y` into one uniform `oneOf`: each arm contributes its elements if it is a literal
 `oneOf` and itself otherwise. -/
-private def flattenPick? (e : Expr) : MetaM (Option (Expr × Expr)) := do
+private def flattenPick? (e : Expr) : MetaM (Option GenRewriteResult) := do
   match_expr e with
   | PGen.pick _ x y => do
-    let (elems, proof) ←
+    let (elems, lemmaName) :=
       match oneOfLit? x, oneOfLit? y with
-      | none, none => do
-        pure ([x, y], ← mkAppM ``support_pick_flatten #[x, y])
-      | some (xh, xt, xelems, hx), none => do
-        pure (xh :: xelems ++ [y], ← mkAppM ``support_pick_flatten_left #[xh, xt, hx, y])
-      | none, some (yh, yt, yelems, hy) => do
-        pure (x :: yh :: yelems, ← mkAppM ``support_pick_flatten_right #[x, yh, yt, hy])
-      | some (xh, xt, xelems, hx), some (yh, yt, yelems, hy) => do
-        pure (xh :: xelems ++ yh :: yelems,
-          ← mkAppM ``support_pick_flatten_both #[xh, xt, hx, yh, yt, hy])
+      | none, none => ([x, y], ``support_pick_flatten)
+      | some (xh, xelems), none => (xh :: xelems ++ [y], ``support_pick_flatten_left)
+      | none, some (yh, yelems) => (x :: yh :: yelems, ``support_pick_flatten_right)
+      | some (xh, xelems), some (yh, yelems) =>
+        (xh :: xelems ++ yh :: yelems, ``support_pick_flatten_both)
     let tl ← mkListLit (← inferType x) elems.tail
     let gs ← mkAppM ``List.cons #[elems.head!, tl]
     let hne ← mkAppM ``List.cons_ne_nil #[elems.head!, tl]
     let e' ← mkAppM ``PGen.oneOf #[gs, hne]
-    return some (e', proof)
+    return some (e', lemmaName)
   | _ => return none
 
 /-! ## Distributing Choices into `dite` -/
@@ -196,48 +195,46 @@ private def matchDite? (e : Expr) : Option (Expr × Expr × Expr × Expr) :=
 
 The copied arm (`x`/`y`) is duplicated into both branches, so this fires only when that arm is a leaf
 (0 recursive holes); a recursive arm is left nested rather than blown up. -/
-private def distributeChoiceDite? (depth : Depth) (e : Expr) : MetaM (Option (Expr × Expr)) := do
+private def distributeChoiceDite? (depth : Depth) (e : Expr) : MetaM (Option GenRewriteResult) := do
   let some (_, typeName) := depth | return none
   let_expr PGen.pick _ x y := e | return none
   let holes ← baseCtorHoles (typeName.appendAfter "F")
-  let mkDite (P inst : Expr) (mkT mkF : Expr → MetaM Expr) : MetaM Expr := do
-    let t' ← withLocalDecl `h .default P fun h => do mkLambdaFVars #[h] (← mkT h)
-    let f' ← withLocalDecl `h .default (.app (.const ``Not []) P) fun h => do
-      mkLambdaFVars #[h] (← mkF h)
-    mkAppOptM ``dite #[none, P, inst, t', f']
   match matchDite? y with
   | some (P, inst, t, f) =>
     if (← branchHoles holes x) != 0 then return none
-    let e' ← mkDite P inst (fun h => mkAppM ``pick #[x, .app t h])
+    let e' ← mkDite P (some inst) (fun h => mkAppM ``pick #[x, .app t h])
                            (fun h => mkAppM ``pick #[x, .app f h])
-    return some (e', ← mkLeafProof ``support_pick_dite_right e e')
+    return some (e', ``support_pick_dite_right)
   | none =>
   match matchDite? x with
   | some (P, inst, t, f) =>
     if (← branchHoles holes y) != 0 then return none
-    let e' ← mkDite P inst (fun h => mkAppM ``pick #[.app t h, y])
+    let e' ← mkDite P (some inst) (fun h => mkAppM ``pick #[.app t h, y])
                            (fun h => mkAppM ``pick #[.app f h, y])
-    return some (e', ← mkLeafProof ``support_pick_dite_left e e')
+    return some (e', ``support_pick_dite_left)
   | none => return none
 
 /-! ## The passes -/
 
-/-- The monad-law / assume-floating pass: one head rewrite, its twin lemma made an oriented proof. -/
-private def mainPass : HeadRewrite := fun _depth e => do
-  let res? ←
-    match_expr e with
-    | bind _ _ _ _ x f => optimizeBind? x f
-    | pick _ x y => optimizePick? x y
-    | assume _ b f => optimizeAssume? b f
-    | _ => pure none
-  match res? with
-  | none => return none
-  | some (e', lemmaName) => return some (e', ← mkLeafProof lemmaName e e')
+/-- Turn a pass's chosen rewrite into a `HeadRewrite`, orienting its twin lemma into a
+`support`-preservation proof. -/
+private def withLeafProof (rw : Depth → Expr → MetaM (Option GenRewriteResult)) : HeadRewrite :=
+  fun depth e => do
+    let some (e', lemmaName) ← rw depth e | return none
+    return some (e', ← mkLeafProof lemmaName e e')
+
+/-- The monad-law / assume-floating pass: one head rewrite per node. -/
+private def mainPass : HeadRewrite := withLeafProof fun _depth e =>
+  match_expr e with
+  | bind _ _ _ _ x f => optimizeBind? x f
+  | pick _ x y => optimizePick? x y
+  | assume _ b f => optimizeAssume? b f
+  | _ => pure none
 
 /-- The pick-collapsing pass. A choice is pushed into a `dite` arm first, before `flattenPick?`
 would bury it, so each constructor gets its own flat `oneOf`; the pass then flattens the resulting
 `pick` arms. -/
-private def flattenPass : HeadRewrite := fun depth e => do
+private def flattenPass : HeadRewrite := withLeafProof fun depth e => do
   if let some r ← distributeChoiceDite? depth e then return some r
   flattenPick? e
 

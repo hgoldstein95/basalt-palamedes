@@ -311,12 +311,14 @@ private def isCorrectGenOr (tgt : Expr) : MetaM Bool := do
     `∀ {a}, P a scrut = Q a` premise with `intros; rflm` (which synthesises `P` by generalising
     `scrut` out of the goal predicate), and return the remaining case subgoals. Throws if `scrut`
     is not usable here (e.g. `rflm` can't close the premise). -/
-private def caseSplitWith (goal : MVarId) (scrut : Expr) (lemmaName : Name) :
+private def caseSplitWith (goal : MVarId) (scrut : Expr) (typeName lemmaName : Name) :
     MetaM (List MVarId) := do
   let newGoals ← goal.apply (← mkConstWithFreshMVarLevels lemmaName)
-  let scrutTy ← inferType scrut
-  let some scrutGoal ← newGoals.findM? (fun g => do isDefEq (← g.getType) scrutTy)
-    | throwError "caseSplitWith: no scrutinee subgoal"
+  -- The registry keys `lemmaName` on its scrutinee's datatype, so the scrutinee subgoal is the one
+  -- typed at `typeName`: the premise below is an `Eq`, and every case is a `CorrectGen`.
+  let some scrutGoal ← newGoals.findM? (fun g => do
+      return (← whnfR (← g.getType)).isAppOf typeName)
+    | throwError "caseSplitWith: {lemmaName} has no {typeName} subgoal to take {scrut}"
   scrutGoal.assign scrut
   let mut caseGoals := #[]
   for g in newGoals.filter (· != scrutGoal) do
@@ -347,9 +349,9 @@ def caseSplitRuleTac : RuleTac := fun input => do
       if decl.isImplementationDetail then continue
       unless tgt.containsFVar decl.fvarId do continue
       let declTy ← instantiateMVars (← inferType decl.toExpr)
-      let some lemmaName := (caseSplitLemmas.find? (declTy.isConstOf ·.1)).map (·.2) | continue
+      let some (typeName, lemmaName) := caseSplitLemmas.find? (declTy.isConstOf ·.1) | continue
       try
-        let caseGoals ← caseSplitWith input.goal decl.toExpr lemmaName
+        let caseGoals ← caseSplitWith input.goal decl.toExpr typeName lemmaName
         let subgoals ← caseGoals.toArray.mapM (mvarIdToSubgoal input.goal ·)
         let postState ← saveState
         apps := apps.push

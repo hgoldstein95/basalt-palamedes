@@ -165,23 +165,24 @@ theorem support_pick_dite_left {α : Type} {P : Prop} [Decidable P]
       = support (if h : P then pick (t h) y else pick (f h) y) := by
   by_cases h : P <;> simp [h]
 
+/-- One direction of `support_oneOf_congr`; the statement is symmetric in `gs`/`gs'`, so the
+congruence applies this twice rather than duplicating the transport. -/
+private theorem support_oneOf_mem {α : Type} {gs gs' : List (PGen α)}
+    (hg : gs.map support = gs'.map support) {a : α} (hin : ∃ g ∈ gs, support g a) :
+    ∃ g ∈ gs', support g a := by
+  obtain ⟨g, hmem, ha⟩ := hin
+  have hs : support g ∈ gs'.map support := by
+    rw [← hg]; exact List.mem_map.mpr ⟨g, hmem, rfl⟩
+  obtain ⟨g', hmem', he⟩ := List.mem_map.mp hs
+  exact ⟨g', hmem', he ▸ ha⟩
+
 theorem support_oneOf_congr {α : Type} {gs gs' : List (PGen α)}
     (hg : gs.map support = gs'.map support) (h : gs ≠ []) (h' : gs' ≠ []) :
     support (oneOf gs h) = support (oneOf gs' h') := by
   rw [PGen.Support.support_oneOf, PGen.Support.support_oneOf]
   funext a
-  apply propext
-  constructor
-  · rintro ⟨g, hmem, ha⟩
-    have hs : support g ∈ gs'.map support := by
-      rw [← hg]; exact List.mem_map.mpr ⟨g, hmem, rfl⟩
-    obtain ⟨g', hmem', he⟩ := List.mem_map.mp hs
-    exact ⟨g', hmem', he ▸ ha⟩
-  · rintro ⟨g, hmem, ha⟩
-    have hs : support g ∈ gs.map support := by
-      rw [hg]; exact List.mem_map.mpr ⟨g, hmem, rfl⟩
-    obtain ⟨g', hmem', he⟩ := List.mem_map.mp hs
-    exact ⟨g', hmem', he ▸ ha⟩
+  exact propext ⟨fun hin => support_oneOf_mem hg hin,
+                 fun hin => support_oneOf_mem hg.symm hin⟩
 
 /-- One direction of `support_frequency_congr`; the statement is symmetric in `gs`/`gs'`, so the
 congruence applies this twice rather than duplicating the transport. -/

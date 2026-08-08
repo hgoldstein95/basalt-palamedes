@@ -82,8 +82,10 @@ private def installTuning? (θ : Expr) (st : IO.Ref TuningState) (declName : Nam
     (depth? : Depth) (e : Expr) : MetaM (Option (Expr × Expr)) := do
   match_expr e with
   | PGen.oneOf α gs h => do
-    let some elems := listLitElems? gs | return none
-    if elems.isEmpty then return none
+    let some elems := listLitElems? gs
+      | throwError "installTuning: `oneOf` with a non-literal branch list{indentExpr gs}"
+    if elems.isEmpty then
+      throwError "installTuning: `oneOf` with an empty branch list{indentExpr e}"
     -- depth expr (or `0` outside a recursion) and per-branch recursive-child counts
     let (depth, holes) ← match depth? with
       | some (d, typeName) => do

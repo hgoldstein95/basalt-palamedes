@@ -65,17 +65,20 @@ partial def branchHoles (holes : Std.HashMap Name Nat) (e : Expr) : MetaM Nat :=
   | ite _ _ _ t f => return max (← branchHoles holes t) (← branchHoles holes f)
   | PGen.pick _ x y => return max (← branchHoles holes x) (← branchHoles holes y)
   | PGen.oneOf _ gs _ =>
-    let some elems := listLitElems? gs | return 0
+    let some elems := listLitElems? gs
+      | throwError "branchHoles: `oneOf` with a non-literal branch list{indentExpr gs}"
     elems.foldlM (init := 0) fun acc g => return max acc (← branchHoles holes g)
   | PGen.frequency _ gs _ =>
     -- Children are rewritten before the head, so an inner choice is already a `frequency` here.
     -- Scoring it 0 (omitting this case) is unsafe: a decay policy grows a 0-hole branch's weight
     -- fastest.
-    let some elems := listLitElems? gs | return 0
+    let some elems := listLitElems? gs
+      | throwError "branchHoles: `frequency` with a non-literal branch list{indentExpr gs}"
     elems.foldlM (init := 0) fun acc p => do
       match p.getAppFnArgs with
       | (``Prod.mk, #[_, _, _, g]) => return max acc (← branchHoles holes g)
-      | _ => return acc
+      | _ => throwError "branchHoles: `frequency` branch is not a literal (weight, generator) \
+          pair{indentExpr p}"
   | _ => return 0
 
 /-! ## Proof helpers -/
@@ -157,6 +160,22 @@ structure TransformResult where
   expr : Expr
   proof? : Option Expr
 
+/-- The proof of `support input = support expr`, with the unchanged case spelled out as `rfl`. -/
+def TransformResult.proofOrRefl (r : TransformResult) (input : Expr) : MetaM Expr :=
+  match r.proof? with
+  | some p => pure p
+  | none => do mkEqRefl (← mkSupport input)
+
+/-- `List.map f gs = List.map f gs'` for two literal lists of element type `eltTy`, folded from one
+`List.cons` congruence per element over `rfl : [] = []`. Both lists reduce, so the result
+type-checks against the `map` form by defeq. -/
+private def mkListMapCongr (eltTy : Expr) (elemProofs : List Expr) : MetaM Expr := do
+  let consFn := mkAppN (mkConst ``List.cons [Level.zero]) #[eltTy]
+  let mut acc ← mkEqRefl (← mkListLit eltTy [])
+  for p in elemProofs.reverse do
+    acc ← mkCongr (← mkCongrArg consFn p) acc
+  return acc
+
 /-- Compose optional `support`-equality proofs with `Eq.trans`, dropping `rfl` (`none`) links; the
 shared midpoints are defeq, so it type-checks across the gaps. -/
 def chainProofs (ps : Array (Option Expr)) : MetaM (Option Expr) :=
@@ -229,16 +248,9 @@ private partial def transformOneOfChildren?
   let genα ← mkAppM ``PGen #[α]
   let gs' ← mkListLit genα elems'
   let h' ← mkAppOptM ``List.cons_ne_nil #[genα, elems'.head!, ← mkListLit genα elems'.tail!]
-  -- `gs.map support = gs'.map support`, folded from the per-branch proofs; both lists reduce, so it
-  -- type-checks against the `map` form by defeq.
+  -- `gs.map support = gs'.map support`, folded from the per-branch proofs.
   let propTy ← mkArrow α (mkSort .zero)
-  let consFn := mkAppN (mkConst ``List.cons [Level.zero]) #[propTy]
-  let mut hgMap ← mkEqRefl (← mkListLit propTy [])
-  for (g, r) in (elems.zip rs).reverse do
-    let pg ← match r.proof? with
-      | some p => pure p
-      | none   => mkEqRefl (← mkSupport g)
-    hgMap ← mkCongr (← mkCongrArg consFn pg) hgMap
+  let hgMap ← mkListMapCongr propTy (← (elems.zip rs).mapM fun (g, r) => r.proofOrRefl g)
   let hg ← mkExpectedTypeHint hgMap
     (← mkEq (← mkAppM ``List.map #[← mkAppOptM ``PGen.support #[α], gs])
             (← mkAppM ``List.map #[← mkAppOptM ``PGen.support #[α], gs']))
@@ -275,15 +287,11 @@ private partial def transformFrequencyChildren? (pass : HeadRewrite) (table : Ar
   -- `gs.map (fun p => (p.1, support p.2)) = gs'.map …`, folded from the per-branch proofs.
   let propTy ← mkArrow α (mkSort .zero)
   let eltTy ← mkAppM ``Prod #[mkConst ``Nat, propTy]
-  let consFn := mkAppN (mkConst ``List.cons [Level.zero]) #[eltTy]
-  let mut hgMap ← mkEqRefl (← mkListLit eltTy [])
-  for ((w, g), r) in (pairs.zip rs).reverse do
-    let pg ← match r.proof? with
-      | some p => pure p
-      | none   => mkEqRefl (← mkSupport g)
+  let elemProofs ← (pairs.zip rs).mapM fun ((w, g), r) => do
     let pairW ← withLocalDeclD `s propTy fun s => do
       mkLambdaFVars #[s] (← mkAppM ``Prod.mk #[w, s])
-    hgMap ← mkCongr (← mkCongrArg consFn (← mkCongrArg pairW pg)) hgMap
+    mkCongrArg pairW (← r.proofOrRefl g)
+  let hgMap ← mkListMapCongr eltTy elemProofs
   let mapFn ← withLocalDeclD `p prodTy fun p => do
     let fst ← mkAppM ``Prod.fst #[p]
     let snd ← mkSupport (← mkAppM ``Prod.snd #[p])

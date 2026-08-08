@@ -136,6 +136,26 @@ def CtorData.fieldIds (c : CtorData) : Array Ident := c.fields.map (·.id)
 def CtorData.nonRecIds (c : CtorData) : Array Ident :=
   (c.fields.filter (!·.isRec)).map (·.id)
 
+/-- Interleaved binders for a constructor's fields: recursive positions get fresh `pre{j}` idents,
+non-recursive positions keep the (positional) field ident.
+Returns (all binders in field order, the recursive-position idents). -/
+def interleaved (c : CtorData) (pre : String) : Array Ident × Array Ident := Id.run do
+  let mut out := #[]
+  let mut recs := #[]
+  let mut j := 0
+  for fd in c.fields do
+    if fd.isRec then
+      let v := gid s!"{pre}{j+1}"
+      out := out.push v
+      recs := recs.push v
+      j := j + 1
+    else
+      out := out.push fd.id
+  return (out, recs)
+
+/-- Induction-hypothesis idents `ih1 … ihk`, in the order `induction` binds them. -/
+def ihIdsFor (k : Nat) : Array Ident := (Array.range k).map fun j => gid s!"ih{j+1}"
+
 structure Ctx where
   xName : Name
   fName : Name
@@ -347,16 +367,8 @@ def accuRhs (ctx : Ctx) (c : CtorData) (ci : Nat) (allArgs : Array Term) (s : Id
   if recFs.isEmpty then
     return ← `($(fIds[ci]!) $(c.fieldIds.map (fun i => (i : Term)))* $s)
   let sIds := (Array.range recFs.size).map fun j => gid s!"s{j+1}"
-  let vIds := (Array.range recFs.size).map fun j => gid s!"v{j+1}"
-  let mut vIdx := 0
-  let mut coreArgs : Array Term := #[]
-  for fd in c.fields do
-    if fd.isRec then
-      let v : Ident := vIds[vIdx]!
-      coreArgs := coreArgs.push (v : Term)
-      vIdx := vIdx + 1
-    else
-      coreArgs := coreArgs.push (fd.id : Term)
+  let (core, vIds) := interleaved c "v"
+  let coreArgs : Array Term := core.map fun i => (i : Term)
   let mut body ← `($(fIds[ci]!) $coreArgs* $s)
   for j in (List.range recFs.size).reverse do
     body ← `($accuRef $allArgs* $((recFs[j]!).id) $(sIds[j]!) >>= fun $(vIds[j]!) => $body)
@@ -442,16 +454,8 @@ def genUnfoldFamily (ctx : Ctx) : CommandElabM Unit := do
   let alts ← ctx.ctors.mapM fun c => do
     let pat ← `($(c.fCtor) $(c.fieldIds)*)
     let recFs := c.recFields
-    let vIds := (Array.range recFs.size).map fun j => gid s!"v{j+1}"
-    let mut vIdx := 0
-    let mut mkArgs : Array Term := #[]
-    for fd in c.fields do
-      if fd.isRec then
-        let v : Ident := vIds[vIdx]!
-        mkArgs := mkArgs.push (v : Term)
-        vIdx := vIdx + 1
-      else
-        mkArgs := mkArgs.push (fd.id : Term)
+    let (mkIds, vIds) := interleaved c "v"
+    let mkArgs : Array Term := mkIds.map fun i => (i : Term)
     let mut rhs ← `(pure ($(c.xCtor) $mkArgs*))
     for j in (List.range recFs.size).reverse do
       rhs ← `($goRef $step ($d + 1) $((recFs[j]!).id) >>= fun $(vIds[j]!) => $rhs)
@@ -533,16 +537,8 @@ def genUnfoldSupport (ctx : Ctx) : CommandElabM Unit := do
       let rhs ← `($P $d $b ($(c.fCtor) $(c.fieldIds)*))
       `(matchAltExpr| | $pat:term => $rhs:term)
     else
-      let bIds := (Array.range recFs.size).map fun j => gid s!"b{j+1}"
-      let mut bIdx := 0
-      let mut fArgs : Array Term := #[]
-      for fd in c.fields do
-        if fd.isRec then
-          let v : Ident := bIds[bIdx]!
-          fArgs := fArgs.push (v : Term)
-          bIdx := bIdx + 1
-        else
-          fArgs := fArgs.push (fd.id : Term)
+      let (fs, bIds) := interleaved c "b"
+      let fArgs : Array Term := fs.map fun i => (i : Term)
       let head ← `($P $d $b ($(c.fCtor) $fArgs*))
       let recs ← recFs.mapIdxM fun j fd => `($usRef $P ($d + 1) $(bIds[j]!) $(fd.id))
       let body ← mkAnds (#[head] ++ recs)
@@ -585,7 +581,7 @@ structure SupportKit where
   /-- Wraps the `unfoldGo` application before `SPMF.support` is applied to it. -/
   runWrap : Term → CommandElabM Term
   /-- The `G` the `unfoldGo` application is read at, when it must be given explicitly. -/
-  goInst : Option Term
+  goInst : Option (CommandElabM Term)
   /-- Adapts an equation proof before feeding it to a constructor's injectivity lemma. On the
   `OptionT` side the equation is between `Option`s, so it needs peeling first. -/
   wrapInj : Term → CommandElabM Term
@@ -594,10 +590,10 @@ structure SupportKit where
 def SupportKit.spmf : SupportKit where
   thmName := "support_unfold"
   supportOf := fun g => `(Palamedes.PGen.support $g)
-  bindLem := mkIdent ``SPMF.support_bind
-  pureLem := mkIdent ``SPMF.support_pure
-  memLems := #[mkIdent ``Set.mem_setOf_eq, mkIdent ``Set.mem_singleton_iff]
-  headSimp := #[mkIdent ``Set.mem_setOf_eq]
+  bindLem := mkCIdent ``SPMF.support_bind
+  pureLem := mkCIdent ``SPMF.support_pure
+  memLems := #[mkCIdent ``Set.mem_setOf_eq, mkCIdent ``Set.mem_singleton_iff]
+  headSimp := #[mkCIdent ``Set.mem_setOf_eq]
   memWrap := pure
   runWrap := pure
   goInst := none
@@ -607,13 +603,13 @@ def SupportKit.spmf : SupportKit where
 def SupportKit.optionT : SupportKit where
   thmName := "someSupport_unfold"
   supportOf := fun g => `(Palamedes.someSupport $g)
-  bindLem := mkIdent ``Palamedes.mem_support_optionT_bind
-  pureLem := mkIdent ``Palamedes.support_optionT_pure
-  memLems := #[mkIdent ``Set.mem_singleton_iff]
+  bindLem := mkCIdent ``Palamedes.mem_support_optionT_bind
+  pureLem := mkCIdent ``Palamedes.support_optionT_pure
+  memLems := #[mkCIdent ``Set.mem_singleton_iff]
   headSimp := #[]
   memWrap := fun w => `(some $w)
   runWrap := fun e => `(OptionT.run $e)
-  goInst := some (Unhygienic.run `(OptionT SPMF))
+  goInst := some `(OptionT SPMF)
   wrapInj := fun h => `(Option.some.inj $h)
 
 /-- `X.support_unfold` / `X.someSupport_unfold` — the support characterization, by a generated
@@ -645,7 +641,7 @@ def genSupportUnfold (ctx : Ctx) (kit : SupportKit) : CommandElabM Unit := do
   -- per-constructor induction cases
   let cases ← ctx.ctors.mapM fun c => do
     let recFs := c.recFields
-    let ihIds := (Array.range recFs.size).map fun j => gid s!"ih{j+1}"
+    let ihIds := ihIdsFor recFs.size
     let tv := gid "tv"
     let ht := gid "ht"
     let hw := gid "hw"
@@ -705,21 +701,13 @@ def genSupportUnfold (ctx : Ctx) (kit : SupportKit) : CommandElabM Unit := do
           ← `(tactic| intro $h:ident),
           ← `(tactic| exact ⟨$wit, $h, by simp only [$pureSet,*]⟩)]
       else
-        let bIds := (Array.range recFs.size).map fun j => gid s!"b{j+1}"
+        let (wit', bIds) := interleaved c "b"
+        let witArgs : Array Term := wit'.map fun i => (i : Term)
         let hb := gid "hb"
         let hIds := (Array.range recFs.size).map fun j => gid s!"h{j+1}"
         let mut pats : Array Ident := bIds
         pats := pats.push hb
         pats := pats ++ hIds
-        let mut bIdx := 0
-        let mut witArgs : Array Term := #[]
-        for fd in c.fields do
-          if fd.isRec then
-            let v : Ident := bIds[bIdx]!
-            witArgs := witArgs.push (v : Term)
-            bIdx := bIdx + 1
-          else
-            witArgs := witArgs.push (fd.id : Term)
         let mut final : Array Term := #[]
         for j in [0:recFs.size] do
           let fj := recFs[j]!
@@ -751,7 +739,9 @@ def genSupportUnfold (ctx : Ctx) (kit : SupportKit) : CommandElabM Unit := do
   -- `G` it is instantiated at — the skeleton below is shared verbatim.
   let goApp ← match kit.goInst with
     | none => `($goRef (fun $d $x => ($f $d $x).run) $d₀ $b)
-    | some inst => `($goRef (G := $inst) (fun $d $x => ($f $d $x).run) $d₀ $b)
+    | some instM => do
+        let inst ← instM
+        `($goRef (G := $inst) (fun $d $x => ($f $d $x).run) $d₀ $b)
   let lhs ← kit.supportOf (← `($(ctx.ref "unfold") $f $b $d₀))
   let step ← `(fun $d $x => $(← kit.supportOf (← `($f $d $x))))
   let memW ← kit.memWrap (w : Term)
@@ -809,7 +799,7 @@ def genTotalUnfold (ctx : Ctx) : CommandElabM Unit := do
     def $(ctx.declId "total_unfold"):ident $binders:bracketedBinder*
         ($h : ∀ $d:ident $x:ident, Palamedes.PGen.total ($g $d $x)) :
         Palamedes.PGen.total ($(ctx.ref "unfold") $g $b $d₀) :=
-      ⟨$(mkIdent ctx.tgenUnfoldName) (fun $d $y => ($h $d $y).val) $b $d₀, by
+      ⟨$(rootedIdent ctx.tgenUnfoldName) (fun $d $y => ($h $d $y).val) $b $d₀, by
         have $heq:ident : (fun $d $y => (($h $d $y).val).toGen) = $g :=
           funext fun $d:ident => funext fun $y:ident => ($h $d $y).property
         conv_rhs => rw [← $heq:ident]
@@ -894,7 +884,7 @@ def genCoerceToFold (ctx : Ctx) : CommandElabM Unit := do
   -- fields by splitting the ∀-hypothesis via `forall_bool`)
   let cases ← ctx.ctors.mapM fun c => do
     let recFs := c.recFields
-    let ihIds := (Array.range recFs.size).map fun j => gid s!"ih{j+1}"
+    let ihIds := ihIdsFor recFs.size
     let hId := gid s!"h_{c.short}"
     let lemmas : Array Term :=
       #[(hId : Term), (ctx.ref s!"fold_{c.short}" : Term)] ++ ihIds.map (fun i => (i : Term))
@@ -913,25 +903,6 @@ end Generators
 
 section FusionGenerators
 
-/-- Interleaved lambda binders for a constructor's algebra: recursive positions get fresh
-`pre{j}` idents, non-recursive positions keep the (positional) field ident.
-Returns (all binders in field order, the recursive-position idents). -/
-def interleaved (c : CtorData) (pre : String) : Array Ident × Array Ident := Id.run do
-  let mut out := #[]
-  let mut recs := #[]
-  let mut j := 0
-  for fd in c.fields do
-    if fd.isRec then
-      let v := gid s!"{pre}{j+1}"
-      out := out.push v
-      recs := recs.push v
-      j := j + 1
-    else
-      out := out.push fd.id
-  return (out, recs)
-
-def ihIdsFor (k : Nat) : Array Ident := (Array.range k).map fun j => gid s!"ih{j+1}"
-
 /-- `merge_accuM` (banana split in `Option`): running two accumulating folds separately agrees
 with running the pairwise-merged one. Statement and proof are constructor-indexed instances of
 the hand-written `Tree.merge_accuM`. -/
@@ -941,7 +912,7 @@ def genMergeAccuM (ctx : Ctx) : CommandElabM Unit := do
   let t := gid "t"; let p := gid "p"
   let accuRef := ctx.ref "accuM"
   let self ← ctx.selfTy
-  let opt := mkIdent `Option
+  let opt := mkCIdent ``Option
   let st1 := ctx.ctors.map fun c =>
     if c.recFields.isEmpty then none else some (gid s!"st1_{c.short}")
   let st2 := ctx.ctors.map fun c =>
@@ -1260,7 +1231,7 @@ def genFoldAccuFunction (ctx : Ctx) : CommandElabM Unit := do
   let foldRef := ctx.ref "fold"
   let accuRef := ctx.ref "accuM"
   let self ← ctx.selfTy
-  let opt := mkIdent `Option
+  let opt := mkCIdent ``Option
   let fIds := algIds ctx
   let sts := stPosIds ctx
   let gIds := ctx.ctors.map fun c =>
@@ -1465,7 +1436,7 @@ def genSUnfold (ctx : Ctx) : CommandElabM Unit := do
   let dv := gid "d"
   let accuRef := ctx.ref "accuM"
   let unfoldRef := ctx.ref "unfold"
-  let opt := mkIdent `Option
+  let opt := mkCIdent ``Option
   let sts := stIds ctx
   let fIds := algIds ctx
   -- binders (shared by s_unfold and s_unfold_val)
@@ -1564,21 +1535,13 @@ def genSUnfold (ctx : Ctx) : CommandElabM Unit := do
         let accuLem : Term := ctx.ref s!"accuM_{c.short}"
         let stC : Ident := sts[ci]!.get!
         let stApp ← `($stC $(c.nonRecIds)* $s)
-        let seedIds := (Array.range k).map fun j => gid s!"b{j+1}"
+        let (seeded, seedIds) := interleaved c "b"
         let hIds := (Array.range k).map fun j => gid s!"h{j+1}"
         let mut obtPats : Array Ident := #[]
         for j in [0:k] do
           obtPats := obtPats ++ #[seedIds[j]!, hIds[j]!]
         -- the base-functor witness over the seeds
-        let mut fArgs : Array Term := #[]
-        let mut ri := 0
-        for fd in c.fields do
-          if fd.isRec then
-            let sid : Ident := seedIds[ri]!
-            fArgs := fArgs.push (sid : Term)
-            ri := ri + 1
-          else
-            fArgs := fArgs.push (fd.id : Term)
+        let fArgs : Array Term := seeded.map fun i => (i : Term)
         let fWit ← `($(c.fCtor) $fArgs*)
         let mut parts : Array Term := #[]
         for j in [0:k] do

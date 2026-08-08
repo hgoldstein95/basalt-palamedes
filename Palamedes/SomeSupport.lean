@@ -31,6 +31,12 @@ polymorphic type, which Lean does not prove. The agreement holds combinator-by-c
 def someSupport (g : PGen α) : α → Prop :=
   fun a => some a ∈ SPMF.support (PGen.totalize g (G := SPMF))
 
+/-- Intro form for a `someSupport` equation, the `OptionT SPMF` counterpart of
+`PGen.Support.support_ext`. -/
+theorem someSupport_ext {g : PGen α} {P : α → Prop}
+    (h : ∀ a, some a ∈ SPMF.support (PGen.totalize g (G := SPMF)) ↔ P a) : someSupport g = P :=
+  funext fun a => propext (h a)
+
 theorem support_optionT_pure (a : α) :
     SPMF.support (OptionT.run (pure a : OptionT SPMF α)) = {some a} := by
   rw [show (pure a : OptionT SPMF α) = OptionT.mk (Pure.pure (some a)) from rfl]
@@ -108,38 +114,33 @@ section Combinators
 variable {α β : Type}
 
 @[simp] theorem someSupport_pure (a : α) : someSupport (pure a : PGen α) = (· = a) := by
-  funext x
-  apply propext
+  refine someSupport_ext fun x => ?_
   show some x ∈ SPMF.support (OptionT.run (Pure.pure a : OptionT SPMF α)) ↔ _
   rw [support_optionT_pure]
   simp
 
 @[simp] theorem someSupport_empty : someSupport (PGen.empty : PGen α) = fun _ => False := by
-  funext x
-  apply propext
+  refine someSupport_ext fun x => ?_
   show some x ∈ SPMF.support ((OptionT.fail : OptionT SPMF α)) ↔ _
   simp [OptionT.fail, OptionT.mk, Pure.pure, SPMF.pure, SPMF.support, DFunLike.coe]
 
 @[simp] theorem someSupport_bind {x : PGen α} {f : α → PGen β} :
     someSupport (x >>= f) = fun b => ∃ a, someSupport x a ∧ someSupport (f a) b := by
-  funext w
-  apply propext
+  refine someSupport_ext fun w => ?_
   show some w ∈ SPMF.support (OptionT.run (x.run >>= fun a => (f a).run : OptionT SPMF β)) ↔ _
   rw [mem_support_optionT_bind]
   rfl
 
 @[simp] theorem someSupport_map {x : PGen α} {g : α → β} :
     someSupport (g <$> x) = fun b => ∃ a, someSupport x a ∧ g a = b := by
-  funext w
-  apply propext
+  refine someSupport_ext fun w => ?_
   show some w ∈ SPMF.support (OptionT.run (g <$> x.run : OptionT SPMF β)) ↔ _
   rw [mem_support_optionT_map]
   rfl
 
 @[simp] theorem someSupport_pick {x y : PGen α} :
     someSupport (PGen.pick x y) = fun a => someSupport x a ∨ someSupport y a := by
-  funext w
-  apply propext
+  refine someSupport_ext fun w => ?_
   show some w ∈ SPMF.support (OptionT.run
       (RandomChoice.pick (fun () => x.run) (fun () => y.run) : OptionT SPMF α))
     ↔ (some w ∈ SPMF.support (OptionT.run (x.run : OptionT SPMF α))
@@ -148,8 +149,7 @@ variable {α β : Type}
 
 @[simp] theorem someSupport_choose {lo hi : Nat} {h : lo ≤ hi} :
     someSupport (PGen.choose lo hi h) = fun a => lo ≤ a ∧ a ≤ hi := by
-  funext v
-  apply propext
+  refine someSupport_ext fun v => ?_
   show some v ∈ SPMF.support (OptionT.run (chooseNat lo hi h : OptionT SPMF Nat)) ↔ _
   rw [show (chooseNat lo hi h : OptionT SPMF Nat)
       = (·.down.val) <$> RandomChoice.choose lo hi h from rfl, mem_support_optionT_map]
@@ -254,31 +254,20 @@ theorem run_frequency {α} (gs : List (Nat × (Unit → OptionT SPMF α))) (h) :
 @[simp] theorem someSupport_frequency {α} {gs : List (Nat × PGen α)} (h) :
     someSupport (PGen.frequency gs h)
       = fun a => ∃ w g, (w, g) ∈ gs ∧ 0 < w ∧ someSupport g a := by
-  funext a
-  apply propext
+  refine someSupport_ext fun a => ?_
   show some a ∈ SPMF.support _ ↔ _
   rw [show PGen.totalize (PGen.frequency gs h) (G := SPMF)
       = OptionT.run (_root_.frequency (gs.map fun p => (p.1, fun _ => p.2.run))
           (by simpa [List.map_map, Function.comp_def] using h) : OptionT SPMF α) from rfl]
   rw [run_frequency, SPMF.support_frequency]
-  simp only [Set.mem_setOf_eq, List.mem_map, List.map_map, Function.comp_def, Prod.mk.injEq]
-  constructor
-  · rintro ⟨w, g, ⟨⟨w', g'⟩, hmem, hw', hg'⟩, hw, ha⟩
-    subst hw'
-    subst hg'
-    exact ⟨w', g', hmem, hw, ha⟩
-  · rintro ⟨w, g, hmem, hw, ha⟩
-    exact ⟨w, fun _ => OptionT.run (g.run : OptionT SPMF α), ⟨⟨w, g⟩, hmem, rfl, rfl⟩, hw, ha⟩
+  simp only [Set.mem_setOf_eq, List.map_map, Function.comp_def]
+  exact PGen.Support.exists_mem_map_weighted
+    (m := fun (g : PGen α) (_ : Unit) => OptionT.run (g.run : OptionT SPMF α))
 
 @[simp] theorem someSupport_oneOf {α} {gs : List (PGen α)} (h) :
     someSupport (PGen.oneOf gs h) = fun a => ∃ g ∈ gs, someSupport g a := by
   funext a
-  simp only [PGen.oneOf, someSupport_frequency, List.mem_map, eq_iff_iff, Prod.mk.injEq]
-  constructor
-  · rintro ⟨w, g, ⟨g', hmem, hw, hg⟩, _, ha⟩
-    subst hg
-    exact ⟨g', hmem, ha⟩
-  · rintro ⟨g, hmem, ha⟩
-    exact ⟨1, g, ⟨g, hmem, rfl, rfl⟩, Nat.one_pos, ha⟩
+  simp only [PGen.oneOf, someSupport_frequency, eq_iff_iff]
+  exact PGen.Support.exists_mem_map_uniform
 
 end Palamedes
