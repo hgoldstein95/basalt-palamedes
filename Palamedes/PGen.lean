@@ -106,122 +106,72 @@ section Delab
 
 open Lean PrettyPrinter Delaborator SubExpr
 
-/-! ## Delaborator Hacks
+/-- The first `autoParam` binder of `ty`: its argument index, and the tactic declaring it.
 
-Choice combinators like `oneOf` and `frequency` carry a side conditions (`gs ≠ []`, `0 < Σ weights`)
-as an explicit argument. By default, these either print as `⋯`, which makes the generator unusable;
-if we set `pp.proofs := true`, those proofs become an ugly wall of text. To get around these issues,
-we hack the delaborator to only print the proofs when they can't be easily reconstructed by the
-combinator's autoparam.
+Each combinator here declares exactly one, as its trailing argument, so the first is the only one;
+finding it is what saves every registration below from restating the position. -/
+private partial def autoParamAt? (ty : Expr) (i : Nat := 0) : Option (Nat × Name) :=
+  match ty with
+  | .forallE _ d b _ =>
+    match d.getAutoParamTactic? with
+    | some (.const n _) => some (i, n)
+    | _ => autoParamAt? b (i + 1)
+  | _ => none
 
-The same problem and the same fix apply to a *primitive* whose side condition is an ordinary explicit
-argument — `choose`'s `lo ≤ hi`, `elements`' `xs.length > 0`. Those live in `Data/`, so
-`delabDroppingProof` below is the shared piece they register against, and the autoParam that puts a
-dropped proof back is Basalt's `gen_side_condition`, the same one its own combinators use — a
-primitive whose delaborator drops more than that tactic can rebuild emits text that does not
-re-elaborate. `delabDroppingSideCondition` stays private because the three combinators it serves are
-all here. -/
+/-- The heartbeat ceiling for a side-condition tactic run while printing. -/
+private def sideConditionHeartbeats : Nat := 1000
 
-def natLit? (e : Expr) : Option Nat :=
-  match e.nat? with
-  | some n => some n
-  | none => match_expr e with
-    | OfNat.ofNat _ n _ => n.nat?
-    | _ => none
+/-- Can `c`'s `autoParam` re-derive the side-condition proof that `e` carries, in `e`'s own context?
+-/
+def autoParamRecovers (c : Name) (e : Expr) : MetaM Bool :=
+  open Lean.Meta in do
+  let some ci := (← getEnv).find? c | return false
+  let some (i, tacDecl) := autoParamAt? ci.type | return false
+  let some arg := e.getAppArgs[i]? | return false
+  let .ok stx := Elab.evalSyntaxConstant (← getEnv) (← getOptions) tacDecl | return false
+  try
+    -- Restores the `Core` state as well as the `Meta` one, so a failing `simp_all` does not leave
+    -- its own error behind as a message on the declaration being printed.
+    withoutModifyingState do
+      withTheReader Core.Context ({ · with maxHeartbeats := sideConditionHeartbeats * 1000 }) do
+        Core.withCurrHeartbeats do
+          let mv ← mkFreshExprMVar (← inferType arg)
+          let (gs, _) ← Elab.runTactic mv.mvarId! stx
+          return gs.isEmpty
+  catch ex =>
+    if ex.isInterrupt then throw ex
+    return false
 
-/-- Is `w` positive for every value of the variables in it, by inspection?
-
-This is a rough heuristic that captures literal affine expressions like `2 + 3 * d` as well as
-`Tuning.weight θ i d`. -/
-private partial def weightPos (w : Expr) : Bool :=
-  match natLit? w with
-  | some n => 0 < n
-  | none =>
-    match_expr w with
-    | HAdd.hAdd _ _ _ _ x y => weightPos x || weightPos y
-    | HMul.hMul _ _ _ _ x y => weightPos x && weightPos y
-    | Tuning.weight _ _ _ => true
-    | _ => false
-
-/-- Does `l` have a branch whose weight is positive by inspection? -/
-private partial def someWeightPos (l : Expr) : Bool :=
-  match_expr l with
-  | List.cons _ hd tl =>
-    (match_expr hd with
-      | Prod.mk _ _ w _ => weightPos w
-      | _ => false) || someWeightPos tl
-  | _ => false
-
-/-- Render `c gs`, dropping `c`'s trailing side-condition argument, when `branchesOk` says the branch
-list at `gsIdx` makes that side condition recoverable. -/
-private def delabDroppingSideCondition
-    (c : Name) (arity gsIdx : Nat)
-    (branchesOk : Expr → Bool) :
-    Delab := do
+/-- Render `c`'s arguments at `shown`, dropping its trailing side-condition proof, when `c`'s
+`autoParam` can put that proof back. -/
+def delabDroppingProof (c : Name) (arity : Nat) (shown : List Nat) : Delab := do
   let e ← getExpr
   guard <| e.isAppOfArity c arity
-  guard <| branchesOk (e.getArg! gsIdx)
-  let gs ← withNaryArg gsIdx delab
+  guard <| ← autoParamRecovers c e
+  let args ← shown.toArray.mapM fun i => withNaryArg i delab
   let fn := mkIdent (← unresolveNameGlobal c)
-  `($fn $gs)
+  `($fn $args*)
 
 @[app_delab Palamedes.PGen.oneOf]
 def delabOneOf : Delab :=
-  delabDroppingSideCondition ``Palamedes.PGen.oneOf 3 1 (·.isAppOf ``List.cons)
+  delabDroppingProof ``Palamedes.PGen.oneOf 3 [1]
 
 @[app_delab Palamedes.PGen.frequency]
 def delabFrequency : Delab :=
-  delabDroppingSideCondition ``Palamedes.PGen.frequency 3 1 someWeightPos
+  delabDroppingProof ``Palamedes.PGen.frequency 3 [1]
 
 -- `_root_`-qualified: this section is inside `namespace Palamedes.PGen`, where a bare `frequency`
 -- resolves to the carrier's combinator. Unqualified, this silently registers a *second* delaborator
 -- for `PGen.frequency` and Basalt's keeps printing in full.
 @[app_delab _root_.frequency]
-def delabBasaltFrequency : Delab := do
-  delabDroppingSideCondition ``_root_.frequency 5 3 someWeightPos
-
-/-- Is `p` an auxiliary `._proof_i` applied to a local hypothesis?
-
-That is the shape a primitive's side condition takes in a *synthesized* generator: the synthesis rule
-discharges it with a tactic, the definition elaborator abstracts the result into a `._proof_i`, and
-the floated `assume`'s guard reaches it as an argument. Printed in full it is an unpasteable
-reference to a synthesis-internal constant, and `gen_side_condition` recovers it from the guard the
-enclosing `dite` binds.
-
-The `isFVar` conjunct makes this a statement about recoverability and not about names: the local it
-is applied to is the guard, which is what the autoParam finds in the pasted term's context. A
-`._proof_i` closed over nothing local proves something about closed data, which the autoParam would
-have to establish from scratch. -/
-def isAuxProofOverLocals (p : Expr) : Bool :=
-  p.getAppFn.constName?.any (·.getString!.startsWith "_proof_") && p.getAppArgs.any Expr.isFVar
-
-/-- Render `c`'s arguments at `shown`, dropping its trailing side-condition *proof*, when
-`recoverable` says `c`'s `gen_side_condition` autoParam can put it back.
-
-The primitive counterpart of `delabDroppingSideCondition`, which differs in what it inspects: a
-combinator's side condition is recoverable from *one* argument (the branch list), which is also the
-only thing printed, whereas a primitive's is recoverable from either its data arguments or the shape
-of the proof itself. So `recoverable` receives the whole application, and the arguments worth
-printing are an explicit subset, the type parameter being implicit. -/
-def delabDroppingProof (c : Name) (arity : Nat) (shown : List Nat) (recoverable : Expr → Bool) :
-    Delab := do
-  let e ← getExpr
-  guard <| e.isAppOfArity c arity
-  guard <| recoverable e
-  let args ← shown.toArray.mapM fun i => withNaryArg i delab
-  let fn := mkIdent (← unresolveNameGlobal c)
-  `($fn $args*)
+def delabBasaltFrequency : Delab :=
+  delabDroppingProof ``_root_.frequency 5 [3]
 
 /-- Print `chooseNat lo hi` without its side-condition proof, so `generator_search?` output
 re-elaborates (`chooseNat`'s `gen_side_condition` autoParam recovers it). -/
 @[app_delab _root_.chooseNat]
 def delabChooseNat : Delab :=
-  delabDroppingProof ``_root_.chooseNat 5 [2, 3] fun e =>
-    let litBounds : Bool := Id.run do
-      let some lo := natLit? (e.getArg! 2) | return false
-      let some hi := natLit? (e.getArg! 3) | return false
-      return lo ≤ hi
-    litBounds || isAuxProofOverLocals (e.getArg! 4)
+  delabDroppingProof ``_root_.chooseNat 5 [2, 3]
 
 end Delab
 

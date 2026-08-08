@@ -174,7 +174,7 @@ worth keeping, but the ambiguity it guards against is latent rather than live.
 
 /-! ## Three renderings, two algebras
 
-`delabDroppingSideCondition` (`PGen.lean`) is registered on three constants because Palamedes has
+`delabDroppingProof` (`PGen.lean`) is registered on three choice constants because Palamedes has
 two generator algebras a reader can meet, not because the code is duplicated.
 
 **Basalt's `frequency`** is what every *emitted* term chooses with, at both declared shapes: `G α` is
@@ -189,12 +189,17 @@ and `PalamedesTest/Optimizer/Rewrites.lean` pins a page of them. The flatten pas
 simp) }` — the `PGen.mk` wrapper, three dummy binders, and every branch eta-expanded.
 
 All three are pinned here. Deleting any of them puts a `._proof_i` reference back into a term that
-is meant to be read, and for the first, pasted. -/
+is meant to be read, and for the first, pasted.
+
+Both *answers* are pinned too. Dropping the proof is conditional on `gen_side_condition` being able
+to rebuild it (`PGen.autoParamRecovers`), and a check that only ever says yes is indistinguishable
+from no check at all — so `renderUnrecoverable` below carries a side condition the tactic cannot
+discharge, and pins that its proof survives into the output. -/
 
 section Renderings
 
--- Basalt's: the tactic is printed, because Basalt's autoParam is `by omega`, which cannot close the
--- goal — omitting the argument here would print a term that does not re-elaborate.
+-- All three autoParams are `gen_side_condition`, which closes each of these goals, so none of the
+-- three proofs is printed.
 def renderBasalt [Gen G] : G Nat := frequency [(1, fun _ => pure 1), (2, fun _ => pure 2)] (by simp)
 
 /--
@@ -204,8 +209,6 @@ fun {G} [Gen G] => frequency [(1, fun x => pure 1), (2, fun x => pure 2)]
 #guard_msgs in
 #print renderBasalt
 
--- The carrier's two: the argument is dropped outright, since their autoParam is `by simp` and does
--- close it.
 def renderOneOf : PGen Nat := PGen.oneOf [pure 1, pure 2]
 
 /--
@@ -223,6 +226,22 @@ PGen.frequency [(3, pure 1), (1, pure 2)]
 -/
 #guard_msgs in
 #print renderFrequency
+
+-- `simp` will not delta-reduce a plain `def`, so it reduces the branch list and stops at
+-- `0 < hiddenWeight` with nothing left to say.
+private def hiddenWeight : Nat := 7
+
+private theorem hiddenWeight_pos : 0 < hiddenWeight := by unfold hiddenWeight; omega
+
+def renderUnrecoverable : PGen Nat :=
+  PGen.frequency [(hiddenWeight, pure 1)] (by simpa [List.sum] using hiddenWeight_pos)
+
+/--
+info: def renderUnrecoverable : PGen ℕ :=
+PGen.frequency [(hiddenWeight, pure 1)] renderUnrecoverable._proof_1
+-/
+#guard_msgs in
+#print renderUnrecoverable
 
 end Renderings
 

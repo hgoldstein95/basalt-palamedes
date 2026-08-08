@@ -150,13 +150,13 @@ info: (genLawful (SchedulePolicy.moderate.materialize genLawful.sites)) — 30 d
 /-! ## A tuned generator still prints as a generator
 
 The pin below is on the *emitted term*, and specifically on the `frequency` branch list appearing
-with no side-condition argument after it. `delabDroppingSideCondition` only drops that argument when
-it can see a positive weight by inspection, and a tuned generator's weights are `Tuning.weight θ i d`
-— opaque in `θ`, positive by `Tuning.weight_pos`. Teach the printer only the literal affine shape and
-this term regrows a ~25-line `Eq.trans`/`congrArg` tower over `TGen.frequency._proof_1`, which is the
-one printing hazard a tuning binder introduces and which no other pin in the corpus can see: the
-term-pinned corpus files are all untuned, and the tuned ones (`genWellTyped`) are pinned by
-`#genstats` instead. -/
+with no side-condition argument after it. `delabDroppingProof` drops that argument only when the
+combinator's autoParam can rebuild it, and a tuned generator's weights are `Tuning.weight θ i d` —
+opaque in `θ`, so the goal `0 < Σ wⱼ(d)` reduces to `0 < θ.weight 0 d ∨ …` and stops unless
+`Tuning.weight_pos` is available to `simp`. Untag it (`Tuning.lean`) and this term regrows a
+~25-line `Eq.trans`/`congrArg` tower over `TGen.frequency._proof_1`. That is the one printing hazard
+a tuning binder introduces, and only a pin on a *tuned* generator can see it — this one and
+`genWellTyped`, the corpus's other tuned pin. -/
 
 /--
 info: Try this:

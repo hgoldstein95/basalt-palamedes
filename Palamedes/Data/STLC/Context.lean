@@ -65,18 +65,18 @@ open Lean PrettyPrinter Delaborator in
 /-- Print `elements xs` without its nonemptiness proof, so `generator_search?` output re-elaborates.
 
 `genWellTyped` is what needs this. Its context lookup is `elements (Γ.idxsOf τ) _`, whose list is a
-computed expression rather than a literal, so the proof can only come from the guard the floated
-`assume` left — an auxiliary `._proof_i` applied to the `dite`'s hypothesis. Printed in full that is
-a reference to a synthesis-internal constant, in a term whose whole purpose is to be read and
-pasted; `gen_side_condition` recovers it from the same hypothesis.
+computed expression rather than a literal, so nonemptiness holds only under the guard the floated
+`assume` left and the proof synthesis supplies is an auxiliary `._proof_i` — a reference to a
+synthesis-internal constant, printed in full, in a term whose whole purpose is to be read and
+pasted. `gen_side_condition` re-derives it from the `dite`'s hypothesis, which is in scope wherever
+that text lands.
 
 Registered on `TGen.elements` as well, and that is the registration a **Basalt-shaped** generator
 actually uses: the totality witness is built from the failure-free primitive, and `extractWitness`
 stops short of unfolding it. A range draw needs no such pair — `chooseNat` is Basalt's own, so
 `delabChooseNat` is registered once, on the constant that survives. -/
 def delabElementsFor (c : Name) : Delab :=
-  delabDroppingProof c 3 [1] fun e =>
-    (e.getArg! 1).isAppOf ``List.cons || isAuxProofOverLocals (e.getArg! 2)
+  delabDroppingProof c 3 [1]
 
 open Lean PrettyPrinter Delaborator in
 

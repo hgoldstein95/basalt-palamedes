@@ -56,12 +56,13 @@ def Tuning.uniform : Tuning := ⟨#[]⟩
 
 /-! A tuned weight is positive by construction (`Tuning.weight` clamps to at least 1), and the choice
 combinators declare their positivity side condition as a `by simp` autoParam. This tag connects the
-two.
+two, and it is what makes a *tuned* generator printable.
 
-`someWeightPos` treats `Tuning.weight θ i d` as positive by inspection, so `delabFrequency` drops
-that side condition from a tuned generator's printed branch list. Without the tag the omission is
-not recoverable: `simp` reduces the goal to `0 < θ.weight 0 d ∨ …` and stops, and the emitted term —
-`generator_search?` output, a `#guard_msgs` pin — fails to re-elaborate when pasted. -/
+`delabFrequency` drops that side condition exactly when the autoParam can put it back, which it
+establishes by running the tactic (`PGen.autoParamRecovers`). Without the tag it cannot: `simp`
+reduces the goal to `0 < θ.weight 0 d ∨ …` and stops. Every tuned generator would then print each
+of its choice sites with a `._proof_i` wall attached — `generator_search?` output and `#guard_msgs`
+pins alike. -/
 attribute [simp] Tuning.weight_pos
 
 namespace Palamedes

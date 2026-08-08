@@ -386,28 +386,6 @@ def classifyGoal (goalTy : Expr) (t : Lean.Term) : TermElabM (Target × Expr) :=
     throwError "generator_search: the goal must be `G α` or `G (Option α)` for a Basalt \
       `[Gen G]`, got{indentExpr goalTy}"
 
-/-- Drop the proof transports that are the identity.
-
-A floated `assume` reaches this stage as a `dite` whose branches bind its guard, and rewriting
-*underneath* those branches means going through Lean's `dite` congruence, which transports the bound
-proof into each arm. The transport is emitted whether or not the guard itself was rewritten; when it
-was not, the equation it transports along is `rfl` and the wrapper denotes nothing. Nothing
-downstream removes it — `simp` never revisits proof subterms, and `Meta.reduce` skips proofs — so
-every side-condition proof in the emitted generator ends up wrapped in an `Eq.mpr_prop (Eq.refl …)`.
-
-The cost is not only noise. A primitive's side-condition delaborator (`delabChooseNat`,
-`delabElements`) drops the proof only when `isAuxProofOverLocals` can see that it is applied to a
-local hypothesis — the guard. Wrapped, the guard is not an argument by inspection, so the proof
-prints in full and the emitted term stops being pasteable. `genWellTyped`'s `elements` draws are
-where that shows, being the ones whose data argument is computed rather than a binder.
-
-Replacing `Eq.mpr_prop h₁ h₂` by `h₂` is type-correct exactly when the two `Prop`s are defeq, which
-is what is checked; proof irrelevance does the rest. -/
-private def dropIdentityTransports (e : Expr) : MetaM Expr :=
-  Meta.transform e (post := fun e => do
-    let_expr Eq.mpr_prop p q _ h := e | return .continue
-    if ← withNewMCtxDepth (isDefEq p q) then return .continue h else return .continue)
-
 /-- Turn a totality witness back into generator code using lemmas in the `totality_witness` simp
 set. -/
 def extractWitness (e : Expr) : MetaM Expr := do
@@ -428,7 +406,7 @@ def extractWitness (e : Expr) : MetaM Expr := do
     (simpTheorems := #[thms])
     (congrTheorems := ← getSimpCongrTheorems)
   let (r, _) ← simp e ctx
-  dropIdentityTransports r.expr
+  return r.expr
 
 /-- Push `PGen.run` through a `match`: rebuild the matcher at the run-type motive with each arm
 projected, and prove the two equal by instantiating the *same* matcher a third time, at a `Prop`
@@ -517,11 +495,11 @@ def extractPartialWitness (α gen G : Expr) : MetaM (Expr × Expr) := do
   let proof ← match r.proof? with
     | some p => mkEqSymm p
     | none => mkEqRefl e
-  let expr ← dropIdentityTransports r.expr
-  -- `dropIdentityTransports` rewrites proof subterms only, so the equation still holds of the
-  -- result; retype it rather than rebuilding it.
+  -- `simp` rewrote from the `.run` at `OptionT G` that `totalize` unfolds to, so the equation it
+  -- returns is already about the right generator; the hint restates it at `totalize` itself, which
+  -- is the spelling `@[correct]` needs and is defeq to the starting point.
   let totalized ← mkAppOptM ``Palamedes.PGen.totalize #[some α, some gen, some G, none]
-  return (expr, ← mkExpectedTypeHint proof (← mkEq expr totalized))
+  return (r.expr, ← mkExpectedTypeHint proof (← mkEq r.expr totalized))
 
 /-- Appended to a `Totality.stuck` message at both shapes, after its account of *how* it got stuck.
 -/
