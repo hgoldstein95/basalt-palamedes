@@ -10,7 +10,7 @@ import Palamedes.GenTransform
 /-!
 # Optimizer
 
-The optimizer optimzies a synthesized `PGen`: it floats `assume`s up to the nearest choice point,
+The optimizer rewrites a synthesized `PGen`: it floats `assume`s up to the nearest choice point,
 discharges the satisfiable ones, and flattens `pick` trees into uniform `oneOf`s.
 -/
 
@@ -91,7 +91,7 @@ def optimizeBind? (x f : Expr) : MetaM (Option GenRewriteResult) :=
     lambdaBoundedTelescope f 1 fun args body => do
       -- bind_assume : x >>= fun a => assume b g ~~> assume b (fun h => x >>= fun a => g h),
       -- valid only if `b` avoids `a`. Conservative: a metavariable `b` possibly depending on `a`
-      -- slips past `containsFVar`, so we skip rather than risk a malformed term.
+      -- slips past `containsFVar`, so decline rather than risk a malformed term.
       let #[a] := args | return none
       let_expr assume _ b g := body | return none
       if b.containsFVar a.fvarId! then return none

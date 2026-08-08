@@ -101,12 +101,10 @@ macro "rw_merge" m:term : tactic =>
      apply and_congr))
 
 /-
-  The fold_accu_cond lemmas expect the bodies of the folds they operate on to be
-  in a particular normal form, i.e. `condition && acc` for lists and `condition && accL && accR`
-  for trees, in both arms of the conditional. Sometimes, however, the arm of the conditional
-  will just look like `acc`, and not be obviously in this normal form. We can
-  massage it into the normal form to apply the lemma however by converting
-  the `acc` into `true && acc`, which is what these rewrite macros do.
+  The fold_accu_cond lemmas expect the bodies of the folds they operate on to be in a particular
+  normal form, i.e. `condition && acc` for lists and `condition && accL && accR` for trees, in both
+  arms of the conditional. An arm that is a bare `acc` is not obviously in that form; these rewrite
+  macros put it there, by turning `acc` into `true && acc`.
 -/
 macro "rw_true_and_list" : tactic =>
   `(tactic| conv =>
@@ -251,8 +249,8 @@ macro "norm_for_elements" : tactic =>
 macro "normalize_and_apply" : tactic =>
    `(tactic| (
       apply convert ?pf ?arg
-      /- simplify the predicate before attempting to normalize it.
-         this way we don't repeat simplification for each different normalization strategy -/
+      /- Simplify the predicate once, before any normalization strategy is attempted, rather than
+         once per strategy in the `first` below. -/
       case' pf => unfold_matches; try accu_simp
       first
       | case' arg => apply s_pure _

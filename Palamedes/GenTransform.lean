@@ -190,10 +190,7 @@ abbrev HeadRewrite := (d : Depth) → (e : Expr) → MetaM (Option (Expr × Expr
 
 /-! ## Proof-carrying traversal -/
 
-/-- Helper for reducing.
-
-This is used twice below; lifting it here means that if we need to change reducibility rules we can
-do it in one place. -/
+/-- The traversal's single notion of "already reduced": reduction at `reducible` transparency. -/
 private def reduceExpr (e : Expr) : MetaM Expr := withReducible (reduce e)
 
 mutual
@@ -215,7 +212,8 @@ private partial def transformReduced (pass : HeadRewrite) (table : Array CongrRu
 /-- Descend into a `oneOf`'s branches.
 
 It cannot be registered through the `@[gen_congr]` table, since `h : gs ≠ []` is dependent on the
-branch list, so a new list with the old proof is ill-typed. -/
+branch list, so a new list with the old proof is ill-typed. Without this hand-written descent,
+`installTuning` could not reach a choice nested under another choice. -/
 private partial def transformOneOfChildren?
     (pass : HeadRewrite) (table : Array CongrRule) (depth : Depth)
     (e : Expr) : MetaM (Option TransformResult) := do
@@ -305,7 +303,7 @@ private partial def transformChildren (pass : HeadRewrite) (table : Array CongrR
   if let some r ← transformOneOfChildren? pass table depth e then return r
   if let some r ← transformFrequencyChildren? pass table depth e then return r
   let some head := e.getAppFn.constName? | return { expr := e, proof? := none }
-  -- Under a registered `X.unfold`, the argument we descend into is its step, whose binder 0 is the
+  -- Under a registered `X.unfold`, the argument descended into is its step, whose binder 0 is the
   -- recursion's depth.
   let entering := (unfoldNameMap (← getEnv))[head]?
   let some (_, congrName, diff) := table.find? (·.1 == head)

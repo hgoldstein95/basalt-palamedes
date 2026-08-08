@@ -9,8 +9,8 @@ import Palamedes.PGen
 /-!
 # Failure-aware semantics for Palamedes generators
 
-If a generator synthesizes with backtracking, we provide tools to lift it to a generator at
-`OptionT`.
+Reading a `PGen` at `OptionT G`, where its `Fail` capability becomes an `Option`-valued draw. This is
+how a generator that kept an `assume` is emitted at the filtering shape `G (Option α)`.
 -/
 
 namespace Palamedes

@@ -9,34 +9,10 @@ import Palamedes.Synthesizer.FrontEnd
 import Palamedes.Laws
 
 /-!
-# `@[correct]` — synthesis that names its proofs
+# The `correct` Attribute
 
-`generator_search` proves `support gen = P` on the way to closing its goal. `@[correct]` is what
-keeps that proof: it emits `genFoo.sound_complete` as an ordinary theorem about the constant, stated
-in **Basalt's** law vocabulary — `IsSoundAndComplete` for a generator declared `G α`,
-`IsSomeSoundAndComplete` for one declared `G (Option α)`.
-
-That is the only law, at either shape. There is no `genFoo.total` companion: `PGen.total` is a
-statement about the pipeline's internal carrier, and a Basalt-shaped generator has no `Fail` to be
-free of — its totality is the content of its declared type, which is why `G α` is an *error* for a
-generator that filters rather than a shape carrying extra evidence.
-
-## Why an attribute rather than a command
-
-A theorem about `genFoo` cannot be added while `genFoo` is still being elaborated, and
-`applicationTime := .afterCompilation` is precisely the tool for that — the same one `to_additive`
-uses to emit declarations derived from the one it is attached to. `Term.getDeclName?` supplies the
-name a tactic is elaborating into, so ordering is the only thing an attribute is needed for.
-
-Binder elaboration, auto-bound implicits, universe handling and the `def` syntax itself therefore
-stay Lean's, none of which a bespoke command elaborator would have to reimplement. It also composes:
-`@[correct]` sits next to any other attribute, and works with `generator_search?`.
-
-The tactic leaves its proofs in `synthesisExt` (see `Synthesizer/FrontEnd.lean`, which documents the
-two constraints on what crosses that boundary), and this module reads them back.
-
-**Purely additive.** The generator is exactly the one `generator_search` emits either way; the only
-difference is whether the proofs survive.
+`generator_search` proves `support gen = P` on the way to closing its goal; if a user wants to keep
+those proofs, they can use the `@[correct]` attribute.
 -/
 
 open Lean Elab Meta Term
@@ -225,7 +201,6 @@ initialize registerBuiltinAttribute {
   name := `correct
   descr := "keep the support proof `generator_search` computed, as a named theorem about this \
     declaration"
-  -- The law is *about* the constant, so it cannot be added until it exists.
   applicationTime := .afterCompilation
   add := fun declName _ _ => do
     MetaM.run' <| TermElabM.run' <| emitCorrectLaw declName

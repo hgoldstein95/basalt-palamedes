@@ -16,34 +16,17 @@ import Palamedes.UnfoldStrategy
 import Palamedes.Util
 
 /-!
-# `derive_palamedes`: derive Palamedes' per-datatype boilerplate
+# Boilerplate Automation for Recursive Structures
 
-`derive_palamedes X` generates, for a directly-recursive inductive `X`, the recursion-scheme
-layer that `Palamedes/Data/` currently writes by hand:
+Given an inductive data type `X`, `derive_palamedes X` generates the whole per-datatype layer
+required for Palamedes to generate values of that type. This includes: a base functor `XF`,
+`X.fold`, the state-threading `X.accuM`, the `unfold` recursion scheme with its projection
+equations, the support and totality lemmas, the fold/`accuM` fusion family, and the `CorrectGen`
+combinator `X.s_unfold`.
 
-* the base functor `XF` (recursive occurrences replaced by a carrier `β`);
-* `X.fold` with per-constructor `@[simp]` equations (proved by `rfl`);
-* `X.accuM` — the state-threading monadic fold — with per-constructor `@[simp]` equations;
-* `X.unfoldGo` (a `partial_fixpoint` over Basalt's CCPO), `X.unfold`, the failure-free
-  `TGen.X.unfold`, and the projection equations `X.run_unfold`, `X.trun_unfold`, `X.toGen_unfold`;
-* `X.unfold_support` and the support characterization `X.support_unfold` (proved by a
-  generated structural induction mirroring the hand-written proofs in `Data/`);
-* `@[gen_congr] X.support_unfold_congr`;
-* `X.total_unfold`, tagged into the `totality` aesop rule set;
-* `X.coerce_to_fold` with per-constructor autoparam hypotheses.
-
-The fusion layer is also generated: `merge_accuM` (banana split in the
-`Option` monad), the `fold_accu_Option_{basic,true,function,function_true}` conversion family
-(generalized per constructor: one `g_c`/`st_c{j}` and one shape hypothesis per recursive
-constructor, subsuming the hand-written per-type variants), and the `CorrectGen` combinator
-`s_unfold` with its `@[extract]` `s_unfold_val`. Not generated: `fold_accu_cond` (a search
-heuristic's normal form) and `toString`.
-
-Restrictions (rejected with an error): mutual, nested, and indexed inductives; non-`Type`
-parameters; dependent constructor fields. Universe-polymorphic inductives (e.g. core `List`)
-are accepted and instantiated at universe 0. Constructor argument order
-in generated declarations follows declaration order (`f_leaf` before `f_node`), with one
-`st_c`/`f_c` argument per constructor named after it.
+The following are not supported: mutual, nested and indexed inductives, non-`Type` parameters, and
+dependent constructor fields. Universe-polymorphic inductives (e.g. core `List`) are accepted and
+instantiated at universe 0.
 
 Debugging: `set_option trace.Palamedes.derive true` prints every generated command.
 -/
@@ -236,8 +219,8 @@ end Analysis
 
 section BaseFunctor
 
-/-- Make the first `n` `∀`-binders implicit (kernel ctor types bind params explicitly;
-the `inductive` frontend marks them implicit — we must do the same by hand). -/
+/-- Make the first `n` `∀`-binders implicit. Kernel constructor types bind parameters explicitly,
+while the `inductive` frontend marks them implicit, so a hand-built `inductDecl` has to match. -/
 def mkImplicitPrefix : Nat → Expr → Expr
   | 0, e => e
   | n + 1, .forallE nm t b _ => .forallE nm t (mkImplicitPrefix n b) .implicit

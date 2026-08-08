@@ -60,13 +60,10 @@ let g ← popMainGoal
   g.withContext do
     let m := lhs.getAppFn.mvarId!
     if ← m.isDelayedAssigned then
-      -- We could probably try to handle these, but an error for now.
       throwError "metavariable is delayed assigned"
     let args ← lhs.getAppArgs.mapM instantiateMVars
-    -- Enter a telescope for the mvar type.
-    -- We will replace each `arg` with the corresponding `fvar` while using `kabstract`.
-    -- This makes sure that when we do `mkLambdaFVars` that we get a function with
-    -- the right type.
+    -- In a telescope for the mvar's own type, so that abstracting each `arg` to the corresponding
+    -- `fvar` gives `mkLambdaFVars` a function of the type `?f` was declared at.
     forallBoundedTelescope (← m.getType) args.size fun fvars _ => do
       let rhs ← instantiateMVars rhs
       let rhs' ← mkLambdaGeneralizeFVars args fvars rhs

@@ -9,31 +9,21 @@ import Basalt
 /-!
 # Palamedes Generators
 
-A Palamedes `PGen α` wraps a polymorphic Basalt generator that additionally supports failure (`Fail
-G`). The wrapped term, `g.run`, is the bare Basalt generator; it can be instantiated at `SPMF` for
-proofs or `Plausible.Gen` for sampling. Synthesis builds these `PGen` terms as data; a generator
-acquires meaning only by interpreting its `run` at a chosen `G`. The proof interpretation is
-Basalt's sub-probability mass function (`SPMF`), so `support` is `SPMF.support`.
-
-## Failure
-
-Filtering (`assume`/`empty`) needs a notion of *failure*. We make that an explicit capability `Fail`
-rather than reusing Basalt's CCPO bottom (`Lean.Order.bot`) for two reasons:
-
-* **Computability.** `Lean.Order.bot` is the supremum of the empty chain, defined via
-  `Classical.choose`, so it is `noncomputable`. (Even worse, in some interpretations
-  `Lean.Order.bot` corresponds to divergence.) Routing failure through a `Fail.fail` method lets
-  each interpretation supply its own computable failure.
-* **Totality.** We explicitly try to remove all failures from generators during optimization.
-  If our optimizer is able to produce a generator that typechecks without `Fail`, we are guaranteed
-  that this failure has been removed.
+A Palamedes `PGen α` wraps a `Gen`-polymorphic Basalt generator that additionally supports failure
+(`Fail G`); the wrapped term `g.run` is the bare Basalt generator, instantiable at `SPMF` for proofs
+or `Plausible.Gen` for sampling. Synthesis builds `PGen` terms as data, and a generator acquires
+meaning only by interpreting its `run` at a chosen `G` — the proof interpretation being Basalt's
+sub-probability mass function, so `support` is `SPMF.support`.
 -/
 
 namespace Palamedes
 
 open Lean.Order
 
-/-- The failure capability: a generator monad with a designated "produces nothing" element. -/
+/-- The failure capability: a generator monad with a designated "produces nothing" element.
+
+We need this because Basalt's CCPO bottom (`Lean.Order.bot`) is `noncomputable`, and it conflates
+rejection with divergence.  -/
 class Fail (G : Type → Type) where
   fail : ∀ {α}, G α
 
@@ -54,11 +44,8 @@ def TGen.toGen (t : TGen α) : PGen α := ⟨fun {_G} _ _ => t.run⟩
 Palamedes defines: `TGen Nat` is exactly the type of a `Gen`-polymorphic `G Nat`, so the failure-free
 view of it costs a `TGen.mk` and nothing else, and the `PGen` view is that coerced.
 
-Spelled here, in an explicit `namespace TGen` block outside the `PGen` one, for the reason every
-`Data/` module spells its own primitives that way: a `def TGen.choose` written inside
-`namespace PGen` lands in `Palamedes.PGen.TGen`, and two namespaces both printing as `TGen` force
-any file that reads emitted terms to `open Palamedes.PGen` to abbreviate the name — which shadows
-Basalt's root-level `frequency`. -/
+The explicit `namespace TGen` block, outside the `PGen` one, is the placement every `Data/` module
+uses for its own primitives; `Data/Nat.lean` documents what goes wrong without it. -/
 
 namespace TGen
 
@@ -118,11 +105,22 @@ private partial def autoParamAt? (ty : Expr) (i : Nat := 0) : Option (Nat × Nam
     | _ => autoParamAt? b (i + 1)
   | _ => none
 
-/-- The heartbeat ceiling for a side-condition tactic run while printing. -/
+/-- The heartbeat ceiling for a side-condition tactic run while printing.
+
+Explicit rather than the ambient budget: inheriting it would let one stuck `autoParam` burn all of a
+corpus file's raised `maxHeartbeats` inside the printer, and would make the same term print
+differently depending on how much of the budget elaboration had already spent. -/
 private def sideConditionHeartbeats : Nat := 1000
 
 /-- Can `c`'s `autoParam` re-derive the side-condition proof that `e` carries, in `e`'s own context?
--/
+
+The tactic is *run*, against the proof's type, in the local context the printed term would be pasted
+into — so the judgement is the pasteability contract itself rather than a proxy for it, in both
+directions. A check on the proof's *shape* silently stops saying yes under any of the ways a proof
+spine drifts: simp's `dite_congr` transports a bound guard into each arm whether or not it rewrote
+the guard, `Meta.reduce` skips proofs, and `whnf` will not unfold the resulting `Eq.mpr_prop`.
+`PalamedesTest/GeneratorAPI.lean` pins both answers — `renderUnrecoverable` is the one the tactic
+cannot discharge — since a check that only ever says yes is indistinguishable from no check. -/
 def autoParamRecovers (c : Name) (e : Expr) : MetaM Bool :=
   open Lean.Meta in do
   let some ci := (← getEnv).find? c | return false
@@ -143,7 +141,15 @@ def autoParamRecovers (c : Name) (e : Expr) : MetaM Bool :=
     return false
 
 /-- Render `c`'s arguments at `shown`, dropping its trailing side-condition proof, when `c`'s
-`autoParam` can put that proof back. -/
+`autoParam` can put that proof back.
+
+Every constant an emitted term can name while carrying a side-condition `autoParam` needs a
+registration: the choice combinators at each spelling a reader meets — Basalt's `frequency`, which
+both emitted shapes choose with, plus `PGen.oneOf`/`PGen.frequency`, which `palamedes.debug`, the
+`optimize_gen` tactic and `PalamedesTest/Optimizer/Rewrites.lean` print — and the primitives, Basalt's
+`chooseNat` and Palamedes' own `elements` (`Data/STLC/Context.lean`) at both its spellings. Miss one
+and a `._proof_i` reference reappears in a pinned term. The proof itself is erased either way; this
+is a printing concern, solved in the printer. -/
 def delabDroppingProof (c : Name) (arity : Nat) (shown : List Nat) : Delab := do
   let e ← getExpr
   guard <| e.isAppOfArity c arity
@@ -226,9 +232,7 @@ def pgenBasis : Array Lean.Name :=
 
 namespace PGen
 
-/-! ## Support
-
-`support g` is the set of values `g` can produce. -/
+/-! ## Support -/
 
 /-- The set of values a generator can produce, via its `SPMF` interpretation. -/
 def support (g : PGen α) : α → Prop := SPMF.support g.run

@@ -24,10 +24,10 @@ open Palamedes.PGen
 /-- A generator bundled with a proof that its `support` (via the `SPMF` interpretation) equals the
 target predicate `P`.
 
-`CorrectGen` must be `implicit_reducible` so that the `extract` can apply to it correctly.  Since
-Lean 4.33, metavariable assignment compares types at `implicit` transparency — with a semireducible
-`CorrectGen` those rewrites silently stop firing (see `PalamedesTest/Extract.lean`).
--/
+`implicit_reducible` is load-bearing: unfolding an `@[extract]` combinator leaves a subterm typed at
+bare `Subtype …` where `CorrectGen …` is expected. Since Lean 4.33 metavariable assignment compares
+types at `implicit` transparency, so a semireducible `CorrectGen` makes those rewrites silently stop
+firing (see `PalamedesTest/Extract.lean`). -/
 @[implicit_reducible]
 def CorrectGen (P : α → Prop) := {g : PGen α // g.support = P}
 

@@ -63,7 +63,8 @@ def extractGen (e : Expr) : MetaM (Expr × Expr) := do
     | none => mkEqRefl e
   return (result.expr, proof)
 
-/-- This is just a utility tactic for debugging. We don't call it in the real synthesizer. -/
+/-- Extract and optimize `t`, closing the goal with the result. A debugging entry point into stages
+2 and 3; the synthesis pipeline calls their `MetaM` implementations directly. -/
 elab "optimize_gen " t:term : tactic =>
   withMainContext do
     let m ← mkFreshExprMVar (some (.sort 0))
@@ -317,8 +318,7 @@ def declTuningBinder? : MetaM (Option Expr) := do
     if (← whnf (← inferType x)).isConstOf ``Tuning then return some x
   return none
 
-/-- Record a completed synthesis for `@[correct]`, if we are elaborating into a named declaration.
--/
+/-- Record a completed synthesis for `@[correct]`, when elaborating into a named declaration. -/
 def stashSynthesis (target : Target) (pred : Expr) (res : SynthesisResult)
     (partialEq? : Option Expr) : TermElabM Unit := do
   let some declName ← Term.getDeclName? | return
@@ -625,9 +625,8 @@ def generatorSearchElab
 it can produce every value satisfying `P`, and nothing else. `P` may be a `Prop`-valued predicate or
 a decidable `α → Bool`, including a recursive one over a `derive_palamedes`d datatype.
 
-We use the declared return type to determine the failure behavior; a return type of `G α` defaults
-to a generator that may not backtrack, whereas one declared at type `G (Option α)` is allowed to
-backtrack if necessary:
+The declared return type determines the failure behavior: `G α` asks for a generator that never
+backtracks, while `G (Option α)` permits one that does:
 
 ```lean
 def genEq2 [Gen G] : G Nat := by generator_search (· = 2)               -- total

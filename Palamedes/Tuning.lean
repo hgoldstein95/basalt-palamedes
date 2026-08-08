@@ -13,36 +13,9 @@ import Palamedes.Schedule
 A generator's branch weights live in its choice sites. `installTuning` rewrites each uniform
 `PGen.oneOf` into a `PGen.frequency` whose weights read a runtime `θ : Tuning`
 (`Tuning.weight θ (offset+j) d`), so a different weighting is a function call away instead of an
-edit-and-recompile away. The affine schedules that populate a `θ` live in `Palamedes.Schedule`;
-`Tuning`, `Site` and `Tuning.weight` are **Basalt's**, so a tuned Palamedes generator speaks the
-same vocabulary as a hand-written `tunable def` and picks up whatever Basalt's tuning layer grows
-next.
-
-## Why this is a pipeline stage and not a command
-
-The rewrite substrate is the `Palamedes.PGen` carrier: `installTuning` keys on `PGen.oneOf`, and the
-optimizer's `support lhs = support rhs` chaining does not typecheck at an abstract `G`. A
-Basalt-shaped *declaration* therefore cannot be rewritten in place at all — reaching one from
-outside would mean tuning a carrier companion and re-projecting it, which costs a second totality
-witness, a re-derived `someSupport` bridge, and a check that the companion is still a tuning of the
-declaration it is named after.
-
-Running between optimize and totality avoids all of it. There is one generator, tuned before it is
-ever packaged; stage 4 builds its witness once; and the law `@[correct]` emits is θ-generalized for
-free, because `θ` is one of the declaration's own binders rather than a parameter invented after the
-fact.
-
-`θ` is exactly that — a binder the user wrote:
-
-```lean4
-def genTree (θ : Tuning := .uniform) [Gen G] : G (Tree Nat) := by generator_search isBalanced
-```
-
-`generator_search` threads whatever `Tuning`-typed binder is in scope, and skips this pass when
-there is none — so opting out is spelling the signature without one. `.uniform` is a universal
-default: `Tuning.weight` reads `θ.schedules.getD i (1, 0)`, so the empty tuning is the uniform
-weighting of *any* generator, with no site table needed. That is what lets the ordinary call
-`genTree` mention tuning nowhere.
+edit-and-recompile away. `Tuning`, `Site` and `Tuning.weight` are **Basalt's**, so a tuned Palamedes
+generator speaks the same vocabulary as a hand-written `tunable def`; the affine schedules that
+populate a `θ` are `Palamedes.Schedule`.
 -/
 
 open Lean Meta
@@ -153,11 +126,28 @@ structure TuningResult where
 
 /-- Thread `θ` through a generator term, producing the tuned term and its site table.
 
+`θ` is a binder the user wrote:
+
+```lean4
+def genTree (θ : Tuning := .uniform) [Gen G] : G (Tree Nat) := by generator_search isBalanced
+```
+
+`generator_search` threads whatever `Tuning`-typed binder is in scope and skips this pass when there
+is none, so opting out is spelling the signature without one.
+
+This runs as a **pipeline stage between optimize and totality**, not as a command over a finished
+declaration. The rewrite substrate is the `Palamedes.PGen` carrier — it keys on `PGen.oneOf`, and
+the `support lhs = support rhs` chaining does not typecheck at an abstract `G` — so a Basalt-shaped
+declaration cannot be rewritten in place at all; reaching one from outside would mean tuning a
+carrier companion and re-projecting it, which costs a second totality witness, a re-derived
+`someSupport` bridge, and a check that the companion is still a tuning of the declaration it is
+named after. Running here there is one generator, tuned before it is ever packaged, stage 4 builds
+its witness once, and the law `@[correct]` emits is θ-generalized for free.
+
 The recursion is the `unfold` combinator, not an `Order.fix`, so it is left untouched — there is no
-monotonicity proof to rebuild. `installTuning` proves support-preservation per site
-(`support_oneOf_reweight`, parametric in `θ`) and the traversal chains them. That is what makes a
-`Tuning` able to change a generator's *distribution* and never its support, whatever weights a
-policy proposes. -/
+monotonicity proof to rebuild. Support-preservation is proved per site (`support_oneOf_reweight`,
+parametric in `θ`) and the traversal chains them. That is what makes a `Tuning` able to change a
+generator's *distribution* and never its support, whatever weights a policy proposes. -/
 def installTuning (declName : Name) (θ gen : Expr) : MetaM TuningResult := do
   let table := getGenCongrRules (← getEnv)
   let st ← IO.mkRef ({} : TuningState)
