@@ -110,7 +110,7 @@ from interacting:
 * `simp` last, single-pass so it cannot loop on the recursive `unfold` equations.
 
 `repeat'` never fails, so a goal none of the four can step is simply left open — see
-`diagnoseTotality`, which is what tells a genuine filter apart from a missing registration. -/
+`diagnoseNoWitness`, which is what tells a genuine filter apart from a missing registration. -/
 elab "totality" : tactic => open Lean Elab Tactic in do
   evalTactic (← `(tactic|
     repeat'

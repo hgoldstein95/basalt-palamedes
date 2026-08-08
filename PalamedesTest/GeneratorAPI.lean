@@ -23,7 +23,7 @@ consumes with no adapter.
 | filters | `G (Option α)` | emitted by reading the carrier at `OptionT G` |
 | filters | `G α` | error — declare `G (Option α)` |
 | succeeds | `G (Option α)` | warning — it never fails, `G α` will do |
-| *gap* | either | error / warning naming the **basis gap**, never advising `Option` |
+| *stuck* | either | error / warning naming the **missing registration**, never advising `Option` |
 
 Both emitted shapes are Basalt vocabulary throughout. `G α` is the `TGen` witness projected;
 `G (Option α)` is the carrier read at `OptionT G`, so a rejecting `assume` becomes an ordinary
@@ -31,7 +31,7 @@ Both emitted shapes are Basalt vocabulary throughout. `G α` is the `TGen` witne
 
 The last row is a third totality outcome, distinct from "filters": reconstruction can come up empty
 because the generator genuinely filters, or because the basis could not cover it. Only the first is
-a fact about the generator. See `diagnoseTotality` (`Synthesizer/FrontEnd.lean`) and the section at
+a fact about the generator. See `diagnoseNoWitness` (`Synthesizer/FrontEnd.lean`) and the section at
 the bottom of this file.
 -/
 
@@ -236,39 +236,35 @@ silent (it keys on a witness that is absent either way), and the law emitted for
 weakens from `IsSoundAndComplete` to `IsSomeSoundAndComplete`. The bad diagnosis is actionable, the
 action succeeds, and the evidence is buried.
 
-So `diagnoseTotality` reads the *term* as well: `PGen.assume` is the only thing a generator can fail
-at, and the optimizer floats every satisfiable one out, so no `assume` anywhere means "it filters"
-is not a claim the evidence supports. The corpus covers the `.filters` rows — five filtering
-generators synthesize without a spurious warning — but nothing in it reaches a basis gap, so the
-three cases are pinned directly. -/
+So `diagnoseNoWitness` reads the *term* as well: `PGen.assume` is the only thing a generator can
+fail at, and the optimizer floats every satisfiable one out, so no `assume` anywhere means "it
+filters" is not a claim the evidence supports. The corpus covers the `.filters` rows — five
+filtering generators synthesize without a spurious warning — but nothing in it leaves reconstruction
+stuck, so the cases are pinned directly. -/
 
-private def mkRes (gen : Lean.Expr) (err? : Option Lean.MessageData) : SynthesisResult :=
-  { gen, supportProof := Lean.mkConst ``Nat.zero, totalWitness? := none, totalityFailure? := err? }
-
-private def mkResGap (gen : Lean.Expr) (gaps : Array Lean.Name) : SynthesisResult :=
-  { mkRes gen none with totalityGaps := gaps }
-
-private def diagnosisLabel : TotalityDiagnosis → String
+private def outcome : Totality → String
+  | .witness _ => "witness"
   | .filters => "filters"
-  | .gap none gaps => s!"gap (left goals, no assume){if gaps.isEmpty then "" else s!", at {gaps}"}"
-  | .gap (some _) _ => "gap (errored)"
+  | .stuck _ => "stuck"
 
 /-- info: "filters" -/
 #guard_msgs in
-#eval diagnosisLabel (diagnoseTotality (mkRes (Lean.mkConst ``Palamedes.PGen.assume) none))
+#eval outcome (diagnoseNoWitness (Lean.mkConst ``Palamedes.PGen.assume) none #[])
 
-/-- info: "gap (left goals, no assume)" -/
+/-- info: "stuck" -/
 #guard_msgs in
-#eval diagnosisLabel (diagnoseTotality (mkRes (Lean.mkConst ``Nat.zero) none))
+#eval outcome (diagnoseNoWitness (Lean.mkConst ``Nat.zero) none #[])
 
--- ...and when the descent recorded *which* head it had no rule for, the diagnosis carries it, so
--- `gapMessage` names the missing registration rather than guessing at it.
-/-- info: "gap (left goals, no assume), at #[Palamedes.PGen.mod2]" -/
+-- A thrown error is stuck whatever the term contains: it is not an answer about the generator.
+/-- info: "stuck" -/
 #guard_msgs in
-#eval diagnosisLabel (diagnoseTotality (mkResGap (Lean.mkConst ``Nat.zero) #[`Palamedes.PGen.mod2]))
+#eval outcome (diagnoseNoWitness (Lean.mkConst ``Palamedes.PGen.assume) (some m!"boom") #[])
 
--- A thrown error is a gap whatever the term contains: it is not an answer about the generator.
-/-- info: "gap (errored)" -/
-#guard_msgs in
-#eval diagnosisLabel
-  (diagnoseTotality (mkRes (Lean.mkConst ``Palamedes.PGen.assume) (some m!"boom")))
+/--
+info: Totality reconstruction has no `@[total]` rule for `Palamedes.PGen.mod2`, so it could not descend past that node.
+-/
+#guard_msgs(info) in
+run_cmd Lean.Elab.Command.liftTermElabM do
+  match diagnoseNoWitness (Lean.mkConst ``Nat.zero) none #[`Palamedes.PGen.mod2] with
+  | .stuck why => Lean.logInfo why
+  | _ => throwError "expected reconstruction to be stuck on an unregistered head"

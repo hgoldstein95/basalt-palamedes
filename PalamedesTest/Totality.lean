@@ -60,14 +60,14 @@ had no rule for, which is what keyed dispatch buys that a search over rules cann
 
 opaque PalamedesTest.mystery : Palamedes.PGen Nat
 
--- The head itself is what is pinned, not `gapMessage`'s prose around it.
+-- The head itself is what is pinned, not the prose `diagnoseNoWitness` wraps around it.
 /-- info: [PalamedesTest.mystery] -/
 #guard_msgs(info) in
 run_cmd Lean.Elab.Command.liftTermElabM do
   let goal ← Lean.Meta.mkAppM ``Palamedes.PGen.total #[Lean.mkConst ``PalamedesTest.mystery]
   match ← solveGoalWithTactic? goal (← `(tactic| totality)) with
   | .ok _ => throwError "expected `totality` to leave a goal on a head with no rule"
-  | .error gs => Lean.logInfo m!"{← totalityGaps gs}"
+  | .error gs => Lean.logInfo m!"{← missingTotalRules gs}"
 
 /-! ## `total_cases` preconditions -/
 
