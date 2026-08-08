@@ -43,11 +43,17 @@ initialize registerBuiltinAttribute {
   name := `case_split
   descr := "register an `s_case*` lemma for the case-split synthesis rule, keyed by the \
     datatype of its scrutinee (the first explicit argument)"
-  add := fun declName _stx kind => do
+  add := fun declName stx kind => do
+    Attribute.Builtin.ensureNoArgs stx
     unless kind == .global do
       throwError "@[case_split] must be global"
     let info ← getConstInfo declName
-    let typeName ← MetaM.run' <| forallTelescope info.type fun args _ => do
+    let typeName ← MetaM.run' <| forallTelescope info.type fun args concl => do
+      -- A `Name` literal, not a `` `` `` one: `Palamedes.CorrectGen` is declared in a module that
+      -- imports this one, so the constant does not exist yet here.
+      unless (← whnfR concl).isAppOf `Palamedes.CorrectGen do
+        throwError "@[case_split]: {declName} concludes in {concl}, not in `CorrectGen _`, so the \
+          case-split rule could never apply it"
       for arg in args do
         if (← arg.fvarId!.getBinderInfo).isExplicit then
           let scrutTy ← whnfR (← inferType arg)
@@ -56,6 +62,13 @@ initialize registerBuiltinAttribute {
                 {scrutTy}, whose head is not a constant"
           return typeName
       throwError "@[case_split]: {declName} has no explicit scrutinee argument"
+    -- One lemma per datatype, checked at tag time: the rule selects by datatype and keeps the first
+    -- match, so a second registration would be silently unreachable.
+    for (prevTy, prevDecl) in caseSplitLemmas (← getEnv) do
+      if prevTy == typeName then
+        throwError "@[case_split]: {declName} and {prevDecl} both case-split on {typeName}, so the \
+          case-split rule would have to choose between them. Keep one, or give them distinct \
+          scrutinee types."
     modifyEnv fun env => caseSplitExt.addEntry env (typeName, declName)
 }
 

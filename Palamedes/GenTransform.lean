@@ -91,6 +91,18 @@ private def mkBinderRefl (f : Expr) : MetaM Expr := do
   forallTelescope (← inferType f) fun xs _ => do
     mkLambdaFVars xs (← mkSupportRefl (f.beta xs))
 
+/-- Reject a proof that still mentions a metavariable, expression or universe.
+
+Such a proof type-checks here and survives into `synthesisExt`, where `@[correct]` reads it back in a
+fresh `MetaM`: the metavariable context is gone, and the only symptom is `unknown universe
+metavariable` reported against the declaration, two stages away and with no `?m` visible in it. -/
+private def ensureNoMVars (lemmaName : Name) (pf : Expr) : MetaM Expr := do
+  let pf ← instantiateMVars pf
+  if pf.hasMVar || pf.hasLevelMVar then
+    throwError "transform: the proof built from `{lemmaName}` has an unassigned metavariable\
+      {indentExpr pf}"
+  return pf
+
 /-- Prove `support lhs = support rhs` via twin lemma `lemmaName`, in whichever orientation it is
 stated. -/
 def mkLeafProof (lemmaName : Name) (lhs rhs : Expr) : MetaM Expr := do
@@ -102,8 +114,8 @@ def mkLeafProof (lemmaName : Name) (lhs rhs : Expr) : MetaM Expr := do
     let (mvars, _, concl) ← forallMetaTelescope (← inferType lem)
     if ← isDefEq concl (← mkEq a b) then return some (← instantiateMVars (mkAppN lem mvars))
     else return none
-  if let some pf ← tryOrient lhsS rhsS then return pf
-  if let some pf ← tryOrient rhsS lhsS then return (← mkEqSymm pf)
+  if let some pf ← tryOrient lhsS rhsS then return ← ensureNoMVars lemmaName pf
+  if let some pf ← tryOrient rhsS lhsS then return ← ensureNoMVars lemmaName (← mkEqSymm pf)
   throwError "transform: twin lemma `{lemmaName}` matches neither orientation of goal\
     {indentExpr (← mkEq lhsS rhsS)}"
 
@@ -137,7 +149,7 @@ private def mkCongrProof (lemmaName : Name) (node node' : Expr) (hyps : Array Ex
     unless matched do
       throwError "transform: no child proof discharges a hypothesis of `{lemmaName}`"
     pool := rest
-  instantiateMVars (mkAppN lem mvars)
+  ensureNoMVars lemmaName (mkAppN lem mvars)
 
 /-- A transformed subterm: the rewritten `expr` and, when it changed, a proof `support input =
 support expr` (`none` = unchanged, i.e. `rfl`). -/

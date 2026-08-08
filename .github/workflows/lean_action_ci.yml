@@ -14,13 +14,9 @@ jobs:
       - uses: leanprover/lean-action@v1
 
       # The build above is the test suite: every module under `PalamedesTest/Corpus/` synthesizes a
-      # generator at elaboration time, so a search regression fails it. But a *totality* failure is
-      # only a **warning** for the `Palamedes.Gen` carrier shape (there is still a term to emit), and
-      # `lake build` exits 0 on warnings — so a silently-degraded totality check would ship green.
-      #
-      # Rebuild just this package's modules with `--wfail`. `lake clean palamedes` drops only the
-      # root package's outputs, so Mathlib and the other dependencies stay cached and cannot trip the
-      # flag with warnings of their own.
+      # generator at elaboration time, so a search regression fails it. Some synthesis defects
+      # surface only as warnings, which `lake build` exits 0 on; see CLAUDE.md's "Warnings hide real
+      # failures" for which ones and why the rebuild below is what catches them.
       - name: Rebuild project modules, failing on warnings
         run: |
           lake clean palamedes

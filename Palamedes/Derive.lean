@@ -186,6 +186,8 @@ def analyze (xName : Name) : TermElabM Ctx := do
     throwError "derive_palamedes: indexed inductives are not supported"
   if indVal.isNested then
     throwError "derive_palamedes: nested inductives are not supported"
+  if indVal.ctors.isEmpty then
+    throwError "derive_palamedes: {xName} has no constructors, so there is nothing to generate"
   -- Universe-polymorphic inductives (e.g. core `List`) are instantiated at universe 0: the whole
   -- generated template is `Type`-monomorphic anyway, matching the hand-written modules.
   let lvls := indVal.levelParams.map fun _ => Level.zero

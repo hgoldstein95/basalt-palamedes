@@ -31,12 +31,6 @@ polymorphic type, which Lean does not prove. The agreement holds combinator-by-c
 def someSupport (g : PGen α) : α → Prop :=
   fun a => some a ∈ SPMF.support (PGen.totalize g (G := SPMF))
 
-/-- `totalize` commutes with `unfold` **definitionally**: `X.unfoldGo` is itself polymorphic in `G`,
-and `X.unfold`'s `.run` merely instantiates it. This is what lets the derived twins reuse the
-`unfold`/`induction` skeleton of `X.support_unfold` unchanged. -/
-theorem totalize_run_eq {G : Type → Type} [Gen G] (g : PGen α) :
-    PGen.totalize g (G := G) = OptionT.run (g.run (G := OptionT G)) := rfl
-
 theorem support_optionT_pure (a : α) :
     SPMF.support (OptionT.run (pure a : OptionT SPMF α)) = {some a} := by
   rw [show (pure a : OptionT SPMF α) = OptionT.mk (Pure.pure (some a)) from rfl]

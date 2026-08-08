@@ -9,7 +9,8 @@ import Palamedes.PGen
 /-!
 # Failure-aware semantics for Palamedes generators
 
-If a generator synthesizes with backtracking, we provide tools to lift it into a partial generator.
+If a generator synthesizes with backtracking, we provide tools to lift it to a generator at
+`OptionT`.
 -/
 
 namespace Palamedes
@@ -21,7 +22,10 @@ instance instFailOptionT {G : Type → Type} [Monad G] : Fail (OptionT G) := ⟨
 
 namespace PGen
 
-/-- Interpret a (possibly failing) Palamedes generator as a **total** generator of `Option α`. -/
+/-- Interpret a (possibly failing) Palamedes generator as a **total** generator of `Option α`.
+
+Anything itself polymorphic in `G` commutes with this definitionally.
+-/
 def totalize (g : PGen α) : ∀ {G : Type → Type} [Gen G], G (Option α) :=
   fun {_G} _ => OptionT.run (g.run (G := OptionT _G))
 

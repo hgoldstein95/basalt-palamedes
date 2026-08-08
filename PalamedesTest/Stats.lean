@@ -7,6 +7,8 @@ Authors: Harrison Goldstein
 import Palamedes.Data.Nat
 import PalamedesTest.Corpus.Simple.OneOfFour
 import PalamedesTest.Corpus.Tree.BST.Fold
+import PalamedesTest.Corpus.Tree.RBT.RBT
+import PalamedesTest.Corpus.Tree.BadRBT.BadRBT
 
 /-!
 # Distribution oracles for `#genstats`
@@ -101,3 +103,55 @@ info: (BSTFold.genBSTFold 0 10) — 4000 draws (seed 0, fuel 10000)
 -/
 #guard_msgs in
 #genstats (draws := 4000) (BSTFold.genBSTFold 0 10)
+
+/--
+info: (RBT.genRBT 1 0 10) — 200 draws (seed 0, fuel 10000)
+
+  outcomes    ok 200 (100.0%)
+  size        mean 1.0   p50 1   p95 1   max 1
+  choices     mean 13.9   p50 13   p95 25   max 35
+  distinct    180 / 200
+
+  head constructor
+    some    94.5%  (189)
+    none     5.5%   (11)
+
+  most common
+      5.5%  (11)  none
+      2.0%   (4)  some (Palamedes.Tree.node (Palamedes.Tree.leaf) (Color.black, 3) (Palamedes.Tree.leaf))
+      1.5%   (3)  some (Palamedes.Tree.node (Palamedes.Tree.leaf) (Color.black, 8) (Palamedes.Tree.leaf))
+      1.5%   (3)  some (Palamedes.Tree.node (Palamedes.Tree.leaf) (Color.black, 9) (Palamedes.Tree.node (Pa…
+      1.0%   (2)  some (Palamedes.Tree.node (Palamedes.Tree.leaf) (Color.black, 1) (Palamedes.Tree.leaf))
+
+  samples
+    some (Palamedes.Tree.node (Palamedes.Tree.node (Palamedes.Tree.leaf) (Color.red, 0) (Pala…
+    none
+    some (Palamedes.Tree.node (Palamedes.Tree.node (Palamedes.Tree.node (Palamedes.Tree.leaf)…
+-/
+#guard_msgs in
+#genstats (draws := 200) (RBT.genRBT 1 0 10)
+
+/--
+info: (BadRBT.genBadRBT 1) — 200 draws (seed 0, fuel 10000)
+
+  outcomes    ok 55 (27.5%)   fuel-exhausted 145 (72.5%)
+  size        mean 17.6   p50 11   p95 53   max 75
+  choices     mean 33.9   p50 22   p95 107   max 158
+  distinct    44 / 55
+
+  head constructor
+    node   100.0%  (55)
+
+  most common
+     12.7%  (7)  Palamedes.Tree.node (Palamedes.Tree.leaf) (Color.black, 0) (Palamedes.Tree.leaf)
+      5.5%  (3)  Palamedes.Tree.node (Palamedes.Tree.leaf) (Color.black, 1) (Palamedes.Tree.node (Palamede…
+      5.5%  (3)  Palamedes.Tree.node (Palamedes.Tree.leaf) (Color.black, 2) (Palamedes.Tree.leaf)
+      3.6%  (2)  Palamedes.Tree.node (Palamedes.Tree.leaf) (Color.black, 1) (Palamedes.Tree.leaf)
+
+  samples
+    Palamedes.Tree.node (Palamedes.Tree.node (Palamedes.Tree.node (Palamedes.Tree.leaf) (Colo…
+    Palamedes.Tree.node (Palamedes.Tree.leaf) (Color.black, 3) (Palamedes.Tree.node (Palamede…
+    Palamedes.Tree.node (Palamedes.Tree.leaf) (Color.black, 0) (Palamedes.Tree.leaf)
+-/
+#guard_msgs in
+#genstats (draws := 200) (BadRBT.genBadRBT 1)

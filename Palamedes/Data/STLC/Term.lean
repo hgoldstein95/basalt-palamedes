@@ -71,7 +71,7 @@ def Term.toString : Term → String
   | .unit => "()"
   | .var n => s!"(var {n})"
   | .abs τ t => s!"({Ty.toString τ} → {Term.toString t})"
-  | .app t₁ t₂ => s!"({Term.toString t₁} → {Term.toString t₂})"
+  | .app t₁ t₂ => s!"({Term.toString t₁} {Term.toString t₂})"
 
 instance : ToString Term where
   toString := Term.toString

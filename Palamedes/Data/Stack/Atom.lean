@@ -109,6 +109,14 @@ reaches the environment as a proof term. Keeping the data a bare `TGen.arbLabel`
 @[total]
 def total_arbLabel : total arbLabel := ⟨TGen.arbLabel, by unfold arbLabel; rfl⟩
 
+/-- Same hazard as `total_Bool_rec`; see there. -/
+@[total]
+def total_Label_rec (hl : total gl) (hh : total gh) : total (Label.rec gl gh l) :=
+  ⟨⟨fun {_G} _ => match l with | .low => hl.val.run | .high => hh.val.run⟩, by
+    cases l
+    · exact hl.property
+    · exact hh.property⟩
+
 end Total
 
 end PGen

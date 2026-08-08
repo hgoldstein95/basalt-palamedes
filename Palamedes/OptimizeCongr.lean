@@ -54,6 +54,9 @@ initialize genCongrExt : SimplePersistentEnvExtension CongrRule (Array CongrRule
     addImportedFn := mkStateFromImportedEntries Array.push #[]
   }
 
+/-- All registered `@[gen_congr]` congruence rules. -/
+def getGenCongrRules (env : Environment) : Array CongrRule := genCongrExt.getState env
+
 /--
 Mark a `support`-congruence lemma for the generator optimizer's structural descent. The lemma must
 have the shape
@@ -73,8 +76,11 @@ initialize registerBuiltinAttribute {
     let some rule ← (analyzeCongr decl).run'
       | throwError "`@[gen_congr]`: `{decl}` is not a support-congruence lemma of the form \
           `support (H …) = support (H …)` with at least one differing argument"
+    -- One rule per head, checked at tag time: the descent selects by head and keeps the first
+    -- match, so a second registration would be silently unreachable.
+    for (prevHead, prevDecl, _) in getGenCongrRules (← getEnv) do
+      if prevHead == rule.1 then
+        throwError "`@[gen_congr]`: `{decl}` and `{prevDecl}` both descend through `{prevHead}`, \
+          so the optimizer would have to choose between them. Keep one."
     modifyEnv (genCongrExt.addEntry · rule)
 }
-
-/-- All registered `@[gen_congr]` congruence rules. -/
-def getGenCongrRules (env : Environment) : Array CongrRule := genCongrExt.getState env

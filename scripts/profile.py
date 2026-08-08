@@ -1,6 +1,8 @@
-import subprocess
+import glob
+import os
 import re
 import statistics
+import subprocess
 from tqdm import tqdm
 
 NUM_RUNS = 2
@@ -74,19 +76,43 @@ FOLD = [
     "PalamedesTest/Corpus/STLC/WellTyped/Fold.lean",
 ]
 
+# Corpus files that are deliberately not benchmarked: the `AccuOpt` spelling is a third phrasing of
+# a predicate `STANDARD` and `FOLD` already cover, and `IdxOf` exists to re-elaborate its own pinned
+# term rather than to time a search.
+EXCLUDED = [
+    "PalamedesTest/Corpus/List/EvenLen/AccuOpt.lean",
+    "PalamedesTest/Corpus/List/IdxOf/IdxOf.lean",
+    "PalamedesTest/Corpus/List/LengthK/AccuOpt.lean",
+    "PalamedesTest/Corpus/List/True/AccuOpt.lean",
+]
+
 # Which set to profile. `STANDARD` is the structurally-recursive spelling of each predicate;
 # `FOLD` is the catamorphism spelling of the same properties, which exercises a different path
 # through the search. Swap this line to profile the other set.
 FILES = STANDARD
 
-# Fail loudly if a path has rotted (e.g. the corpus was moved) rather than silently profiling
-# nothing.
-import os
-missing = [f for f in FILES if not os.path.exists(f)]
+# The lists above are checked against the corpus in both directions, since either drift is silent:
+# a rotted path profiles nothing, and a corpus file nobody listed is a benchmark quietly missing
+# from the paper's table.
+missing = [f for f in STANDARD + FOLD + EXCLUDED if not os.path.exists(f)]
 if missing:
-    raise SystemExit("ERROR: these benchmark files do not exist (was the corpus moved?):\n  "
-                     + "\n  ".join(missing))
+    raise SystemExit(
+        "ERROR: these benchmark files do not exist (was the corpus moved?):\n  "
+        + "\n  ".join(missing))
 
+unlisted = sorted(
+    set(glob.glob("PalamedesTest/Corpus/**/*.lean", recursive=True)) -
+    set(STANDARD) - set(FOLD) - set(EXCLUDED))
+if unlisted:
+    raise SystemExit(
+        "ERROR: these corpus files are in neither STANDARD, FOLD nor EXCLUDED:\n  "
+        + "\n  ".join(unlisted))
+
+# A declaration, from its `def` through the `:=` that starts its body. Classification reads these
+# rather than the whole file so that a predicate or a docstring mentioning `Option` does not confuse
+# the totality check.
+DECLARATION = re.compile(r"^\s*(?:@\[[^\]]*\]\s*)*def\b.*?:=",
+                         re.MULTILINE | re.DOTALL)
 
 # `: G (Option α)` or `: Palamedes.Gen (Option α)` in a declaration's return type.
 PARTIAL_RETURN_TYPE = re.compile(
@@ -102,10 +128,13 @@ def is_total(path):
     classified `total` and the partial table silently empty.)
     """
     with open(path, "r") as f:
-        return PARTIAL_RETURN_TYPE.search(f.read()) is None
+        decls = DECLARATION.findall(f.read())
+    return not any(PARTIAL_RETURN_TYPE.search(d) for d in decls)
+
 
 # Regular expression to match the desired output
-pattern = re.compile(r'\[palamedes\.trace\] \[(\d+(?:\.\d+)?)\].*?⟪(.+)⟫⟪(.+)⟫')
+pattern = re.compile(
+    r'\[palamedes\.trace\] \[(\d+(?:\.\d+)?)\].*?⟪(.+)⟫⟪(.+)⟫')
 
 # Dictionary to store extracted numbers by string
 data = dict()
@@ -122,7 +151,9 @@ for file in iter:
         output = result.stdout
         matches = pattern.findall(output)
         if not matches:
-            raise SystemExit(f"\nERROR: no palamedes.trace nodes matched for {file} (trace format changed?)")
+            raise SystemExit(
+                f"\nERROR: no palamedes.trace nodes matched for {file} (trace format changed?)"
+            )
         for (numRepr, typ, pred) in matches:
             label = (typ, pred)
             if label in data:
@@ -133,7 +164,7 @@ for file in iter:
                     "total": is_total(file),
                 }
     except subprocess.CalledProcessError as e:
-        print(f"\nError running script: {e} \n")
+        raise SystemExit(f"\nERROR: elaborating {file} failed:\n{e.stderr}")
 
 label_pattern = re.compile(r"fun (.+) => (.+)")
 

@@ -28,6 +28,11 @@ def expandAssertOptimizes : CommandElab := fun stx =>
       let mα ← mkFreshExprMVar none
       let e1 ← elabTerm t1 (some (.app (.const ``Palamedes.PGen []) mα))
       let e2 ← elabTerm t2 (some (.app (.const ``Palamedes.PGen []) mα))
+      -- Instance arguments (`OfNat`, …) are postponed by `elabTerm`, and the optimizer's proofs
+      -- inherit whatever metavariables its input still holds.
+      synthesizeSyntheticMVarsNoPostponing
+      let e1 ← instantiateMVars e1
+      let e2 ← instantiateMVars e2
       let (e1', proof) ← Palamedes.optimizeGen e1
       unless ← isDefEq e1' e2 do
         throwError "{e1}\n~~>\n{e1'}\n!=\n{e2}"

@@ -48,21 +48,32 @@ structure TotalRule where
   decl : Name
   deriving Inhabited, BEq, Repr
 
-initialize totalExt : SimplePersistentEnvExtension TotalRule (Array TotalRule) ←
+/-- The registry state: the rules in registration order, and the same rules as the descent's
+dispatch table. These are maintained together to make lookup cheaper. -/
+structure TotalRuleSet where
+  rules : Array TotalRule := #[]
+  /-- Keyed as `totalKey?` keys a goal. -/
+  table : Std.HashMap (Name × Name) Name := {}
+
+instance : Inhabited TotalRuleSet := ⟨{}⟩
+
+def TotalRuleSet.insert (s : TotalRuleSet) (r : TotalRule) : TotalRuleSet :=
+  { rules := s.rules.push r, table := s.table.insert (r.goal, r.head) r.decl }
+
+initialize totalExt : SimplePersistentEnvExtension TotalRule TotalRuleSet ←
   registerSimplePersistentEnvExtension {
-    addEntryFn := Array.push
-    addImportedFn := fun ess => ess.flatten
+    addEntryFn := TotalRuleSet.insert
+    addImportedFn := fun ess => ess.flatten.foldl TotalRuleSet.insert {}
   }
 
 /-- Every `@[total]`-tagged rule, in registration order. -/
-def totalRules (env : Environment) : Array TotalRule := totalExt.getState env
+def totalRules (env : Environment) : Array TotalRule := (totalExt.getState env).rules
 
 /-- The declaration names of every `@[total]`-tagged rule, in registration order. -/
 def totalLemmas (env : Environment) : Array Name := (totalRules env).map (·.decl)
 
 /-- The registry as the descent's dispatch table, keyed as `totalKey?` keys a goal. -/
-def totalTable (env : Environment) : Std.HashMap (Name × Name) Name :=
-  (totalRules env).foldl (init := {}) fun m r => m.insert (r.goal, r.head) r.decl
+def totalTable (env : Environment) : Std.HashMap (Name × Name) Name := (totalExt.getState env).table
 
 /-- The three goal shapes the totality descent dispatches on. (`Name` literals, not `` `` `` ones:
 these live in a module that imports this one, so the constants do not exist yet here.) -/
@@ -115,11 +126,10 @@ initialize registerBuiltinAttribute {
           `totality` tactic could never dispatch to it"
     -- One rule per head, checked at tag time: two rules that could race are a build error naming
     -- both.
-    for prev in totalRules (← getEnv) do
-      if (prev.goal, prev.head) == key then
-        throwError "@[total]: `{declName}` and `{prev.decl}` both reconstruct `{key.2}`, so the \
-          `totality` tactic would have to choose between them. Keep one, or give them distinct \
-          heads."
+    if let some prev := (totalTable (← getEnv))[key]? then
+      throwError "@[total]: `{declName}` and `{prev}` both reconstruct `{key.2}`, so the \
+        `totality` tactic would have to choose between them. Keep one, or give them distinct \
+        heads."
     modifyEnv fun env =>
       totalExt.addEntry env { goal := key.1, head := key.2, decl := declName }
 }
