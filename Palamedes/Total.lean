@@ -12,44 +12,12 @@ import Palamedes.RuleSets
 /-!
 # Totality (assume-freedom)
 
-A generator is `total` when it never fails — equivalently, when it is definable *without* the `Fail`
-capability. We make that precise as **factoring through `TGen`**: `total g` is the type of
-failure-free `t : TGen α` with `t.toGen = g`.
-
-`total` is **`Type`-valued, not `Prop`-valued**, and that is load-bearing rather than incidental. The
-witness `t` is the failure-free generator itself, and `t.run` is already a Basalt-shaped generator
-(`∀ {G} [Gen G], G α`) — so a totality proof *is* the term we want to emit. Stated as an `∃` the
-witness would be sealed behind `Exists`, recoverable only with `choose`, which pulls
-`Classical.choice` into every totality fact and makes the result noncomputable. As a subtype the
-witness projects out with `.val`, the lemmas are computable, and `t.toGen = g` is what transfers a
-support fact from `g` to the emitted generator.
-
-This is a structural, syntactic notion of totality — "no `assume`" — for the polymorphic carrier. It is
-deliberately *not* Basalt's almost-sure termination (`SPMF.IsPMF`, i.e. mass = 1): the two agree on
-every non-recursive generator, but disagree on recursion (an assume-free `unfold` can still diverge
-with probability 1, e.g. an always-`cons` body). Almost-sure termination is a strictly stronger
-property — a separate predicate (`IsPMF ∘ run`), orthogonal to this one.
-
-Because `TGen` cannot mention `Fail`, every combinator that does not fail has a `TGen` witness, and
-the introduction lemmas below build those witnesses compositionally. The recursive case
-(`X.total_unfold`) lives with each datatype in `Palamedes/Data/`, because the witness is that
-datatype's own `unfold` re-instantiated at the failure-free interface.
-
-The combinator basis below is the one place where the two interfaces are both written out, and it
-has to be: `pure`, `bind`, `pick`, `frequency` and `map` take *generators* as arguments, so their
-`TGen` and `PGen` spellings differ in argument type and neither can be the image of the other.
-Everything else goes the other way — defined once at `TGen`, with the `PGen` form as `TGen.toGen` of
-it (`TGen.arbNat`, `TGen.choose`, `TGen.elements`, …), so its `total_*` lemma is `⟨TGen.foo, rfl⟩`
-with no second body to keep in agreement.
-
-Generator-valued arguments are the whole of that criterion. It is *not* a split between a datatype's
-primitives and the core algebra: `PGen.choose` sits with the core algebra in `PGen.lean` and still
-takes the coercion route, because a uniform range draw takes no generators.
-
-The dividing line is whether the witness has a compositional route, not whether the generator can
-fail. A *composite* over the primitives stays an ordinary `PGen` definition — `PGen.gt` is
-`(lo + 1 + ·) <$> arbNat`, and `total_gt` is `total_map total_arbNat` — because the registry already
-assembles its witness.
+A generator is `total` when it never fails — equivalently, definable *without* the `Fail`
+capability — made precise as factoring through `TGen`; see `PGen.total`. This module defines the
+`TGen` mirror of the combinator basis and the `@[total]` introduction rules that build totality
+witnesses compositionally. The recursive case (`X.total_unfold`) lives with each datatype in
+`Palamedes/Data/`, because the witness is that datatype's own `unfold` re-instantiated at the
+failure-free interface.
 -/
 
 namespace Palamedes
@@ -58,7 +26,17 @@ namespace Palamedes
 
 The `TGen` mirror of the core generator algebra. Each is the obvious failure-free term, and each
 coerces (`TGen.toGen`) to the corresponding `PGen` combinator definitionally — that is what makes the
-totality witnesses below close by `rfl`. -/
+totality witnesses below close by `rfl`.
+
+These five are the only definitions spelled at *both* interfaces, and generator-valued arguments are
+the whole criterion: `pure`, `bind`, `pick`, `frequency` and `map` take generators, so their `TGen`
+and `PGen` spellings differ in argument type and neither can be the image of the other. Everything
+that takes no generators is defined once at `TGen` with the `PGen` form as `TGen.toGen` of it
+(`TGen.choose`, `TGen.arbNat`, `TGen.elements`, …), so its `total_*` lemma is `⟨TGen.foo, rfl⟩` with
+no second body to keep in agreement — wherever it lives, core algebra (`PGen.choose`) or `Data/`
+module alike. And a composite over the primitives needs neither: it stays an ordinary `PGen`
+definition whose witness the `@[total]` registry assembles (`PGen.gt` in `Data/Nat.lean` is the
+worked example). -/
 
 namespace TGen
 
@@ -125,8 +103,13 @@ namespace PGen
 witness together with a proof that its coercion is `g`. Equivalently, `g` is definable without
 `Fail`, i.e. it never uses `assume`/`empty`.
 
-This is *data*, not a proposition — see the module docstring. `.val` is the witness the synthesizer
-emits from; `.property` is what carries a support fact across to it. -/
+`Type`-valued because the witness is data: the failure-free generator itself, which stage 5
+projects out — a `Prop`-valued spelling would erase it. `.val` is the witness the synthesizer
+emits from; `.property` is what carries a support fact across to it.
+
+Deliberately *not* Basalt's almost-sure termination (`SPMF.IsPMF`, mass = 1): an assume-free
+recursive `unfold` can still diverge with probability 1 (an always-`cons` body), so a.s. termination
+is a strictly stronger, orthogonal predicate (`IsPMF ∘ run`). -/
 def total (g : PGen α) : Type 1 := {t : TGen α // t.toGen = g}
 
 def totalList (gs : List (PGen α)) : Type 1 := {ts : List (TGen α) // ts.map TGen.toGen = gs}
@@ -144,21 +127,16 @@ theorem frequency_congr {gs gs' : List (Nat × PGen α)} (hg : gs = gs') {h h'} 
 namespace Total
 
 /-! These are `def`s rather than `theorem`s, and carry no `@[simp]`: `total` is `Type`-valued, so
-they build witnesses rather than prove propositions.
+they build witnesses rather than prove propositions, and they must stay **computable** — the witness
+they assemble is emitted as the generator's definition, so a `Classical.choice` anywhere here makes
+that generator noncomputable. Each is `@[total]`, exactly like a per-datatype leaf: the tag fixes
+the head each rule reconstructs, so the order they appear in here carries no meaning.
 
-Each is `@[total]`, exactly like a per-datatype leaf: the generic combinator basis has no privileged
-status in the descent, and `Synthesizer/Totality.lean` names none of them. The tag fixes the head
-each rule reconstructs, so the order they appear in here carries no meaning.
-
-They must stay **computable** — the witness they assemble is what stage 2 emits as the generator's
-definition, so a `Classical.choice` anywhere here would make the emitted generator noncomputable.
-
-**Every one of these is written as a direct `⟨witness, proof⟩`, with tactics confined to the proof
-component, and that is load-bearing rather than stylistic.** Written instead as `by obtain ⟨t, rfl⟩ …`
-the `subst` puts an `Eq.rec` in the *data* path, which blocks `.val` from projecting — so the emitted
-generator cannot be reduced back to generator code and lands in the environment as a witness tree
-(`total_bind (total_oneOf …) …`) instead of as a readable generator. `PalamedesTest/Extract.lean`
-audits for exactly that. Keep the data direct. -/
+**Every one is a direct `⟨witness, proof⟩`, with tactics confined to the proof component.** Written
+instead as `by obtain ⟨t, rfl⟩ …`, the `subst` puts an `Eq.rec` in the *data* path, `.val` stops
+projecting, and the generator lands in the environment as a witness tree
+(`total_bind (total_oneOf …) …`) instead of generator code — `PalamedesTest/Extract.lean` fails the
+build on exactly that residue. -/
 
 @[total]
 def total_pure (a : α) : total (pure a) :=
@@ -212,8 +190,6 @@ component. This is the side condition `TGen.frequency` needs, and it has to be a
 proof component so that the witness itself can be built. -/
 theorem totalWeighted_fst {gs : List (Nat × PGen α)} (hgs : totalWeighted gs) :
     hgs.val.map Prod.fst = gs.map Prod.fst := by
-  -- `conv_rhs`, not a bare `rw`: `hgs`'s own type mentions `gs`, so rewriting it everywhere makes
-  -- the motive ill-typed.
   conv_rhs => rw [← hgs.property]
   simp [List.map_map, Function.comp_def]
 
@@ -240,16 +216,11 @@ def total_map
     total (f <$> x) :=
   ⟨TGen.map f hx.val, by rw [TGen.toGen_map, hx.property]⟩
 
-/-- The conditional lives **inside** `TGen.mk`, not outside it, and that placement is the whole
-content of this lemma — the same trick, and for the same reason, as `X.total_cases`.
-
-Written the other way round (`if hb : b then (h₁ hb).val else (h₂ hb).val`) the witness is a `dite`
-whose branches are `TGen`s, so the `.run` the Basalt shape projects with has a `dite` between it and
-the `TGen.mk`s and simply does not cancel. What gets emitted is
-`(if hb : … then { run := … } else { run := … }).run` — structure literals, eta-expanded branches
-and a `._proof_1` reference, in a term that is supposed to be readable and re-elaborable. With the
-`mk` outermost the projection cancels at the top and the `dite` is left where it belongs, in the
-generator's body. `genBST` is the canary. -/
+/-- The conditional lives **inside** `TGen.mk`, not outside it — the same trick, and for the same
+reason, as `X.total_cases`. A `dite` *of* `TGen`s (`if hb : b then (h₁ hb).val else …`) leaves the
+Basalt shape's `.run` unable to cancel, and the emitted term is
+`(if hb : … then { run := … } else { run := … }).run` — structure literals and a `._proof_1` in a
+term that is supposed to be readable and re-elaborable; `genBST` is the canary. -/
 @[total]
 def total_dite
     {g₁ : b = true → PGen α}
@@ -257,24 +228,18 @@ def total_dite
     (h₁ : (h : b = true) → total (g₁ h))
     (h₂ : (h : ¬(b = true)) → total (g₂ h))
     : total (if h : b then g₁ h else g₂ h) :=
-  -- Still not a `by_cases` on `b`: that would put the case split in the data path, where it cannot
-  -- reduce until `b` is concrete. The `dite` stays, it just moves inside the `mk`.
+  -- Not a `by_cases` on `b` either: that puts the case split in the data path, where it cannot
+  -- reduce until `b` is concrete.
   ⟨⟨fun {_G} _ => if hb : b then (h₁ hb).val.run else (h₂ hb).val.run⟩, by
     by_cases hb : b = true
     · simp only [dif_pos hb]; exact (h₁ hb).property
     · simp only [dif_neg hb]; exact (h₂ hb).property⟩
 
-/-- The non-dependent `ite`, which is **not** an instance of `total_dite`: that one is keyed on
-`dite` and on a `Bool` condition read as `b = true`, and dispatch is by head constant, so an `ite`
-over an arbitrary decidable `Prop` matches no rule of its own.
-
-Without this rule the cost is silent. `totality` is `repeat' first | … | split`, so a node with no
-rule does not fail — it falls through to `split`, which leaves a `Decidable.rec` and an `Eq.mpr` per
-arm in the witness's **data** path. A `G α` generator is read straight out of that path, and the
-code generator rejects it outright: "code generator does not support recursor `Decidable.rec`". A
-predicate as ordinary as `isComplete`'s `n == 0` reaches it.
-
-`mk` outermost, for the reason `total_dite` gives. -/
+/-- The non-dependent `ite`, which is **not** an instance of `total_dite`: dispatch is by head
+constant, so an `ite` over an arbitrary decidable `Prop` matches no rule of its own, and `totality`
+silently falls through to `split` — leaving a `Decidable.rec` and an `Eq.mpr` per arm in the
+witness's **data** path, which the code generator rejects downstream with "code generator does not
+support recursor `Decidable.rec`". `mk` outermost, for the reason `total_dite` gives. -/
 @[total]
 def total_ite {c : Prop} [Decidable c] {g₁ g₂ : PGen α}
     (h₁ : total g₁)

@@ -16,12 +16,9 @@ import Palamedes.SomeSupport
 # `Nat` primitives
 
 `arbNat` (geometric, a direct `partial_fixpoint`), the range generators `gt`/`lt`/`mod2`, their
-support and totality facts, and the range synthesis rules (`s_between`, `s_between_partial`, `s_gt`,
-`s_lt_partial`, `s_mod2_partial`).
-
-The uniform range draw those rules are built from is `PGen.choose`, which lives in `PGen.lean` beside
-the rest of the Basalt vocabulary rather than here: it is a view of Basalt's `chooseNat`, not a
-generator this module defines. What belongs here is everything that is about `Nat` *predicates*.
+support and totality facts, and the range synthesis rules. The uniform range draw those rules are
+built from is `PGen.choose`, which lives in `PGen.lean` beside the rest of the Basalt vocabulary;
+what belongs here is everything that is about `Nat` *predicates*.
 -/
 
 namespace Palamedes
@@ -43,18 +40,15 @@ end PGen
 /-! ## The primitive
 
 `arbNat` is the one generator here that is neither built from the core algebra nor able to fail, so
-it is spelled once at the failure-free interface `TGen` and its `PGen` form is `TGen.toGen` of it.
-That direction makes `total_arbNat` a direct `⟨witness, rfl⟩` pair: the witness a totality proof has
-to produce is the definition itself, rather than a separately written mirror of it that a lemma then
-has to reconnect.
+it is spelled once at the failure-free interface `TGen` and its `PGen` form is `TGen.toGen` of it,
+making `total_arbNat` a direct `⟨TGen.arbNat, rfl⟩` — see `Total.lean`'s combinator section for the
+criterion.
 
-Deliberately `Palamedes.TGen`, beside the type and the core algebra (`TGen.pure`, `TGen.bind`,
-`TGen.frequency`, … in `Total.lean`) — **not** `Palamedes.PGen.TGen`, which is where it would land if
-written inside a `namespace PGen` block. Two namespaces both *printing* as `TGen` is confusing on its
-own, and the cost is concrete: it forces every file that reads emitted terms to `open Palamedes.PGen`
-in order to abbreviate `PGen.TGen.arbNat`, and that open shadows Basalt's root-level `frequency`, so
-the generator Palamedes emits prints as `_root_.frequency`. The same trap is one `namespace` line
-away in any `Data/` module that adds a primitive. -/
+It goes in `Palamedes.TGen`, in an explicit `namespace TGen` block **outside** the `namespace PGen`
+one: written inside that block it silently lands in `Palamedes.PGen.TGen`, and every file that reads
+emitted terms must then `open Palamedes.PGen` to abbreviate the name — which shadows Basalt's
+root-level `frequency`, so emitted generators print their choice sites as `_root_.frequency`. The
+same trap is one `namespace` line away in any `Data/` module that adds a primitive. -/
 
 namespace TGen
 
@@ -72,12 +66,9 @@ theorem run_arbNat (G : Type → Type) [Gen G] [Fail G] : arbNat.run (G := G) = 
 
 /-! ### The range generators
 
-Ordinary `PGen` definitions over `arbNat` and the core `choose`, and the `TGen`-first direction above
-is not meant to reach them. It earns its keep only where a totality witness has to be written by
-hand, since that is what a `PGen`-side primitive costs a second body for. These compose, so their
-witnesses come out of the `@[total]` registry — `total_gt` is `total_map total_arbNat` and `total_lt`
-is `total_choose` — and there is no second body either way. (`mod2` is reached only through the
-filtering `s_mod2_partial`, so it needs no totality rule at all.) -/
+Ordinary `PGen` composites over `arbNat` and the core `choose`: their totality witnesses come out of
+the `@[total]` registry (the `Total` section below), so none needs a `TGen` spelling. `mod2` is
+reached only through the filtering `s_mod2_partial`, so it needs no totality rule at all. -/
 
 def gt (lo : Nat) : PGen Nat := (lo + 1 + · ) <$> arbNat
 
@@ -243,9 +234,6 @@ end CorrectGen
 
 namespace Total
 
-/-- `arbNat` is assume-free by construction: it *is* `TGen.arbNat` viewed as a `PGen`, so the witness
-is that generator and the equation is `rfl`. (Almost-sure termination is a strictly stronger,
-orthogonal fact; see the Basalt library.) -/
 @[total]
 def total_arbNat : total arbNat := ⟨TGen.arbNat, rfl⟩
 

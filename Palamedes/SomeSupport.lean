@@ -11,19 +11,9 @@ import Palamedes.Support
 # The support of a *filtering* generator
 
 `PGen.support g` reads a generator at `SPMF`, where `Fail` is `⊥`, so it describes the values a
-generator produces *when it does not fail*. A filtering generator's emitted definition runs it at
-`OptionT SPMF` instead — a different instantiation of the same polymorphic term. This file gives the
-support notion for *that* interpretation, and the three lemmas the per-datatype twins need.
-
-`someSupport` and `PGen.support` agree on every generator built from the combinator basis (each such
-equation is a one-liner from the two `bind`/`pure` lemmas below), and the agreement propagates
-through `unfold`. What is **not** available is the global statement `∀ g, someSupport g = g.support`:
-`g.run` is an arbitrary element of `∀ {G} [Gen G] [Fail G], G α`, so relating its `SPMF` instance to
-its `OptionT SPMF` instance is a free theorem about that Π-type, which Lean's logic does not prove.
-
-This is why the twins are *derived per datatype* rather than obtained by transporting
-`X.support_unfold`: `support_unfold`'s step predicate is `(f d x).support` for a `PGen`-valued `f`,
-and no `PGen` has a prescribed `someSupport` as its support, so there is nothing to transport along.
+generator produces *when it does not fail*; a filtering generator's emitted definition runs the same
+polymorphic term at `OptionT SPMF` instead. This file gives the support notion for *that*
+interpretation (`someSupport`) and the lemmas the per-datatype twins need.
 -/
 
 namespace Palamedes
@@ -33,7 +23,11 @@ open Palamedes.PGen Helpers
 variable {α β : Type}
 
 /-- The support of a possibly-failing generator, read through `totalize` — the values it can
-actually produce, as opposed to the values it produces when it does not fail. -/
+actually produce, as opposed to the values it produces when it does not fail.
+
+There is no global `someSupport g = g.support` — it would be a free theorem about `g.run`'s
+polymorphic type, which Lean does not prove. The agreement holds combinator-by-combinator (the
+`@[simp]` lemmas below), so the per-datatype twins are *derived*, not transported. -/
 def someSupport (g : PGen α) : α → Prop :=
   fun a => some a ∈ SPMF.support (PGen.totalize g (G := SPMF))
 
@@ -69,9 +63,8 @@ theorem mem_support_optionT_bind {x : OptionT SPMF α} {k : α → OptionT SPMF 
     exact ⟨some a, ha, hw⟩
 
 /-- The `pick` lemma. `pick` is `choose 0 1 >>= …`, so this follows from the `bind` lemma once the
-two-element index is case-split — but stating it separately is what lets the *primitive* generators
-(`arbNat`'s fixpoint, `arbBool`, `arbColor`) be proved by the same one-line scripts as their
-`PGen.support` counterparts. -/
+two-element index is case-split — but stating it separately is what lets the *primitive* generators'
+`someSupport` proofs mirror their `PGen.support` scripts line for line. -/
 theorem mem_support_optionT_pick {x y : OptionT SPMF α} {w : α} :
     some w ∈ SPMF.support (OptionT.run
         (RandomChoice.pick (fun () => x) (fun () => y) : OptionT SPMF α))
@@ -113,8 +106,8 @@ theorem mem_support_optionT_lift {p : SPMF α} {a : α} :
 
 Each of these is a one-liner from the two helper lemmas: the `Fail` interpretations differ (`⊥` at
 `SPMF`, `pure none` at `OptionT SPMF`) but agree on `some`-values, and every other combinator is a
-`bind`/`pure`/`choose` composite. What is *not* available is the corresponding statement for an
-opaque `g : PGen α` — that is the free theorem described in this module’s header. -/
+`bind`/`pure`/`choose` composite. The corresponding statement for an *opaque* `g : PGen α` is the
+free theorem `someSupport`'s docstring rules out. -/
 
 section Combinators
 
@@ -190,12 +183,8 @@ end Combinators
 
 These are the combinators the **optimizer** actually emits — a `pick` chain is flattened into a
 `frequency` so that a k-way choice is a function of its weights rather than of how the chain was
-associated. The stage-4 probe checked `pure`/`bind`/`pick`/`assume` and the `unfold` twin, but not
-these, so their cost was not visible in the estimate: `frequencyAux` is a `choose`-then-`dite`
-composite whose `else` branch is `default`, and `OptionT SPMF α`'s `Inhabited` (`pure none`) is a
-*different term* from `SPMF (Option α)`'s. `OptionT.run` therefore does not distribute over
-`frequency` unconditionally — it needs `0 < total` to rule the dead branch out, which is exactly
-what `run_frequencyAux` takes as a hypothesis. -/
+associated. `OptionT.run` does not distribute over `frequency` unconditionally; `run_frequencyAux`
+has the `0 < total` hypothesis that makes it true. -/
 
 
 theorem run_frequencySelect {α} (gs : List (Nat × (Unit → OptionT SPMF α))) (n : Nat) (h) :

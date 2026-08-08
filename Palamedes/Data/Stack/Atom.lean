@@ -101,13 +101,11 @@ end CorrectGen
 
 namespace Total
 
-/-- Direct `⟨witness, proof⟩`, with the `unfold` confined to the proof — `arbLabel` is
-`@[irreducible]`, so the goal has to be opened, and the only question is where.
-
-Written `by unfold arbLabel; exact total_pick …` the whole term sits under an `Eq.mpr`, which lands
-in the **data** path, so `.val` stops projecting and the witness reaches the environment as a proof
-term. Keeping the data a bare `TGen.arbLabel` is also what makes `genGoodStack` print each of its
-four label draws as one named generator instead of an inlined `pick`. -/
+/-- The `unfold` is confined to the proof component: written `by unfold arbLabel; exact …` instead,
+the whole term sits under an `Eq.mpr` in the **data** path, `.val` stops projecting, and the witness
+reaches the environment as a proof term. Keeping the data a bare `TGen.arbLabel` is also what makes
+`genGoodStack` print each of its four label draws as one named generator instead of an inlined
+`pick`. -/
 @[total]
 def total_arbLabel : total arbLabel := ⟨TGen.arbLabel, by unfold arbLabel; rfl⟩
 

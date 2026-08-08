@@ -55,7 +55,6 @@ theorem support_arbColor :
     support arbColor = fun _ => True := by
     funext x; cases x <;> simp_all [arbColor]
 
-/-- The `someSupport` twin, for the filtering path's law. -/
 @[simp]
 theorem someSupport_arbColor : someSupport arbColor = fun _ => True := by
   funext x; cases x <;> simp_all [arbColor]
@@ -90,9 +89,7 @@ namespace Total
 def total_arbColor : total (arbColor : PGen Color) :=
   total_pick (total_pure _) (total_pure _)
 
-/-- Case split inside `TGen.mk` — see `total_Bool_rec`, and `total_dite` for why. A `match` rather
-than `Color.rec`: the conclusion is keyed on `Color.rec` because that is what the descent dispatches
-on, but the *data* has to be something the code generator compiles, and it rejects a bare recursor. -/
+/-- Same hazard as `total_Bool_rec`; see there. -/
 @[total]
 def total_color_rec (hf : total gr) (ht : total gb) : total (Color.rec gr gb c) :=
   ⟨⟨fun {_G} _ => match c with | .red => hf.val.run | .black => ht.val.run⟩, by

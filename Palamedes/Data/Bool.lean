@@ -32,8 +32,6 @@ theorem support_arbBool :
     support arbBool = fun _ => True := by
     funext x; cases x <;> simp_all [arbBool]
 
-/-- The `someSupport` twin, for the filtering path's law. Same script: `arbBool` is a `pick` of two
-`pure`s, and the combinator twins cover both. -/
 @[simp]
 theorem someSupport_arbBool : someSupport arbBool = fun _ => True := by
   funext x; cases x <;> simp_all [arbBool]
@@ -66,11 +64,10 @@ namespace Total
 def total_arbBool : total (arbBool : PGen Bool) :=
   total_pick (total_pure _) (total_pure _)
 
-/-- The case split stays **inside** `TGen.mk`, for the reason `total_dite` and `X.total_cases` give:
-`by cases b <;> assumption` puts `Bool.rec` in the data path, where `.val` cannot project past it
-until `b` is concrete, and the Basalt shape then emits `(Bool.rec … b).val.run` instead of a
-generator. A `match` rather than `Bool.rec` in the data — the conclusion is keyed on `Bool.rec`
-because that is what the descent dispatches on, but the code generator rejects a bare recursor. -/
+/-- The case split stays **inside** `TGen.mk` (see `total_dite`), and the data is a `match`, not
+`Bool.rec`: `by cases b <;> assumption` puts `Bool.rec` in the data path, where `.val` cannot
+project past it until `b` is concrete, and the code generator rejects a bare recursor anyway. The
+conclusion is still keyed on `Bool.rec`, because that is what the totality descent dispatches on. -/
 @[total]
 def total_Bool_rec (hf : total gf) (ht : total gt) : total (Bool.rec gf gt b) :=
   ⟨⟨fun {_G} _ => match b with | false => hf.val.run | true => ht.val.run⟩, by

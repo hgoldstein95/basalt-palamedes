@@ -163,31 +163,18 @@ end CorrectGen
 
 namespace Total
 
-/-- Direct `⟨witness, proof⟩` with the `unfold arbTy` confined to the proof — `arbTy` is
-`@[irreducible]`, so the goal has to be opened, and the only question is where.
-
-Opened by `simp only` in tactic mode the whole witness ends up under an `Eq.mpr`, and an `Eq.mpr` in
-the **data** path stops `.val` from projecting; `genWellScoped` then prints this one node as a
-150-line congruence tree in a term whose whole purpose is to be read and pasted. With `arbTy` defined
-as a coercion, the data is the failure-free generator itself and the proof is `rfl` under the unfold.
-
-Same shape as `total_arbLabel`. -/
+/-- Same hazard as `total_arbLabel`: the `unfold arbTy` is confined to the proof component. Opened
+by `simp only` in tactic mode instead, the whole witness ends up under an `Eq.mpr` in the **data**
+path, and `genWellScoped` prints this one node as a 150-line congruence tree. -/
 @[total]
 def total_arbTy : total arbTy := ⟨TGen.arbTy, by unfold arbTy; rfl⟩
 
-/-- The witness is a `match` on `τ` producing `TGen`s — mirroring `caseTy`'s own match — placed
-**inside** `TGen.mk`, and **not** `by cases τ`.
-
-`total` is `Type`-valued, so `cases` in tactic mode is `Ty.rec` *in the data path*. The projection
-`.val` then has nothing to reduce, and the generator reaches the environment as a recursor
-application, which the code generator rejects with "does not support recursor `Ty.rec`". Moving the
-`mk` outermost lets `.run` cancel at the top and leaves the `match` where it belongs, in the
-generator's body. `genWellTyped` is the only generator that reaches this rule, so nothing else in
-the corpus exercises it.
-
-This is the same discipline `Total.lean` states for the generic combinators and `X.total_cases` for
-the base functor: direct `⟨data, proof⟩`, with tactics confined to the proof. It is available here
-only because `caseTy`'s branches are non-dependent; see its docstring. -/
+/-- The witness is a `match` on `τ` inside `TGen.mk`, **not** `by cases τ` (same hazard as
+`total_Bool_rec`): `total` is `Type`-valued, so tactic-mode `cases` is `Ty.rec` in the data path,
+and the code generator rejects the emitted generator with "does not support recursor `Ty.rec`".
+That move is available only because `caseTy`'s branches are non-dependent — see its docstring.
+`genWellTyped` is the only generator that reaches this rule, so nothing else in the corpus
+exercises it. -/
 @[total]
 def total_Ty_caseTy
     {gu : PGen α}
