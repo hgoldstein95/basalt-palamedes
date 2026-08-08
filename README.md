@@ -182,8 +182,10 @@ Rejected by design, loudly: mutual, nested, and indexed inductives. (A rose tree
 - **`Palamedes/CorrectGen.lean`** — `CorrectGen P := {g : PGen α // g.support = P}`, a generator
   bundled with a proof that its support is exactly `P`, plus the combinators the search composes.
   Synthesis is a proof search for an inhabitant of this.
-- **`Palamedes/Derive.lean`** — the `derive_palamedes` command (see above). This is where the
-  recursion scheme lives, in exactly one place, so a change to it reaches every datatype at once.
+- **`Palamedes/Derive/`** — the `derive_palamedes` command (see above), split into the input check
+  (`Analyze`), the base functor, the recursion schemes and their laws, and the fusion family. This is
+  where the recursion scheme lives, in exactly one place, so a change to it reaches every datatype at
+  once.
 - **`Palamedes/Synthesizer/`** — the five-stage pipeline. `CGeneratorSearch.lean` registers the
   synthesis rules with Aesop and defines `cgenerator_search`; `FrontEnd.lean` defines the user-facing
   `generator_search` (search → extract a raw `PGen` → optimize → check totality → close the goal);
