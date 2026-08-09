@@ -98,9 +98,9 @@ def emitCorrectLaw (declName : Name) : TermElabM Unit := do
     let G := body.getAppFn
 
     -- `f.sound_complete`, stated against the emitted constant rather than the term, so it is a fact
-    -- about `f` and not about a copy of its body. The *statement* follows the declared shape, and
-    -- both are Basalt's: `IsSoundAndComplete` for a total generator, `IsSomeSoundAndComplete` for a
-    -- filtering one.
+    -- about `f` and not about a copy of its body. The *statement* follows the declared shape:
+    -- Basalt's `IsSoundAndComplete` for a total generator, and Palamedes' own
+    -- `IsSomeSoundAndComplete` (`Laws.lean`) for a filtering one.
     match stash.shape with
     | .basalt =>
       let some w := totalWitness?
@@ -123,43 +123,14 @@ def emitCorrectLaw (declName : Name) : TermElabM Unit := do
       -- global `∀ g, someSupport g = g.support`, which is unprovable.
       let bridgeGoal ← mkEq (← mkAppM ``Palamedes.someSupport #[gen])
         (← mkAppM ``Palamedes.PGen.support #[gen])
-      -- `simp` alone suffices for a non-recursive generator: the per-combinator twins fire on both
-      -- sides and meet. A *recursive* one does not close, and the reason is not a missing twin.
-      -- `X.someSupport_unfold` and `X.support_unfold` both fire, leaving
-      -- `unfold_support (fun d x => someSupport (f d x)) … = unfold_support (fun d x => (f d x).support) …`
-      -- — equal only if the two step predicates are, which needs congruence under the `unfold_support`
-      -- application and then the *step* bridge. The step generator is a nest of conditionals (the
-      -- `dite` guarding each constructor choice, plus an `ite` per numeric side condition), and simp
-      -- will not case-split them, so it stalls at `someSupport (dite …)` with the twins unreachable
-      -- underneath. `repeat' split` exposes the branches; each is then a bare combinator spine the
-      -- twins close.
+      -- `simp` alone closes the bridge for a non-recursive generator; a recursive one stalls with
+      -- the twins unreachable under the step generator's conditionals, which simp will not
+      -- case-split — hence the `congr 1; funext; (repeat' split)` tail that exposes the branches.
       --
-      -- Three details in the script below *weaken* it silently rather than failing:
-      --
-      -- * `funext d x b` takes **three** binders, not two. `unfold_support`'s predicate is
-      --   `fun d x => (f d x).support`, and `support` is itself `α → Prop`, so what `congr 1` leaves
-      --   is an equation between 3-ary functions. Introducing only `d x` leaves a lambda equality
-      --   that simp discharges only for some generators.
-      -- * `(repeat' split)` needs its own parentheses. `;`-sequenced inside a quotation,
-      --   `repeat' split; all_goals simp` binds as `repeat' (split; all_goals simp)`, and the
-      --   conditionals never get split at all.
-      -- * the tail is `try`-guarded because a non-recursive generator is already closed by `simp`
-      --   alone, leaving `congr 1` with no goals to work on.
-      --
-      -- The final `all_goals` handles a **bound scrutinee**, and runs only on what the lines above
-      -- left. `split` case-splits a `match` whose scrutinee is in the local context, and after
-      -- `someSupport_bind` the interesting one is not: it is bound by an `∃` *inside* the goal, in
-      -- `∃ a, P a ∧ someSupport (match a with …) b`, where `split` cannot reach `a` and the twins
-      -- sit unreachable under the arms. Taking the `Iff` apart along the structure the two sides
-      -- share — they are identical bar `someSupport` vs `support`, so componentwise is exactly
-      -- right — introduces `a` as a local, and then `split` applies.
-      --
-      -- A per-datatype `X.someSupport_cases` beside `X.total_cases` is the obvious alternative and
-      -- cannot work: `total_cases` is dispatched by the discriminant's *type* and `apply`d precisely
-      -- because matchers are per-elaboration and only defeq, whereas a simp lemma is matched at
-      -- `reducible`, so its matcher auxiliary never unifies with the generator's and the lemma never
-      -- fires (`rw` fails on it too). The obstacle is tactical rather than per-datatype, and so is
-      -- this fix: nothing here mentions a datatype, so a type declared in a test file gets it free.
+      -- A few gotchas:
+      -- - `funext d x b` takes three binders, because `support` is itself `α → Prop`;
+      -- - `(repeat' split)` needs its own -- parentheses, or the `;` binds incorrectly; and
+      -- - the tail is `try`-guarded because a non-recursive generator leaves `congr 1` no goals.
       let bridge ←
         try
           solveGoalWithTactic "someSupport bridge" bridgeGoal

@@ -156,7 +156,9 @@ fails to compile if synthesis fails.
 
 Beyond the corpus, each file in `PalamedesTest/` guards one library module and is named after it —
 `PalamedesTest/Foo.lean` guards `Palamedes/Foo.lean`, so the two directory listings diff into a
-coverage map.
+coverage map. The exceptions are `GeneratorAPI.lean`, `TotalWitness.lean`, and `Stats.lean`, which
+have no library counterpart and are named for what they pin, and `Harness.lean`, which holds the
+assertions the audit modules share.
 
 ## Layout
 
@@ -191,8 +193,9 @@ coverage map.
   failure-free generator the Basalt shape is projected from), and the combinator-wise totality
   lemmas that stage 4 reconstructs a witness from.
 - **`Palamedes/Laws.lean`** and **`Palamedes/SomeSupport.lean`** — the bridges from Palamedes'
-  `support` facts to Basalt's law vocabulary (`IsSoundAndComplete`), including the filtering path's
-  `IsSomeSoundAndComplete` and the `OptionT SPMF` twin lemmas it is discharged by.
+  `support` facts to the emitted laws: Basalt's `IsSoundAndComplete`, plus the filtering path's
+  `IsSomeSoundAndComplete` — Palamedes' own notion, defined in `Laws.lean` since Basalt has no
+  filtering law — and the `OptionT SPMF` twin lemmas it is discharged by.
 - **`Palamedes/Synthesizer/Correct.lean`** — the `@[correct]` attribute: the tactic stashes the
   pipeline's proofs, and the attribute — running once the constant exists — `addDecl`s them as named
   theorems about it.
@@ -202,7 +205,7 @@ coverage map.
 - **`Palamedes/Data/`** — the supported datatypes. The recursive ones (`List`, `Tree`, `Stack`, and
   the STLC `Ty`/`Term`) are largely a `derive_palamedes` line plus the odd fusion lemma the command
   does not yet emit. The hand-written content is the primitives the synthesizer bottoms out at
-  (`Nat`, `Bool`, `Unit`, `Color`, `Tuple`, `Stack/Atom`, `STLC/Context`) and, in `STLC/Ty.lean`, a
+  (`Nat`, `Bool`, `Unit`, `Color`, `Tuple`, `Stack/Atom`, `List/Elements`) and, in `STLC/Ty.lean`, a
   hand-tuned `arbTy` and its case-analysis rules on top of the derived layer.
 - **`Palamedes/Util.lean`** — two meta-level tactics (`rflm`, `unfold_matches`) shared by the
   synthesizer and the derive command.

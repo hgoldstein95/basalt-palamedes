@@ -10,12 +10,12 @@ import Palamedes.Data.Nat
 import Palamedes.Sample
 
 /-!
-# The generator API: one vocabulary across Basalt and Palamedes
+# The Generator API
 
-`generator_search` dispatches on the **declared return type**: whether a generator can fail is a
-fact about its type, visible at every use site. Both declarable shapes are Basalt's — there is no
-Palamedes-flavoured third one, so a synthesized generator is always something Basalt's own tooling
-consumes with no adapter.
+`generator_search` dispatches on the declared return type — whether a generator can fail is a fact
+about its type, visible at every use site — and both declarable shapes are Basalt's, so a
+synthesized generator is always something Basalt's own tooling consumes with no adapter. This file
+pins that dispatch table, and every message it can produce:
 
 | totality | declared | result |
 |---|---|---|
@@ -24,15 +24,6 @@ consumes with no adapter.
 | filters | `G α` | error — declare `G (Option α)` |
 | succeeds | `G (Option α)` | warning — it never fails, `G α` will do |
 | *stuck* | either | error / warning naming the **missing registration**, never advising `Option` |
-
-Both emitted shapes are Basalt vocabulary throughout. `G α` is the `TGen` witness projected;
-`G (Option α)` is the carrier read at `OptionT G`, so a rejecting `assume` becomes an ordinary
-`pure none` draw and no `Palamedes.PGen` constant survives into the term.
-
-The last row is a third totality outcome, distinct from "filters": reconstruction can come up empty
-because the generator genuinely filters, or because the basis could not cover it. Only the first is
-a fact about the generator. See `diagnoseNoWitness` (`Synthesizer/FrontEnd.lean`) and the section at
-the bottom of this file.
 -/
 
 open Palamedes

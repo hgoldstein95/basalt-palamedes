@@ -5,12 +5,6 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
   Leonidas Lampropoulos, Benjamin C. Pierce
 -/
 
-/-
-Aggregates the full example corpus. Compiling this module elaborates every example, each of which
-synthesizes a generator at elaboration time and *fails to compile* if synthesis fails — so this
-file is the de facto test suite. `PalamedesTest/Extract.lean` imports it to walk the corpus.
--/
-
 import PalamedesTest.Corpus.Simple.Eq2
 import PalamedesTest.Corpus.Simple.Eq2'
 import PalamedesTest.Corpus.Simple.Eq2Or5
@@ -75,8 +69,6 @@ import PalamedesTest.Corpus.Tree.Nonempty.Fold
 import PalamedesTest.Corpus.Stack.GoodStack
 import PalamedesTest.Corpus.Stack.Fold
 
--- The Stage-5 demo: a datatype the library does not have, derived and synthesized end-to-end
--- from one `derive_palamedes` line, with zero edits to any `Palamedes/` module.
 import PalamedesTest.Corpus.LeafTree.LeafTree
 
 import PalamedesTest.Corpus.STLC.WellTyped.WellTyped
@@ -84,3 +76,10 @@ import PalamedesTest.Corpus.STLC.WellScoped.WellScoped
 
 import PalamedesTest.Corpus.STLC.WellTyped.Fold
 import PalamedesTest.Corpus.STLC.WellScoped.Fold
+
+/-!
+# Aggregator for the example corpus
+
+Compiling this module elaborates every example, each of which synthesizes a generator at
+elaboration time and fails to compile if synthesis fails.
+-/

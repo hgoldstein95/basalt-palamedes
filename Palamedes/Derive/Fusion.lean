@@ -53,7 +53,6 @@ def genMergeAccuM (ctx : Ctx) : CommandElabM Unit := do
     (st1.filterMap id).map (fun i => (i : Term)) ++ fs1.map (fun i => (i : Term))
   let args2 : Array Term :=
     (st2.filterMap id).map (fun i => (i : Term)) ++ fs2.map (fun i => (i : Term))
-  -- merged arguments
   let mut mergedSts : Array Term := #[]
   let mut mergedFs : Array Term := #[]
   for hci : ci in [0:ctx.ctors.size] do
@@ -87,7 +86,6 @@ def genMergeAccuM (ctx : Ctx) : CommandElabM Unit := do
       $(fs2[ci]!) $a2* (($p).2) >>= fun $w2 => pure ($w1, $w2))
     mergedFs := mergedFs.push (← `(fun $lams* $p => $body))
   let mergedArgs := mergedSts ++ mergedFs
-  -- proof
   let cases ← ctx.ctors.mapIdxM fun ci c => do
     let k := c.recFields.size
     let ihs := ihIdsFor k
@@ -116,7 +114,6 @@ def genMergeAccuM (ctx : Ctx) : CommandElabM Unit := do
         let pr1 ← projComp stApp1 j k
         let pr2 ← projComp stApp2 j k
         `(tactic| replace $ih:ident := @$ih $pr1 $pr2 $x $y)
-      -- forward
       let fwdPats1 := interleavePairs xs hxs
       let fwdPats2 := interleavePairs ys hys
       let fwd ← seqTac (#[
@@ -127,7 +124,6 @@ def genMergeAccuM (ctx : Ctx) : CommandElabM Unit := do
         ← `(tactic| obtain $(← rcasesTuple (fwdPats1.push H1)):rcasesPat := $H1),
         ← `(tactic| obtain $(← rcasesTuple (fwdPats2.push H2)):rcasesPat := $H2)]
         ++ replaces ++ #[← `(tactic| simp_all)])
-      -- backward
       let bwdPats := interleavePairs pxs hps
       let pairSplits ← (Array.range k).mapM fun j => do
         let x : Ident := xs[j]!
@@ -207,7 +203,6 @@ def trueStyleCase (c : CtorData) (foldLem accuLem hC : Term)
   let hvs := (Array.range k).map fun j => gid s!"hv{j+1}"
   let andEq : Term := mkCIdent ``Bool.and_eq_true
   let rwAnds : Array Term := (Array.range k).map fun _ => andEq
-  -- forward
   let fwdPat ← rcNestLeft ((#[hg] ++ hs).map fun i => (i : TSyntax `rcasesPat))
   let ihRws ← (Array.range k).mapM fun j => do
     let ih : Ident := ihs[j]!
@@ -219,7 +214,6 @@ def trueStyleCase (c : CtorData) (foldLem accuLem hC : Term)
     ← `(tactic| obtain $fwdPat:rcasesPat := $hf),
     ← `(tactic| simp only [$accuLem:term, Option.bind_eq_bind])]
     ++ ihRws ++ #[← `(tactic| simp [guard, $hg:term])])
-  -- backward
   let unitPat ← rcTuple #[]
   let bwdPats :=
     (interleavePairs ((Array.range k).map fun _ => unitPat)
@@ -272,7 +266,6 @@ def genFoldAccuTrue (ctx : Ctx) : CommandElabM Unit := do
     if let some g := gO then
       binders := binders.push (← impB #[g]
         (← mkArrows ((c.fields.filter (!·.isRec)).map (·.tyStx)) boolT))
-  -- hypotheses
   let hIds := ctx.ctors.map fun c =>
     if c.recFields.isEmpty then none else some (gid s!"h_{c.short}")
   for hci : ci in [0:ctx.ctors.size] do
@@ -299,7 +292,6 @@ def genFoldAccuTrue (ctx : Ctx) : CommandElabM Unit := do
     else
       accuArgs := accuArgs.push
         (← `(fun $lams* _ => guard ($(gIds[ci]!.get!) $(c.nonRecIds)*)))
-  -- proof
   let cases ← ctx.ctors.mapIdxM fun ci c => do
     let k := c.recFields.size
     let ihs := ihIdsFor k
@@ -350,7 +342,6 @@ def genFoldAccuFunction (ctx : Ctx) : CommandElabM Unit := do
       for stj in sts[ci]! do
         binders := binders.push (← impB #[stj]
           (← mkArrows ((c.fields.filter (!·.isRec)).map (·.tyStx)) (← `($σ → $σ))))
-  -- hypotheses
   let hIds := ctx.ctors.map fun c =>
     if c.recFields.isEmpty then none else some (gid s!"h_{c.short}")
   for hci : ci in [0:ctx.ctors.size] do
@@ -388,7 +379,6 @@ def genFoldAccuFunction (ctx : Ctx) : CommandElabM Unit := do
       accuArgs := accuArgs.push (← `(fun $lams* $sv => some ($(fIds[ci]!) $lams* $sv)))
     else
       accuArgs := accuArgs.push ((gIds[ci]!.get! : Term))
-  -- proof
   let cases ← ctx.ctors.mapIdxM fun ci c => do
     let k := c.recFields.size
     let ihs := ihIdsFor k
@@ -403,7 +393,6 @@ def genFoldAccuFunction (ctx : Ctx) : CommandElabM Unit := do
       let hf := gid "hf"
       let vs := (Array.range k).map fun j => gid s!"v{j+1}"
       let hvs := (Array.range k).map fun j => gid s!"hv{j+1}"
-      -- forward
       let holes : Array Term ← (Array.range k).mapM fun _ => `(_)
       let mps ← (Array.range k).mapM fun j => do
         let ih : Ident := ihs[j]!
@@ -414,7 +403,6 @@ def genFoldAccuFunction (ctx : Ctx) : CommandElabM Unit := do
         ← `(tactic| rw [$foldLem:term, $hC:term] at $hf:ident),
         ← `(tactic| simp only [$accuLem:term, Option.bind_eq_bind, Option.bind_eq_some_iff]),
         ← `(tactic| exact ⟨$wits,*⟩)]
-      -- backward
       let bwdPats := interleavePairs vs hvs
       let ihRws ← (Array.range k).mapM fun j => do
         let ih : Ident := ihs[j]!
@@ -463,7 +451,6 @@ def genFoldAccuFunctionTrue (ctx : Ctx) : CommandElabM Unit := do
       for stj in sts[ci]! do
         binders := binders.push (← impB #[stj]
           (← mkArrows ((c.fields.filter (!·.isRec)).map (·.tyStx)) (← `($σ → $σ))))
-  -- hypotheses
   let hIds := ctx.ctors.map fun c =>
     if c.recFields.isEmpty then none else some (gid s!"h_{c.short}")
   for hci : ci in [0:ctx.ctors.size] do
@@ -498,7 +485,6 @@ def genFoldAccuFunctionTrue (ctx : Ctx) : CommandElabM Unit := do
     else
       accuArgs := accuArgs.push
         (← `(fun $lams* $sv => guard ($(gIds[ci]!.get!) $(c.nonRecIds)* $sv)))
-  -- proof
   let cases ← ctx.ctors.mapIdxM fun ci c => do
     let k := c.recFields.size
     let ihs := ihIdsFor k

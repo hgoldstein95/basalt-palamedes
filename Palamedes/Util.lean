@@ -8,19 +8,12 @@ Authors: Harrison Goldstein, Hila Peleg, Cassia Torczon,
 import Lean
 
 /-!
-# Meta-level helpers shared by the synthesizer and `derive_palamedes`
+# Helpers Shared by the Synthesizer and `derive_palamedes`
 
-Two tactics, both used to close goals that arise from *elaborating against a metavariable* rather
-than from the object logic:
-
-* `rflm` closes `?f a₁ … aₙ = rhs` by assigning `?f := fun x₁ … xₙ => rhs[aᵢ := xᵢ]`. This is how the
-  case-split rule synthesizes the motive `P` in `∀ {a}, P a scrut = Q a` (`CGeneratorSearch.lean`)
-  and how `derive_palamedes` discharges the corresponding premise in its emitted scripts.
-* `unfold_matches` unfolds the compiler-generated `match_*` auxiliaries that a `fold`/`accuM`
-  equation leaves behind, so that `simp` can see through them.
-
-`ensureLHSIsMVar` and `mkLambdaGeneralizeFVars` exist only to support `rflm`. (Both, and `rflm`
-itself, are due to Kyle Miller.)
+Two tactics, both used to close goals that arise from elaborating against a metavariable rather
+than from the object logic: `rflm` solves `?f a₁ … aₙ = rhs` for the function `?f`, and
+`unfold_matches` unfolds the compiler-generated `match_*` auxiliaries that a `fold`/`accuM`
+equation leaves behind, so that `simp` can see through them.
 -/
 
 open Lean Elab Meta Tactic
@@ -54,7 +47,9 @@ private def mkLambdaGeneralizeFVars (exprs : Array Expr) (fvars : Array Expr) (e
   return (← getLCtx).mkBinding (isLambda := true) fvars e
 
 /-- Close `?f a₁ … aₙ = rhs` by assigning `?f := fun x₁ … xₙ => rhs[aᵢ := xᵢ]` — i.e. solve for the
-function, not for the value. `rfl` cannot do this: it needs `?f` to already be determined. -/
+function, not for the value. `rfl` cannot do this: it needs `?f` to already be determined.
+
+This tactic and its two helpers above are due to Kyle Miller. -/
 elab "rflm" : tactic => do
 let g ← popMainGoal
   let (lhs, rhs, g) ← ensureLHSIsMVar g

@@ -7,22 +7,14 @@ Authors: Harrison Goldstein
 import Lean
 
 /-!
-# The `unfold_strategy` registry
+# The `unfold_strategy` Registry
 
-The per-datatype data that `normalize_and_apply_unfold` needs — which `s_unfold` to apply, and which
-fold/coercion/merge/conversion lemmas to normalize with — lives in a persistent environment
-extension keyed by the datatype name. `derive_palamedes` registers the standard entry
-for every type it derives, so a new datatype needs **no synthesizer edits** to participate in unfold
-synthesis. (Totality is the sibling registry: `X.total_unfold` is tagged `@[total]` and read by the
-`totality` tactic — see `Palamedes.RuleSets`.)
-
-Two commands amend an entry with the hand-written extras the derive command deliberately does
-not generate:
-
-* `unfold_strategy_cond X X.fold_accu_cond` — set the conditional-fold normal form
-  (`norm_for_unfold`'s `condVia` step);
-* `unfold_strategy_convert X X.fold_accu_Option_extra` — insert an additional conversion lemma
-  into the `convertVia` list, just before the final (most permissive) `_basic` entry.
+This registry stores the per-datatype data that `normalize_and_apply_unfold` needs: which `s_unfold`
+to apply, and which fold/coercion/merge/conversion lemmas to normalize with. `derive_palamedes`
+registers the standard entry for every type it derives, so a new datatype needs no synthesizer
+edits to participate in unfold synthesis. The `unfold_strategy_cond` /
+`unfold_strategy_convert` commands below amend an entry with the hand-written extras the derive
+command deliberately does not generate.
 -/
 
 open Lean
@@ -61,7 +53,6 @@ def unfoldStrategies (env : Environment) : Array UnfoldStrategy := Id.run do
   let raw := unfoldStrategyExt.getState env
   let mut seen : NameSet := {}
   let mut out := #[]
-  -- keep only the LAST entry per type, preserving first-registration order
   for e in raw.reverse do
     unless seen.contains e.typeName do
       seen := seen.insert e.typeName

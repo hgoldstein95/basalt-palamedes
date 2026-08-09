@@ -299,7 +299,6 @@ def genSupportUnfold (ctx : Ctx) (kit : SupportKit) : CommandElabM Unit := do
     let tv := gid "tv"
     let ht := gid "ht"
     let hw := gid "hw"
-    -- forward direction
     let caseTacs ← ctx.ctors.mapM fun c' => do
       if c'.short != c.short then
         let tac ← `(tactic|
@@ -342,7 +341,6 @@ def genSupportUnfold (ctx : Ctx) (kit : SupportKit) : CommandElabM Unit := do
     let fwd ← seqTac (#[
       ← `(tactic| rintro $(← rcasesTuple #[tv, ht, hw]):rcasesPat),
       ← `(tactic| cases $tv:ident)] ++ caseTacs)
-    -- backward direction
     let bwd ← do
       if recFs.isEmpty then
         let h := gid "h"

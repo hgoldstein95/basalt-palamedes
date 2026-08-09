@@ -13,20 +13,13 @@ import PalamedesTest.Harness
 /-!
 # Tuning regression: a `Tuning` binder is threaded through synthesis
 
-**The signature says whether a generator is tunable.** A `θ : Tuning` binder in scope is threaded
-through every choice site by `installTuning`, run inside the pipeline between optimize and totality;
-no binder means the generator ships uniform. There is no command and no flag.
-
-Two properties carry the design, and both are pinned below:
-
-* **One generator, one law.** `sound_complete` is `∀ … θ, …` because `θ` is one of the
-  declaration's own binders, so the support invariant across every weighting is the *ordinary* law
-  rather than a separate `tuned_support`/`tuned_sound_complete` pair. Nothing here relates two
-  independently-derived generators, so there is no fidelity check to perform.
-* **`.uniform` is universal.** `Tuning.weight` reads `θ.schedules.getD i (1, 0)`, so the empty
-  tuning is the uniform weighting of *any* generator. That is what lets `(θ : Tuning := .uniform)`
-  be written before the site count is known, and what makes the untuned call site mention tuning
-  nowhere.
+**The signature says whether a generator is tunable**: a `θ : Tuning` binder in scope is threaded
+through every choice site by `installTuning`, run inside the pipeline between optimize and totality,
+and no binder means the generator ships uniform — there is no command and no flag. The pins below
+carry the design's two properties: **one generator, one law** (`sound_complete` is `∀ … θ, …`
+because `θ` is one of the declaration's own binders, so there is no separate tuned law and no
+fidelity check), and **`.uniform` is universal** (the empty tuning is the uniform weighting of
+*any* generator, so it can be a default argument before the site count is known).
 -/
 
 open Palamedes

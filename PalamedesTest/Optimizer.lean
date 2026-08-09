@@ -66,8 +66,6 @@ private opaque f : Nat → PGen Nat
   goes_to
   if _ : (2 == 2) then oneOf [pure 3, pure 4] else pure 4
 
--- TODO: Can we do better? Ideally we could apply a heuristic here to try to figure out which one is
--- easier to satisfy...
 #assert_optimizes!
   pick (assume ((2 : Nat) == 2) (fun _ => (pure 2 : PGen Nat))) (assume ((3 : Nat) == 3) (fun _ => pure 3))
   goes_to
@@ -126,10 +124,8 @@ private opaque f : Nat → PGen Nat
   goes_to
   oneOf [oneOf [(fun x => pure (x + 1)) 5, pure 2], pure 3]
 
--- The same for a hand-written `frequency` (`transformFrequencyChildren?`). Until this existed,
--- `frequency` was exempted from the descent guard by name: a `frequency` in a *reducible* position
--- had its branches silently skipped, and the exemption's comment carried the gap as a known risk.
--- Weights must survive the rebuild untouched — only the generators are optimized.
+-- The same for a hand-written `frequency` (`transformFrequencyChildren?`). Weights must survive
+-- the rebuild untouched — only the generators are optimized.
 #assert_optimizes!
   frequency [(2, (pure 5 : PGen Nat) >>= fun x => pure (x + 1)), (1, pure 2)]
   goes_to

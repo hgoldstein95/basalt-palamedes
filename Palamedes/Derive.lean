@@ -13,17 +13,13 @@ import Palamedes.Derive.Fusion
 /-!
 # Boilerplate Automation for Recursive Structures
 
-Given an inductive data type `X`, `derive_palamedes X` generates the whole per-datatype layer
-required for Palamedes to generate values of that type. This includes: a base functor `XF`,
-`X.fold`, the state-threading `X.accuM`, the `unfold` recursion scheme with its projection
-equations, the support and totality lemmas, the fold/`accuM` fusion family, and the `CorrectGen`
-combinator `X.s_unfold`.
+Given an inductive data type `X`, `derive_palamedes X` generates and registers the whole
+per-datatype layer required for Palamedes to generate values of that type — base functor, recursion
+schemes, support/totality lemmas, and the fusion family.
 
 The following are not supported: mutual, nested and indexed inductives, non-`Type` parameters, and
 dependent constructor fields. Universe-polymorphic inductives (e.g. core `List`) are accepted and
 instantiated at universe 0.
-
-Debugging: `set_option trace.Palamedes.derive true` prints every generated command.
 -/
 
 open Lean Elab Command Meta

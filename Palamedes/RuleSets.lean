@@ -9,23 +9,10 @@ import Lean
 import Aesop
 
 /-!
-# Rule registries
+# Rule Registries
 
-Two tag-driven registries, so that adding a datatype needs no synthesizer edit: the `synthesis`
-Aesop rule set (the search in `Synthesizer/CGeneratorSearch.lean`), and `@[total]`, the rules the
-`totality` tactic reconstructs a `TGen` witness from.
-
-`@[total]` is deliberately *not* an Aesop rule set: `totality` is a **structural descent**, not a
-search. Every registered rule is keyed by the head constant it reconstructs (`totalKey?` below), so
-dispatch is a lookup rather than a `first | apply …` race, and the whole basis — the generic
-combinators as much as the per-datatype leaves — lives in this one registry. Two properties follow,
-and both are what keep the descent honest:
-
-* **Order cannot matter.** `oneOf` *is* a `frequency`, so under `apply` the latter's rule could
-  capture the former's goal. Keyed dispatch sees `PGen.oneOf` and `PGen.frequency` as different
-  heads.
-* **A tagged rule cannot be unreachable.** The tag *is* the registration, and a second rule claiming
-  a head already claimed is rejected at tag time rather than silently shadowed.
+Tag-driven registries that allow users to support their own datatypes without editing the
+synthesizer.
 -/
 
 declare_aesop_rule_sets [synthesis]
@@ -34,12 +21,7 @@ open Lean
 
 namespace Palamedes
 
-/-- A registered totality rule and the goal shape it reconstructs.
-
-The key is stored rather than recomputed. Deriving it needs `forallTelescope` + `matchMatcherApp?`
-per rule, and the descent looks a rule up at *every node of every generator* — recomputing there
-would put the whole registry inside the inner loop. Tag time is also where the key has to be known
-anyway, for the one-rule-per-head check. -/
+/-- A registered totality rule and the goal shape it reconstructs. -/
 structure TotalRule where
   /-- `Palamedes.PGen.total`, `…totalList`, or `…totalWeighted`. -/
   goal : Name
@@ -81,19 +63,12 @@ private def totalGoalHeads : List Name :=
   [`Palamedes.PGen.total, `Palamedes.PGen.totalList, `Palamedes.PGen.totalWeighted]
 
 /-- What a totality goal dispatches on: the goal's own head paired with the head constant of the
-generator (or branch list) it is about. `none` if `concl` is not a totality goal at all.
-
-A `match` node is keyed by its **discriminant's type** rather than by the matcher constant. The
-matcher in a synthesized generator need not be the same auxiliary as the one in `X.total_cases`'s
-statement — matchers are per-elaboration and only defeq — but the base functor is the same either
-way, and there is exactly one `total_cases` per base functor.
-
-The argument is `headBeta`'d and nothing else: no `whnf`. Delta-unfolding here would defeat the
-point, turning `PGen.oneOf` into the `PGen.frequency` it is defined as and reinstating the very
-collision keyed dispatch exists to rule out. -/
+generator (or branch list) it is about. `none` if `concl` is not a totality goal at all. -/
 def totalKey? (concl : Expr) : MetaM (Option (Name × Name)) := do
   let some goal := concl.getAppFn.constName? | return none
   unless totalGoalHeads.contains goal do return none
+  -- The argument is `headBeta`'d, not `whnf`. Delta-unfolding here would turn `PGen.oneOf` into
+  -- `PGen.frequency`.
   let arg := concl.appArg!.headBeta
   if let some app ← Lean.Meta.matchMatcherApp? arg then
     if let some d := app.discrs[0]? then

@@ -10,24 +10,12 @@ import Palamedes.Data.List
 /-!
 # The totality witness is extractable data
 
-`PGen.total` is `Type`-valued, so a totality proof *is* a failure-free generator. This file pins the
-three consequences that the Basalt-shaped emission stage builds on:
-
-1. the witness can be **named** — it survives out of the `totality` tactic as an ordinary value;
-2. `w.val.run` is **Basalt-shaped** (`∀ {G} [Gen G], G α`, no `Fail`) and **executable**, so Basalt's
-   own tooling accepts it directly;
-3. `w.property` **transfers the support fact** from the Palamedes generator to the emitted one,
-   without any parametricity assumption — both sides are the *same* instantiation, at `SPMF`.
-
-(3) is why the total path's law is Basalt's `IsSoundAndComplete` where the filtering path's is
-`IsSomeSoundAndComplete`: a filtering generator is read at `OptionT SPMF`, a *different*
-instantiation, so the transfer does not go through and the law is stated at that interpretation's
-own support notion instead.
-
-The three steps are spelled out here **at the internal layer**, one tactic at a time. That is not
-how a generator is declared — `generator_search` takes a Basalt goal and runs the whole pipeline, so
-the `PGen` below never surfaces — and isolating them is the point: the corpus exercises the steps
-only composed, where a defect in any one shows up as a wrong emitted term rather than a failing step.
+`PGen.total` is `Type`-valued, so a totality proof *is* a failure-free generator; the examples
+below pin the consequences the Basalt-shaped emission stage builds on — the witness can be named,
+`w.val.run` is Basalt-shaped and executable, and `w.property` transfers the support fact with no
+parametricity assumption. The stages run here at the internal layer, one tactic at a time, and
+isolating them is the point: the corpus exercises them only composed, where a defect in any one
+shows up as a wrong emitted term rather than a failing step.
 -/
 
 open Palamedes

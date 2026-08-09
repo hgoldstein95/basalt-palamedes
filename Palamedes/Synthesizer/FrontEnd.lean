@@ -23,15 +23,6 @@ The user-facing pipeline:
 - build a totality witness;
 - package at the declared shape: `G α` from the `TGen` witness, or `G (Option α)` by reading the
   carrier at `OptionT G`.
-
-**Both declarable shapes are Basalt's.** `Palamedes.PGen` is the pipeline's internal carrier and
-nothing more; `classifyGoal` rejects a goal typed at it along with every other type that is not a
-Basalt generator monad. So a generator declared total whose totality cannot be reconstructed is an
-*error* — `G α` is `Fail`-free by construction, leaving no term to emit — rather than a warning,
-which `lake build` would exit 0 on.
-
-`runSynthesisPipeline` is the shared core; the `@[correct]` attribute (`Correct.lean`) reads the
-proofs it leaves behind.
 -/
 
 open Lean Tactic Elab Meta Tactic

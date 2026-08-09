@@ -12,20 +12,12 @@ import PalamedesTest.Corpus.STLC.WellTyped.WellTyped
 # Regression test for depth-indexed weight schedules (`installTuning` + `SchedulePolicy.stlc`)
 
 The guard on `installTuning` and on `SchedulePolicy.stlc`'s hand-tuned coefficients — nothing else
-pins them, so this file is what notices if they are retuned. The generator under test is `genWTstlc`:
-`genWellTyped` at its `Tuning` binder, sampled under the `stlc`
-schedule materialized into a runtime `Tuning` (no weights are baked into the term). The bar: sample
-without diverging, median term size ≥ 4, and ≥ 70% of terms containing an application. **Termination
-alone is not success** — a generator that decays too fast terminates by emitting nothing but leaves.
-
-`#genstats` covers outcomes and size. `measureShape` below adds the four things it cannot express,
-all domain-specific: whether an `app` occurs *anywhere* (the histogram sees head constructors only),
-the fraction of trivial terms, the total size of type annotations, and the per-depth application
-rate.
-
-**Keep this file free of proofs.** It is all `#eval`/`#genstats`, which re-run on every elaboration,
-so a generator that regresses into diverging makes every draw burn its full fuel budget and this file
-take minutes.
+pins them, so this file is what notices if they are retuned. The bar for `genWTstlc` (sampled under
+the materialized `stlc` schedule): sample without diverging, median term size ≥ 4, and ≥ 70% of
+terms containing an application — **termination alone is not success**, since a generator that
+decays too fast terminates by emitting nothing but leaves. Keep this file free of proofs: it is all
+`#eval`/`#genstats`, which re-run on every elaboration, so a generator that regresses into
+diverging makes every draw burn its full fuel budget and this file take minutes.
 -/
 
 open Palamedes Palamedes.PGen
