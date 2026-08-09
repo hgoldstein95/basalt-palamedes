@@ -260,7 +260,7 @@ theorem run_frequency {α} (gs : List (Nat × (Unit → OptionT SPMF α))) (h) :
       = OptionT.run (_root_.frequency (gs.map fun p => (p.1, fun _ => p.2.run))
           (by simpa [List.map_map, Function.comp_def] using h) : OptionT SPMF α) from rfl]
   rw [run_frequency, SPMF.support_frequency]
-  simp only [Set.mem_setOf_eq, List.map_map, Function.comp_def]
+  simp only [Set.mem_ofPred_eq, List.map_map, Function.comp_def]
   exact PGen.Support.exists_mem_map_weighted
     (m := fun (g : PGen α) (_ : Unit) => OptionT.run (g.run : OptionT SPMF α))
 

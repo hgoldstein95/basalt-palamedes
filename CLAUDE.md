@@ -22,7 +22,7 @@ lake build PalamedesTest                       # tests only
 lake build PalamedesTest.Corpus.Simple.Eq2     # one corpus file, by module path
 lake env lean PalamedesTest/Corpus/Simple/Eq2.lean   # elaborate one file, see all messages
 lake build PalamedesExperiments                # spikes; excluded from the default build
-lake update basalt                             # Basalt tracks `main`, pinned in lake-manifest.json
+lake update basalt                             # re-resolve the Basalt release tag set in lakefile.toml
 ```
 
 **There is no separate test framework.** Every module under `PalamedesTest/Corpus/` synthesizes a
@@ -344,4 +344,4 @@ which is why each puts them in an explicit `namespace TGen … end TGen` block a
   scoped per the documentation rules above.
 - Declaration docstrings explain design tension, not just signature — where rule 4 admits one.
 - Lean toolchain is pinned in `lean-toolchain`; deps in `lakefile.toml` / `lake-manifest.json`.
-  Mathlib/Aesop/Plausible are version-tagged, Basalt tracks `main` by revision pin.
+  Mathlib/Aesop/Plausible and Basalt are all pinned to release tags.

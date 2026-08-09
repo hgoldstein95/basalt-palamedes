@@ -27,19 +27,19 @@ globs = ["PalamedesExperiments.+"]
 [[require]]
 name = "basalt"
 git = "https://github.com/hgoldstein95/basalt"
-rev = "main"
+rev = "v4.33.0-rc2"
 
 [[require]]
 name = "mathlib"
 git = "https://github.com/leanprover-community/mathlib4"
-rev = "v4.33.0-rc1"
+rev = "v4.33.0-rc2"
 
 [[require]]
 name = "aesop"
 git = "https://github.com/leanprover-community/aesop"
-rev = "v4.33.0-rc1"
+rev = "v4.33.0-rc2"
 
 [[require]]
 name = "plausible"
 git = "https://github.com/leanprover-community/plausible"
-rev = "v4.33.0-rc1"
+rev = "v4.33.0-rc2"

@@ -247,8 +247,8 @@ def SupportKit.spmf : SupportKit where
   supportOf := fun g => `(Palamedes.PGen.support $g)
   bindLem := mkCIdent ``SPMF.support_bind
   pureLem := mkCIdent ``SPMF.support_pure
-  memLems := #[mkCIdent ``Set.mem_setOf_eq, mkCIdent ``Set.mem_singleton_iff]
-  headSimp := #[mkCIdent ``Set.mem_setOf_eq]
+  memLems := #[mkCIdent ``Set.mem_ofPred_eq, mkCIdent ``Set.mem_singleton_iff]
+  headSimp := #[mkCIdent ``Set.mem_ofPred_eq]
   memWrap := pure
   runWrap := pure
   goInst := none

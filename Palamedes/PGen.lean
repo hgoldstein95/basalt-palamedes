@@ -288,7 +288,7 @@ theorem support_bind :
     support (x >>= f) = fun b => ∃ a, support x a ∧ support (f a) b := by
   refine support_ext fun b => ?_
   show b ∈ SPMF.support (x.run >>= fun a => (f a).run) ↔ _
-  simp only [SPMF.support_bind, Set.mem_setOf_eq]
+  simp only [SPMF.support_bind, Set.mem_ofPred_eq]
   rfl
 
 @[simp]
@@ -306,7 +306,7 @@ theorem support_frequency {gs : List (Nat × PGen α)} (h) :
   show a ∈ SPMF.support (_root_.frequency (gs.map fun p => (p.1, fun _ => p.2.run))
       (by simpa [List.map_map, Function.comp_def] using h)) ↔ _
   rw [SPMF.support_frequency]
-  simp only [Set.mem_setOf_eq]
+  simp only [Set.mem_ofPred_eq]
   exact exists_mem_map_weighted (m := fun (g : PGen α) (_ : Unit) => (g.run : SPMF α))
 
 @[simp]
@@ -344,7 +344,7 @@ theorem support_map :
     support (f <$> x) = fun b => ∃ a, support x a ∧ b = f a := by
   refine support_ext fun b => ?_
   show b ∈ SPMF.support (x.run >>= fun a => Pure.pure (f a)) ↔ _
-  simp only [SPMF.support_bind, SPMF.support_pure, Set.mem_setOf_eq, Set.mem_singleton_iff]
+  simp only [SPMF.support_bind, SPMF.support_pure, Set.mem_ofPred_eq, Set.mem_singleton_iff]
   rfl
 
 end Support

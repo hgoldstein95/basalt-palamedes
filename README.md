@@ -20,8 +20,9 @@ stable and flexible, but you may still run into snags when using it.
 Palamedes is built on [Basalt](https://github.com/hgoldstein95/basalt), which supplies the generator
 representation it synthesizes onto: the `Gen` typeclass, the `SPMF` (sub-probability mass function)
 interpretation that gives `support` its meaning, the executable `Plausible.Gen` instance, and the
-`#genstats` diagnostics command. Basalt is a git dependency **tracking `main`**, with the revision
-pinned in `lake-manifest.json`; run `lake update basalt` to pick up new Basalt work.
+`#genstats` diagnostics command. Basalt is a git dependency **pinned to a release tag** in
+`lakefile.toml`, with the resolved revision in `lake-manifest.json`; to move to a new Basalt
+release, bump the tag there and run `lake update basalt`.
 
 ## Building
 
