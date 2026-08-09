@@ -9,7 +9,8 @@ Synthesis runs at elaboration time, inside a proof, driven by
 
 While this project has evolved quite a bit over time, it is still largely based on
 [The Search for Constrained Random Generators](https://dl.acm.org/doi/abs/10.1145/3808329),
-published at PLDI 2026.
+published at PLDI 2026. The original GitHub repository for that code can be
+found [here](https://github.com/hgoldstein95/palamedes-lean/).
 
 Users should be aware that this is research software. We are working hard to make it increasingly
 stable and flexible, but you may still run into snags when using it.
