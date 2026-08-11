@@ -7,20 +7,17 @@ Authors: Harrison Goldstein
 import Palamedes.Synthesizer.CGeneratorSearch
 
 /-!
-# Stage-1 Failure Diagnosis
+# Failure Diagnosis
 
-`diagnoseSearchFailure` runs only after `cgenerator_search` has failed: it replays the search's own
-normalization stages one at a time and names the gate that declined, so the error is a statement
-about the predicate rather than Aesop's uniform "made no progress".
+`diagnoseSearchFailure` runs after `cgenerator_search` has failed: it replays the search's
+normalization stages one at a time and attempts to determine what went wrong.
 -/
 
 open Lean Elab Meta Tactic
 
 namespace Palamedes
 
-/-- Run `tac` against `goal`, returning the remaining goals, or `none` — with the elaboration state
-restored — if it throws. Interrupts and exhaustion are rethrown: they are not evidence about the
-goal. -/
+/-- Run `tac` against `goal`, returning the remaining goals, or `none` if it throws. -/
 private def tryTac (goal : MVarId) (tac : TSyntax `tactic) : TermElabM (Option (List MVarId)) := do
   let s ← saveState
   try
@@ -31,7 +28,7 @@ private def tryTac (goal : MVarId) (tac : TSyntax `tactic) : TermElabM (Option (
     return none
 
 /-- Reference a registered constant from a quotation built at diagnosis time, immune to whatever
-the caller has `open`. Same move as `normalize_and_apply_unfold`. -/
+the caller has `open`. -/
 private def root (n : Name) : Ident := mkIdent (`_root_ ++ n)
 
 private def searchGoal (α pred : Expr) : TermElabM MVarId :=
@@ -46,8 +43,7 @@ private def isStepGenGoal (g : MVarId) : MetaM Bool :=
     forallTelescopeReducing (← instantiateMVars (← g.getType)) fun _ body =>
       return body.isAppOf ``Palamedes.CorrectGen
 
-/-- Const-headed applications in `e` that take `a` as a direct argument, in traversal order.
-Logical connectives are skipped: the interesting application is the predicate's own function. -/
+/-- Const-headed applications in `e` that take `a` as a direct argument, in traversal order. -/
 private partial def appsMentioning (a : Expr) (e : Expr) : Array (Name × Array Expr) :=
   go e #[]
 where
@@ -67,9 +63,7 @@ where
     | .letE _ _ v b _ => go b (go v acc)
     | _ => acc
 
-/-- Whether `fn` is defined by recursion over `ty`. A heuristic — structural recursion elaborates
-to `ty.brecOn`/`ty.rec`, well-founded recursion to `WellFounded.fix` — used only to phrase a
-failure-path message. -/
+/-- Heuristic for determining whether `fn` is defined by recursion over `ty`. -/
 private def isRecursiveOver (fn ty : Name) : CoreM Bool := do
   let some ci := (← getEnv).find? fn | return false
   let some v := ci.value? | return false
@@ -98,20 +92,15 @@ private def targetPosition (fn : Name) (args : Array Expr) (a : Expr) :
     if pos == 0 then return none
     return some (pos, after)
 
-/-- The message for a refused coercion, refined by how the predicate arranges the arguments of its
-recursive function — the contract (`f t`, indices tupled into at most one trailing argument) is
-otherwise written nowhere a user will look. `merged` says the `∧`-merge split the predicate into
-several goals, of which this replay names the first that refused — not necessarily the pipeline's
-actual point of failure. -/
+/-- The message for a refused coercion. -/
 private def coercionRefused (entry : UnfoldStrategy) (pred : Expr) (merged : Bool) :
     MetaM MessageData := do
   let base := m!"Unfold synthesis for `{entry.typeName}` stopped at the coercion: \
     `{entry.coerce}` could not rewrite this predicate into a `{entry.fold}`."
   let caveat :=
     if merged then
-      m!"\nThe `∧`-merge split this predicate, and this names the first goal whose coercion \
-        refused; in the full pipeline a refused coercion still falls through to the conversion \
-        step, so the culprit may be a different conjunct — or the merge itself."
+      m!"\nThis is a merged predicate; the culprit for this error may may be a \
+      different conjunct or the merge itself."
     else
       m!""
   let hint? ← lambdaTelescope pred fun xs body => do
@@ -126,14 +115,13 @@ private def coercionRefused (entry : UnfoldStrategy) (pred : Expr) (merged : Boo
     let some (pos, after) ← targetPosition fn args a | return none
     if pos != 1 then
       return some m!"The generation target is `{fn}`'s explicit argument {pos}; the coercion \
-        unifies the `{entry.typeName}`-typed argument first, so spell the recursion with that \
+        unifies the `{entry.typeName}`-typed argument first, so try the recursion with that \
         argument first and any indices after it."
     if after ≥ 2 then
       return some m!"`{fn}` takes {after} curried arguments after the generation target, and the \
         coercion handles at most one — tuple the indices into a single trailing argument \
         (`{fn} t (i, j)`) and match on the tuple in the defining equations."
-    return some m!"The argument arrangement is fine (target first, {after} trailing), so the \
-      refusal is about `{fn}`'s defining equations: they could not be read back as a fold \
+    return some m!"Error in `{fn}`'s defining equations: they could not be read back as a fold \
       algebra over `{entry.typeName}`."
   match hint? with
   | some h => return m!"{base}\n{h}{caveat}"
@@ -141,24 +129,21 @@ private def coercionRefused (entry : UnfoldStrategy) (pred : Expr) (merged : Boo
 
 private def conversionRefused (entry : UnfoldStrategy) (goal : Format) : MessageData :=
   let lemmas := MessageData.andList (entry.convert.toList.map (m!"`{·}`"))
-  m!"Unfold synthesis for `{entry.typeName}` got past the coercion — the predicate reads as a \
-    `{entry.fold}` — but converting that fold to the `accuM` normal form refused: none of \
+  m!"Problem converting a fold to the `accuM` normal form: none of \
     {lemmas} matched. The conversions expect each recursive arm as \
     `condition && accumulated results` (a bare accumulator and `&&` reassociation are handled); \
     an arm outside that form has no conversion, and `unfold_strategy_convert` is how a \
-    hand-written one is registered. The conversion was attempted against:{indentD goal}"
+    hand-written one is registered. The conversion was attempted against: {indentD goal}"
 
 /-- Diagnose against the unfold pipeline for `entry`, the strategy registered for the goal's
-element type. The authoritative probe is the entry's own `norm_for_unfold`, verbatim; only when it
-refuses is it replayed one stage at a time to name the gate. -/
+element type. -/
 private def diagnoseUnfold (entry : UnfoldStrategy) (α pred : Expr) :
     TermElabM (Option MessageData) := do
   let g ← searchGoal α pred
   let some gs ← tryTac g (← `(tactic| goal_is_eq_or_and))
     | return some m!"`{entry.typeName}` is registered for unfold synthesis, but the unfold rule \
         fires only on predicates shaped `fun x => _ = _` or `fun x => _ ∧ _` — this predicate is \
-        neither, so the unfold path was never entered. (Other rules may still apply to such \
-        shapes; none closed this goal.)"
+        neither."
   let [g] := gs | return none
   -- Enter the entry's arm exactly as `normalize_and_apply_unfold` does.
   let sUnfold : Lean.Term := root entry.sUnfold
@@ -179,12 +164,6 @@ private def diagnoseUnfold (entry : UnfoldStrategy) (α pred : Expr) :
   let mut degenerateStep : Option Format := none
   match ← tryTac pf norm with
   | some [] =>
-    -- The normalization closed, which is what the pipeline's `case pf =>` demands of it. If it
-    -- also *determined* the per-step generator, the search genuinely failed below the unfold; a
-    -- step goal with metavariables or a `sorry` left in it means the iff closed only formally —
-    -- a fold algebra was never actually read off the predicate (a refused coercion discharge
-    -- elaborates to `sorry`) — and the coercion is what deserves the blame, so fall through to
-    -- the stagewise replay.
     let mut step? : Option (Format × Bool) := none
     for s in gs do
       unless ← s.isAssigned do
@@ -197,11 +176,8 @@ private def diagnoseUnfold (entry : UnfoldStrategy) (α pred : Expr) :
     match step? with
     | none => return none
     | some (stepGoal, true) =>
-      return some m!"The `{entry.typeName}` unfold rule itself fires on this predicate — \
-        coercion and `accuM` conversion both succeed — so the search failed below the unfold, \
-        while synthesizing its per-step generator:{indentD stepGoal}\nThe usual causes are a \
-        constructor field whose type has no synthesis rules, or a step condition no leaf rule \
-        closes."
+      return some m!"Search failed below the unfold while synthesizing the per-step \
+        generator: {indentD stepGoal}"
     | some (stepGoal, false) =>
       degenerateStep := some stepGoal
       preNorm.restore
@@ -238,13 +214,10 @@ private def diagnoseUnfold (entry : UnfoldStrategy) (α pred : Expr) :
   | some stepGoal =>
     return some m!"Unfold synthesis for `{entry.typeName}` appeared to normalize, but without \
       determining the per-step generator — its goal still contains metavariables or `sorry`:\
-      {indentD stepGoal}\nThis usually means the predicate is not spelled as a fold the \
-      coercion can read off."
+      {indentD stepGoal}"
   | none => return none
 
-/-- Diagnose a predicate whose element type has no `unfold_strategy` entry: either a recursion over
-a datatype nothing registered, or a leaf-shaped predicate no rule matched — where the useful fact
-is what the rules were matched *against*. -/
+/-- Diagnose a predicate whose element type has no `unfold_strategy` entry. -/
 private def diagnoseBare (α pred : Expr) : TermElabM (Option MessageData) := do
   if let .const tyName _ := α.getAppFn then
     -- Leaf types are handled by enumerated rules, not by unfold synthesis; suggesting
@@ -272,19 +245,17 @@ private def diagnoseBare (α pred : Expr) : TermElabM (Option MessageData) := do
   let some normalized := normalized? | return none
   if (← instantiateMVars pred) != normalized then
     return some m!"No search rule matched. The normalizing rules were tried \
-      against{indentD (← ppExpr normalized)}\nrather than the spelling as written (rules that \
-      apply directly saw the original) — if that shape is not the one you meant to expose, \
-      respell the predicate so normalization preserves it."
-  return some m!"No search rule matched this predicate, and the search's shared normalization \
-    does not change it — the spelling as written is exactly what every rule was tried against."
+      against {indentD (← ppExpr normalized)}\nrather than the expression as written — if that shape \
+      is not the one you meant to expose, rewrite the predicate so normalization preserves it."
+  return some m!"No search rule matched this predicate."
 
 private inductive SplitProbe where
   | notDisjunction
   | bothClose
   | fails (side : String) (disjunct : Expr)
 
-/-- `s_pick` splits a top-level disjunction into one search per disjunct, so a failing disjunction
-is diagnosed by finding which disjunct the search cannot close on its own. -/
+/-- `s_pick` splits a top-level disjunction into one search per disjunct; we diagnose a failing
+disjunction by finding which disjunct the search cannot close on its own. -/
 private def probeDisjunction (α pred : Expr) : TermElabM SplitProbe := do
   let parts? ← lambdaBoundedTelescope pred 1 fun xs body => do
     let some a := xs[0]? | return (none : Option (Expr × Expr))
@@ -322,8 +293,8 @@ private partial def diagnoseCore (α pred : Expr) (fuel : Nat) : TermElabM (Opti
 cheap evidence and name the one that declined, or `none` when no specific story fits. Runs only on
 the failure path, so nothing here is paid for on success.
 
-The model is stage 4's `diagnoseNoWitness`: an actionable statement about the predicate, not a dump
-of the search's internals. All probing happens inside `withoutModifyingState`, and every message is
+The model is `diagnoseNoWitness`: an actionable statement about the predicate, not a dump of the
+search's internals. All probing happens inside `withoutModifyingState`, and every message is
 rendered eagerly so it survives the rollback. -/
 def diagnoseSearchFailure (α pred : Expr) : TermElabM (Option MessageData) := do
   try

@@ -10,11 +10,7 @@ import Palamedes.Data.List
 import Palamedes.Data.Nat
 
 /-!
-# Stage-1 failure diagnosis
-
-Before `diagnoseSearchFailure`, every stage-1 failure was the same sentence — Aesop's "made no
-progress" — whatever the cause. This file pins one failing predicate per diagnosis the replay can
-produce, so the message a user actually sees is the contract.
+# Failure Diagnosis
 -/
 
 open Palamedes
@@ -43,7 +39,7 @@ Initial goal:
   ⊢ CorrectGen fun t => isBSTFlipped (lo, hi) t = true
 
 Unfold synthesis for `Palamedes.Tree` stopped at the coercion: `Palamedes.Tree.coerce_to_fold` could not rewrite this predicate into a `Palamedes.Tree.fold`.
-The generation target is `PalamedesTest.Diagnose.isBSTFlipped`'s explicit argument 2; the coercion unifies the `Palamedes.Tree`-typed argument first, so spell the recursion with that argument first and any indices after it.
+The generation target is `PalamedesTest.Diagnose.isBSTFlipped`'s explicit argument 2; the coercion unifies the `Palamedes.Tree`-typed argument first, so try the recursion with that argument first and any indices after it.
 -/
 #guard_msgs in
 example (lo hi : Nat) [Gen G] : G (Palamedes.Tree Nat) := by
@@ -94,7 +90,7 @@ Initial goal:
 
 Unfold synthesis for `Palamedes.Tree` stopped at the coercion: `Palamedes.Tree.coerce_to_fold` could not rewrite this predicate into a `Palamedes.Tree.fold`.
 `PalamedesTest.Diagnose.isBSTCurried` takes 2 curried arguments after the generation target, and the coercion handles at most one — tuple the indices into a single trailing argument (`PalamedesTest.Diagnose.isBSTCurried t (i, j)`) and match on the tuple in the defining equations.
-The `∧`-merge split this predicate, and this names the first goal whose coercion refused; in the full pipeline a refused coercion still falls through to the conversion step, so the culprit may be a different conjunct — or the merge itself.
+This is a merged predicate; the culprit for this error may may be a different conjunct or the merge itself.
 -/
 #guard_msgs in
 example (lo hi : Nat) [Gen G] : G (Palamedes.Tree Nat) := by
@@ -118,7 +114,7 @@ Initial goal:
   inst✝ : Gen G
   ⊢ CorrectGen fun xs => allSix xs = true
 
-The `List` unfold rule itself fires on this predicate — coercion and `accuM` conversion both succeed — so the search failed below the unfold, while synthesizing its per-step generator:
+Search failed below the unfold while synthesizing the per-step generator: ⏎
   G : Type → Type
   inst✝ : Gen G
   ⊢ (bg : Unit) →
@@ -126,7 +122,6 @@ The `List` unfold rule itself fires on this predicate — coercion and `accuM` c
         CorrectGen fun tv =>
           guard (allSix [] = true) = some bg ∧ tv = ListF.nil ∨
             ∃ a1 a2, guard ((a1 * 2 == 12) = true) = some bg ∧ tv = ListF.cons a1 a2
-The usual causes are a constructor field whose type has no synthesis rules, or a step condition no leaf rule closes.
 -/
 #guard_msgs in
 example [Gen G] : G (List Nat) := by
@@ -170,9 +165,9 @@ Initial goal:
   inst✝ : Gen G
   ⊢ CorrectGen fun n => decide (n % 3 = 0) = true
 
-No search rule matched. The normalizing rules were tried against
+No search rule matched. The normalizing rules were tried against ⏎
   fun n => n % 3 = 0
-rather than the spelling as written (rules that apply directly saw the original) — if that shape is not the one you meant to expose, respell the predicate so normalization preserves it.
+rather than the expression as written — if that shape is not the one you meant to expose, rewrite the predicate so normalization preserves it.
 -/
 #guard_msgs in
 example [Gen G] : G Nat := by
@@ -186,7 +181,7 @@ Initial goal:
   inst✝ : Gen G
   ⊢ CorrectGen fun n => n * 2 = 4
 
-No search rule matched this predicate, and the search's shared normalization does not change it — the spelling as written is exactly what every rule was tried against.
+No search rule matched this predicate.
 -/
 #guard_msgs in
 example [Gen G] : G Nat := by
@@ -209,7 +204,7 @@ Initial goal:
   fun xs => allSix xs = true
 is the one the search cannot close.
 
-The `List` unfold rule itself fires on this predicate — coercion and `accuM` conversion both succeed — so the search failed below the unfold, while synthesizing its per-step generator:
+Search failed below the unfold while synthesizing the per-step generator: ⏎
   G : Type → Type
   inst✝ : Gen G
   ⊢ (bg : Unit) →
@@ -217,7 +212,6 @@ The `List` unfold rule itself fires on this predicate — coercion and `accuM` c
         CorrectGen fun tv =>
           guard (allSix [] = true) = some bg ∧ tv = ListF.nil ∨
             ∃ a1 a2, guard ((a1 * 2 == 12) = true) = some bg ∧ tv = ListF.cons a1 a2
-The usual causes are a constructor field whose type has no synthesis rules, or a step condition no leaf rule closes.
 -/
 #guard_msgs in
 example [Gen G] : G (List Nat) := by
@@ -233,7 +227,7 @@ Initial goal:
   inst✝ : Gen G
   ⊢ CorrectGen fun xs => xs ≠ []
 
-`List` is registered for unfold synthesis, but the unfold rule fires only on predicates shaped `fun x => _ = _` or `fun x => _ ∧ _` — this predicate is neither, so the unfold path was never entered. (Other rules may still apply to such shapes; none closed this goal.)
+`List` is registered for unfold synthesis, but the unfold rule fires only on predicates shaped `fun x => _ = _` or `fun x => _ ∧ _` — this predicate is neither.
 -/
 #guard_msgs in
 example [Gen G] : G (List Nat) := by
