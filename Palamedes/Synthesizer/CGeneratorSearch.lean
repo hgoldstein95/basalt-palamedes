@@ -131,7 +131,8 @@ end Merges
 
 section Coercions
 
-macro "coerce_fold" fh:ident co:term:max : tactic =>
+/-- The core of `coerce_fold`; fails when the coercion does not fire for better error handling. -/
+macro "coerce_fold_strict" fh:ident co:term:max : tactic =>
   `(tactic|
     (first
       | goal_is_not_fold $fh; conv => rhs; lhs; apply $co (by coerce_discharge) (by coerce_discharge) (by coerce_discharge) (by coerce_discharge)
@@ -139,8 +140,10 @@ macro "coerce_fold" fh:ident co:term:max : tactic =>
       | goal_is_not_fold $fh; conv => rhs; lhs; apply $co (by coerce_discharge) (by coerce_discharge)
       | goal_is_not_fold $fh; conv => rhs; lhs; apply congrFun; apply $co (by coerce_discharge) (by coerce_discharge) (by coerce_discharge) (by coerce_discharge)
       | goal_is_not_fold $fh; conv => rhs; lhs; apply congrFun; apply $co (by coerce_discharge) (by coerce_discharge) (by coerce_discharge)
-      | goal_is_not_fold $fh; conv => rhs; lhs; apply congrFun; apply $co (by coerce_discharge) (by coerce_discharge)
-      | skip))
+      | goal_is_not_fold $fh; conv => rhs; lhs; apply congrFun; apply $co (by coerce_discharge) (by coerce_discharge)))
+
+macro "coerce_fold" fh:ident co:term:max : tactic =>
+  `(tactic| first | coerce_fold_strict $fh $co | skip)
 
 end Coercions
 
