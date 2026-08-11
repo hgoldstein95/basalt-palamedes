@@ -77,6 +77,29 @@ Unfold synthesis for `Palamedes.Tree` stopped at the coercion: `Palamedes.Tree.c
 example (lo hi : Nat) [Gen G] : G (Palamedes.Tree Nat) := by
   generator_search (fun t => isBSTCurried t lo hi = true)
 
+/-! ## A merged conjunction names the first refusing goal, with a caveat
+
+The `∧`-merge splits the predicate before the coercion runs, and in the full pipeline a refused
+coercion still falls through to the conversion step — so the named conjunct is the first refusal,
+not necessarily the pipeline's actual point of failure, and the message says so. -/
+
+/--
+error: Failed during generator synthesis.
+Tactic `aesop` failed, made no progress
+Initial goal:
+  G : Type → Type
+  lo hi : ℕ
+  inst✝ : Gen G
+  ⊢ CorrectGen fun t => isBSTCurried t lo hi = true ∧ isBSTFlipped (lo, hi) t = true
+
+Unfold synthesis for `Palamedes.Tree` stopped at the coercion: `Palamedes.Tree.coerce_to_fold` could not rewrite this predicate into a `Palamedes.Tree.fold`.
+`PalamedesTest.Diagnose.isBSTCurried` takes 2 curried arguments after the generation target, and the coercion handles at most one — tuple the indices into a single trailing argument (`PalamedesTest.Diagnose.isBSTCurried t (i, j)`) and match on the tuple in the defining equations.
+The `∧`-merge split this predicate, and this names the first goal whose coercion refused; in the full pipeline a refused coercion still falls through to the conversion step, so the culprit may be a different conjunct — or the merge itself.
+-/
+#guard_msgs in
+example (lo hi : Nat) [Gen G] : G (Palamedes.Tree Nat) := by
+  generator_search (fun t => isBSTCurried t lo hi = true ∧ isBSTFlipped (lo, hi) t = true)
+
 /-! ## The unfold fires; the failure is below it
 
 The fold coerces and converts, so the diagnosis prints the per-step generator goal the search could
@@ -128,7 +151,7 @@ Initial goal:
   inst✝ : Gen G
   ⊢ CorrectGen fun t => leafy t = true
 
-`PalamedesTest.Diagnose.leafy` recurses over `PalamedesTest.Diagnose.MyTree`, which has no `unfold_strategy` entry, so the unfold rule could not fire. If `PalamedesTest.Diagnose.MyTree` is a plain recursive datatype, `derive_palamedes PalamedesTest.Diagnose.MyTree` registers everything unfold synthesis needs.
+`PalamedesTest.Diagnose.MyTree` has no `unfold_strategy` entry, so the unfold rule could not fire on `PalamedesTest.Diagnose.leafy`. If `PalamedesTest.Diagnose.MyTree` is a plain recursive datatype, `derive_palamedes PalamedesTest.Diagnose.MyTree` registers everything unfold synthesis needs.
 -/
 #guard_msgs in
 example [Gen G] : G MyTree := by
@@ -147,9 +170,9 @@ Initial goal:
   inst✝ : Gen G
   ⊢ CorrectGen fun n => decide (n % 3 = 0) = true
 
-No search rule matched. The rules were tried against the normalized predicate
+No search rule matched. The normalizing rules were tried against
   fun n => n % 3 = 0
-rather than the spelling as written — if that shape is not the one you meant to expose, respell the predicate so normalization preserves it.
+rather than the spelling as written (rules that apply directly saw the original) — if that shape is not the one you meant to expose, respell the predicate so normalization preserves it.
 -/
 #guard_msgs in
 example [Gen G] : G Nat := by

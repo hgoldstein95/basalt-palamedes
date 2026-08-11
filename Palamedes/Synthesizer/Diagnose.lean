@@ -18,8 +18,6 @@ open Lean Elab Meta Tactic
 
 namespace Palamedes
 
-open Palamedes.PGen Palamedes.PGen.CorrectGen
-
 /-- Run `tac` against `goal`, returning the remaining goals, or `none` — with the elaboration state
 restored — if it throws. Interrupts and exhaustion are rethrown: they are not evidence about the
 goal. -/
@@ -102,10 +100,20 @@ private def targetPosition (fn : Name) (args : Array Expr) (a : Expr) :
 
 /-- The message for a refused coercion, refined by how the predicate arranges the arguments of its
 recursive function — the contract (`f t`, indices tupled into at most one trailing argument) is
-otherwise written nowhere a user will look. -/
-private def coercionRefused (entry : UnfoldStrategy) (pred : Expr) : MetaM MessageData := do
+otherwise written nowhere a user will look. `merged` says the `∧`-merge split the predicate into
+several goals, of which this replay names the first that refused — not necessarily the pipeline's
+actual point of failure. -/
+private def coercionRefused (entry : UnfoldStrategy) (pred : Expr) (merged : Bool) :
+    MetaM MessageData := do
   let base := m!"Unfold synthesis for `{entry.typeName}` stopped at the coercion: \
     `{entry.coerce}` could not rewrite this predicate into a `{entry.fold}`."
+  let caveat :=
+    if merged then
+      m!"\nThe `∧`-merge split this predicate, and this names the first goal whose coercion \
+        refused; in the full pipeline a refused coercion still falls through to the conversion \
+        step, so the culprit may be a different conjunct — or the merge itself."
+    else
+      m!""
   let hint? ← lambdaTelescope pred fun xs body => do
     let some a := xs[0]? | return none
     let apps := appsMentioning a body
@@ -128,8 +136,8 @@ private def coercionRefused (entry : UnfoldStrategy) (pred : Expr) : MetaM Messa
       refusal is about `{fn}`'s defining equations: they could not be read back as a fold \
       algebra over `{entry.typeName}`."
   match hint? with
-  | some h => return m!"{base}\n{h}"
-  | none => return base
+  | some h => return m!"{base}\n{h}{caveat}"
+  | none => return m!"{base}{caveat}"
 
 private def conversionRefused (entry : UnfoldStrategy) (goal : Format) : MessageData :=
   let lemmas := MessageData.andList (entry.convert.toList.map (m!"`{·}`"))
@@ -169,27 +177,38 @@ private def diagnoseUnfold (entry : UnfoldStrategy) (α pred : Expr) :
     | none => `(tactic| norm_for_unfold $fold $coerce mergeVia $merge convertVia [$convs,*])
   let preNorm ← saveState
   let mut degenerateStep : Option Format := none
-  if (← tryTac pf norm).isSome then
-    -- The normalization closed. If it also *determined* the per-step generator, the search
-    -- genuinely failed below the unfold; a step goal with metavariables left in it means the
-    -- iff closed only formally — a fold algebra was never actually read off the predicate — and
-    -- the coercion is what deserves the blame, so fall through to the stagewise replay.
-    let mut stepGoal : Format := ""
-    let mut determined := true
+  match ← tryTac pf norm with
+  | some [] =>
+    -- The normalization closed, which is what the pipeline's `case pf =>` demands of it. If it
+    -- also *determined* the per-step generator, the search genuinely failed below the unfold; a
+    -- step goal with metavariables or a `sorry` left in it means the iff closed only formally —
+    -- a fold algebra was never actually read off the predicate (a refused coercion discharge
+    -- elaborates to `sorry`) — and the coercion is what deserves the blame, so fall through to
+    -- the stagewise replay.
+    let mut step? : Option (Format × Bool) := none
     for s in gs do
       unless ← s.isAssigned do
         if ← isStepGenGoal s then
-          determined := !(← s.withContext do instantiateMVars (← s.getType)).hasExprMVar
-          stepGoal ← s.withContext do ppGoal s
+          let ty ← s.withContext do instantiateMVars (← s.getType)
+          let determined := !ty.hasExprMVar && !ty.hasSorry
+          let fmt ← s.withContext do ppGoal s
+          step? := some (fmt, determined)
           break
-    if determined then
+    match step? with
+    | none => return none
+    | some (stepGoal, true) =>
       return some m!"The `{entry.typeName}` unfold rule itself fires on this predicate — \
         coercion and `accuM` conversion both succeed — so the search failed below the unfold, \
         while synthesizing its per-step generator:{indentD stepGoal}\nThe usual causes are a \
         constructor field whose type has no synthesis rules, or a step condition no leaf rule \
         closes."
-    degenerateStep := some stepGoal
+    | some (stepGoal, false) =>
+      degenerateStep := some stepGoal
+      preNorm.restore
+  | some _ =>
+    -- Ran to completion but left goals open, which `case pf =>` counts as failure.
     preNorm.restore
+  | none => pure ()
   -- The normalization refused (or closed without content); replay it one stage at a time to name
   -- the gate.
   let some pfGoals ← tryTac pf (← `(tactic| (preprocess
@@ -211,14 +230,14 @@ private def diagnoseUnfold (entry : UnfoldStrategy) (α pred : Expr) :
       else
         tryTac h (← `(tactic| (simp; coerce_fold_strict $fold $coerce)))
     let some hs := coerced
-      | return some (← coercionRefused entry pred)
+      | return some (← coercionRefused entry pred (pfGoals.length > 1))
     for h' in hs do
       if (← tryTac h' convertStep).isNone then
         return some (conversionRefused entry (← h'.withContext do ppGoal h'))
   match degenerateStep with
   | some stepGoal =>
     return some m!"Unfold synthesis for `{entry.typeName}` appeared to normalize, but without \
-      determining the per-step generator — its goal still contains metavariables:\
+      determining the per-step generator — its goal still contains metavariables or `sorry`:\
       {indentD stepGoal}\nThis usually means the predicate is not spelled as a fold the \
       coercion can read off."
   | none => return none
@@ -236,8 +255,10 @@ private def diagnoseBare (α pred : Expr) : TermElabM (Option MessageData) := do
         let some a := xs[0]? | return none
         (appsMentioning a body).findM? fun (fn, _) => isRecursiveOver fn tyName
       if let some (fn, _) := rec? then
-        return some m!"`{fn}` recurses over `{tyName}`, which has no `unfold_strategy` entry, so \
-          the unfold rule could not fire. If `{tyName}` is a plain recursive datatype, \
+        -- `isRecursiveOver` cannot attribute a `WellFounded.fix` to a measure, so the message
+        -- asserts only the registry fact and leaves `fn`'s recursion unclaimed.
+        return some m!"`{tyName}` has no `unfold_strategy` entry, so the unfold rule could not \
+          fire on `{fn}`. If `{tyName}` is a plain recursive datatype, \
           `derive_palamedes {tyName}` registers everything unfold synthesis needs."
   -- Replay the shared normalization every leaf rule sees the predicate through.
   let g ← searchGoal α pred
@@ -250,10 +271,10 @@ private def diagnoseBare (α pred : Expr) : TermElabM (Option MessageData) := do
     pure (some rhs)
   let some normalized := normalized? | return none
   if (← instantiateMVars pred) != normalized then
-    return some m!"No search rule matched. The rules were tried against the normalized \
-      predicate{indentD (← ppExpr normalized)}\nrather than the spelling as written — if that \
-      shape is not the one you meant to expose, respell the predicate so normalization \
-      preserves it."
+    return some m!"No search rule matched. The normalizing rules were tried \
+      against{indentD (← ppExpr normalized)}\nrather than the spelling as written (rules that \
+      apply directly saw the original) — if that shape is not the one you meant to expose, \
+      respell the predicate so normalization preserves it."
   return some m!"No search rule matched this predicate, and the search's shared normalization \
     does not change it — the spelling as written is exactly what every rule was tried against."
 
@@ -290,7 +311,8 @@ private partial def diagnoseCore (α pred : Expr) (fuel : Nat) : TermElabM (Opti
         | none => head)
     | .bothClose =>
       return some m!"Each disjunct of this predicate synthesizes on its own, so the failure is in \
-        splitting the disjunction itself (`s_pick` and its normalization)."
+        splitting the disjunction itself (`s_pick` and its normalization) — or the combined \
+        search exhausted a budget the separate searches did not."
     | .notDisjunction => pure ()
   match (unfoldStrategies (← getEnv)).find? (fun e => α.getAppFn.isConstOf e.typeName) with
   | some entry => diagnoseUnfold entry α pred
