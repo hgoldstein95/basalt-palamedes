@@ -131,7 +131,10 @@ end Merges
 
 section Coercions
 
-macro "coerce_fold" fh:ident co:term:max : tactic =>
+/-- `coerce_fold` without the final `skip`, so it *fails* when the coercion does not fire — which is
+what lets the failure-path diagnosis (`Synthesizer/Diagnose.lean`) tell "the coercion refused" apart
+from "the predicate is already a fold". -/
+macro "coerce_fold_strict" fh:ident co:term:max : tactic =>
   `(tactic|
     (first
       | goal_is_not_fold $fh; conv => rhs; lhs; apply $co (by coerce_discharge) (by coerce_discharge) (by coerce_discharge) (by coerce_discharge)
@@ -139,8 +142,10 @@ macro "coerce_fold" fh:ident co:term:max : tactic =>
       | goal_is_not_fold $fh; conv => rhs; lhs; apply $co (by coerce_discharge) (by coerce_discharge)
       | goal_is_not_fold $fh; conv => rhs; lhs; apply congrFun; apply $co (by coerce_discharge) (by coerce_discharge) (by coerce_discharge) (by coerce_discharge)
       | goal_is_not_fold $fh; conv => rhs; lhs; apply congrFun; apply $co (by coerce_discharge) (by coerce_discharge) (by coerce_discharge)
-      | goal_is_not_fold $fh; conv => rhs; lhs; apply congrFun; apply $co (by coerce_discharge) (by coerce_discharge)
-      | skip))
+      | goal_is_not_fold $fh; conv => rhs; lhs; apply congrFun; apply $co (by coerce_discharge) (by coerce_discharge)))
+
+macro "coerce_fold" fh:ident co:term:max : tactic =>
+  `(tactic| first | coerce_fold_strict $fh $co | skip)
 
 end Coercions
 

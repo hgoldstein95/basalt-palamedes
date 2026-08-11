@@ -122,6 +122,16 @@ interpreting the generator at `Plausible.Gen` or `IO`.
 
 To inspect a generator's distribution, use Basalt's `#genstats` command.
 
+### When Synthesis Fails
+
+When the search cannot find a generator, the error names the gate that declined rather than only
+reporting that the search made no progress: whether the predicate could not be read as a fold (and
+how its arguments should be arranged — generation target first, indices tupled into a single
+trailing argument), whether the failure is in a sub-generator the fold needs, whether the
+datatype is missing a `derive_palamedes` registration, or what the predicate looked like after
+normalization when no rule matched it. `PalamedesTest/Synthesizer/Diagnose.lean` shows one failing
+example per diagnosis.
+
 ## Deriving Infrastructure for Inductive Types
 
 If you have your own inductive type that you'd like to use with Palamedes, use the

@@ -9,6 +9,7 @@ import Palamedes.PGen
 import Palamedes.CorrectGen
 import Palamedes.Optimizer
 import Palamedes.Synthesizer.CGeneratorSearch
+import Palamedes.Synthesizer.Diagnose
 import Palamedes.Synthesizer.Totality
 import Palamedes.Failure
 import Palamedes.Tuning
@@ -172,11 +173,21 @@ may use is exactly the question the witness answers. -/
 def runSynthesisPipeline (α pred : Expr) (verbose : Bool)
     (tuningBinder : Option Expr := none) (declName : Name := `_gen) :
     TermElabM SynthesisResult := do
-  -- 1. Search for an inhabitant of `CorrectGen pred`.
+  -- 1. Search for an inhabitant of `CorrectGen pred`. On failure — but never on exhaustion, which
+  -- says nothing about the predicate — `diagnoseSearchFailure` replays the search's own gates to
+  -- name the one that declined; Aesop's error alone is the same sentence for every cause.
   let searchTac ← `(tactic| cgenerator_search)
-  let cgen ← wrapStage "generator synthesis" <|
-    solveGoalWithTactic "cgenerator_search"
-      (mkAppN (.const ``Palamedes.CorrectGen []) #[α, pred]) searchTac
+  let cgen ←
+    try
+      solveGoalWithTactic "cgenerator_search"
+        (mkAppN (.const ``Palamedes.CorrectGen []) #[α, pred]) searchTac
+    catch e =>
+      if e.isInterrupt then throw e
+      let base := m!"Failed during generator synthesis.\n{e.toMessageData}"
+      if e.isMaxHeartbeat || e.isMaxRecDepth then throwError base
+      match ← diagnoseSearchFailure α pred with
+      | some why => throwError "{base}\n\n{why}"
+      | none => throwError base
 
   -- 2. Extract the raw `PGen`, keeping the rewrite that justifies it.
   let genTy := mkApp (Expr.const ``Palamedes.PGen []) α
