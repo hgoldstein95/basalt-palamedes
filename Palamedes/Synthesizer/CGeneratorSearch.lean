@@ -131,9 +131,7 @@ end Merges
 
 section Coercions
 
-/-- `coerce_fold` without the final `skip`, so it *fails* when the coercion does not fire — which is
-what lets the failure-path diagnosis (`Synthesizer/Diagnose.lean`) tell "the coercion refused" apart
-from "the predicate is already a fold". -/
+/-- The core of `coerce_fold`; fails when the coercion does not fire for better error handling. -/
 macro "coerce_fold_strict" fh:ident co:term:max : tactic =>
   `(tactic|
     (first

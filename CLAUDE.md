@@ -11,7 +11,9 @@ exactly `P`. Synthesis happens at elaboration time, inside a proof, driven by Ae
 for a PLDI 2026 paper; APIs are unstable.
 
 `README.md` is the user-facing reference and is kept accurate — read it before changing public
-behavior, and update it when you do.
+behavior, and update it when a change falsifies something it says. It documents what a user must
+do, so an improvement that is apparent from using the repository — a better error message, say —
+gets no mention.
 
 ## Commands
 
@@ -337,6 +339,9 @@ which is why each puts them in an explicit `namespace TGen … end TGen` block a
     used here) and name the concept so a reader can find the real treatment ("a free theorem";
     "tactic-mode `cases` elaborates to the recursor"). Explain a mechanism only when it has no
     citable name — version-specific or undocumented behavior — and then as a rule-4 fence.
+11. A comment never mirrors a docstring. At a call site the callee's name is the pointer, and a
+    helper's docstring is one sentence — what it does, plus at most a clause of why; the full
+    rationale lives with the consumer that needs it.
 
 ## Conventions
 

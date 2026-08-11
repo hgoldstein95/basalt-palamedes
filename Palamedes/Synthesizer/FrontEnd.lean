@@ -173,9 +173,7 @@ may use is exactly the question the witness answers. -/
 def runSynthesisPipeline (α pred : Expr) (verbose : Bool)
     (tuningBinder : Option Expr := none) (declName : Name := `_gen) :
     TermElabM SynthesisResult := do
-  -- 1. Search for an inhabitant of `CorrectGen pred`. On failure — but never on exhaustion, which
-  -- says nothing about the predicate — `diagnoseSearchFailure` replays the search's own gates to
-  -- name the one that declined; Aesop's error alone is the same sentence for every cause.
+  -- 1. Search for an inhabitant of `CorrectGen pred`.
   let searchTac ← `(tactic| cgenerator_search)
   let cgen ←
     try
