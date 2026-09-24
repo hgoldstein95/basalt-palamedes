@@ -27,7 +27,7 @@ globs = ["PalamedesExperiments.+"]
 [[require]]
 name = "basalt"
 git = "https://github.com/hgoldstein95/basalt"
-rev = "v4.33.0-rc2"
+rev = "basalt-0.1.0"
 
 [[require]]
 name = "mathlib"

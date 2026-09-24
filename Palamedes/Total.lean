@@ -46,7 +46,7 @@ protected def bind (x : TGen α) (f : α → TGen β) : TGen β :=
   ⟨fun {_G} _ => x.run >>= fun a => (f a).run⟩
 
 def pick (x y : TGen α) : TGen α :=
-  ⟨fun {_G} _ => RandomChoice.pick (fun () => x.run) (fun () => y.run)⟩
+  ⟨fun {_G} _ => _root_.oneOf [fun () => x.run, fun () => y.run]⟩
 
 def frequency (gs : List (Nat × TGen α)) (h : 0 < (gs.map Prod.fst).sum := by simp) : TGen α :=
   ⟨fun {_G} _ =>

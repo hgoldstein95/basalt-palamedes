@@ -30,9 +30,9 @@ namespace PGen
 /-- Polymorphic Basalt generator for an arbitrary natural number (geometrically distributed): stop at
 `0`, or recurse and add one. A direct `partial_fixpoint` over Basalt's CCPO. -/
 def arbNatGo [Gen G] : G Nat :=
-  RandomChoice.pick
-    (fun () => pure 0)
-    (fun () => arbNatGo >>= fun n => pure (n + 1))
+  _root_.oneOf [
+    fun () => pure 0,
+    fun () => arbNatGo >>= fun n => pure (n + 1)]
   partial_fixpoint
 
 end PGen
@@ -96,11 +96,11 @@ theorem support_arbNat :
   show some v ∈ SPMF.support (OptionT.run (arbNatGo (G := OptionT SPMF)))
   induction v with
   | zero =>
-    rw [arbNatGo, mem_support_optionT_pick]
-    exact Or.inl (by rw [support_optionT_pure]; simp)
+    rw [arbNatGo, mem_support_optionT_oneOf]
+    exact ⟨_, List.mem_cons_self, by rw [support_optionT_pure]; simp⟩
   | succ n ih =>
-    rw [arbNatGo, mem_support_optionT_pick]
-    refine Or.inr ?_
+    rw [arbNatGo, mem_support_optionT_oneOf]
+    refine ⟨_, List.mem_cons_of_mem _ List.mem_cons_self, ?_⟩
     rw [mem_support_optionT_bind]
     exact ⟨n, ih, by rw [support_optionT_pure]; simp⟩
 @[simp]

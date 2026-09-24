@@ -18,7 +18,7 @@ interpretation (`someSupport`) and the lemmas the per-datatype twins need.
 
 namespace Palamedes
 
-open Palamedes.PGen Helpers
+open Palamedes.PGen
 
 variable {α β : Type}
 
@@ -62,25 +62,6 @@ theorem mem_support_optionT_bind {x : OptionT SPMF α} {k : α → OptionT SPMF 
   · rintro ⟨a, ha, hw⟩
     exact ⟨some a, ha, hw⟩
 
-/-- The `pick` lemma. `pick` is `choose 0 1 >>= …`, so this follows from the `bind` lemma once the
-two-element index is case-split — but stating it separately is what lets the *primitive* generators'
-`someSupport` proofs mirror their `PGen.support` scripts line for line. -/
-theorem mem_support_optionT_pick {x y : OptionT SPMF α} {w : α} :
-    some w ∈ SPMF.support (OptionT.run
-        (RandomChoice.pick (fun () => x) (fun () => y) : OptionT SPMF α))
-      ↔ some w ∈ SPMF.support (OptionT.run x) ∨ some w ∈ SPMF.support (OptionT.run y) := by
-  simp only [RandomChoice.pick, instRandomChoiceOptionT]
-  rw [mem_support_optionT_bind]
-  constructor
-  · rintro ⟨n, hn, hw⟩
-    rcases Nat.le_one_iff_eq_zero_or_eq_one.mp n.down.property.2 with h0 | h1
-    · left; simpa [h0] using hw
-    · right; simpa [h1] using hw
-  · intro h
-    cases h with
-    | inl hx => exact ⟨⟨⟨0, by omega⟩⟩, by simp, by simpa using hx⟩
-    | inr hy => exact ⟨⟨⟨1, by omega⟩⟩, by simp, by simpa using hy⟩
-
 theorem mem_support_optionT_map {x : OptionT SPMF α} {g : α → β} {w : β} :
     some w ∈ SPMF.support (OptionT.run (g <$> x : OptionT SPMF β))
       ↔ ∃ a, some a ∈ SPMF.support (OptionT.run x) ∧ g a = w := by
@@ -102,12 +83,68 @@ theorem mem_support_optionT_lift {p : SPMF α} {a : α} :
   · intro ha
     exact ⟨a, ha, rfl⟩
 
+/-! ## The observation
+
+`someSupport` is the may observation of the `OptionT SPMF` interpretation, so a choice combinator's
+lemma is its `Obs.map_*` read through an angelic presentation — the derivation of
+`SPMF.support_oneOf` and `SPMF.support_frequency`, one interpretation over. -/
+
+/-- The may observation at `OptionT SPMF`: some value the generator can produce without failing
+satisfies the postcondition. -/
+def someObs : Obs (OptionT SPMF) (WP Mix.angelic) where
+  spec g := fun Q => ∃ a, some a ∈ SPMF.support (OptionT.run g) ∧ Q a
+  map_pure a := by
+    funext Q; apply propext
+    show (∃ b, some b ∈ SPMF.support (OptionT.run (pure a : OptionT SPMF _)) ∧ Q b) ↔ Q a
+    simp
+  map_bind x k := by
+    funext Q; apply propext
+    show (∃ b, some b ∈ SPMF.support (OptionT.run (x >>= k)) ∧ Q b)
+      ↔ ∃ a, some a ∈ SPMF.support (OptionT.run x)
+          ∧ ∃ b, some b ∈ SPMF.support (OptionT.run (k a)) ∧ Q b
+    simp only [mem_support_optionT_bind]
+    exact ⟨fun ⟨b, ⟨a, ha, hb⟩, h⟩ => ⟨a, ha, b, hb, h⟩,
+      fun ⟨a, ha, b, hb, h⟩ => ⟨b, ⟨a, ha, hb⟩, h⟩⟩
+  map_choose lo hi h := by
+    funext Q; apply propext
+    show (∃ a, some a ∈ SPMF.support (OptionT.run (OptionT.lift (RandomChoice.choose lo hi h)))
+      ∧ Q a) ↔ ∃ a, Q a
+    simp only [mem_support_optionT_lift, SPMF.mem_support_choose_iff, true_and]
+
+/-- `some`-membership, read through a specification the observation equals. -/
+theorem mem_support_optionT_of_obs {g : OptionT SPMF α} {w : WP Mix.angelic α}
+    (h : someObs.spec g = w) {a : α} : some a ∈ SPMF.support (OptionT.run g) ↔ w (· = a) :=
+  ⟨fun ha => h ▸ ⟨a, ha, rfl⟩, fun hw => by obtain ⟨_, hb, e⟩ := h ▸ hw; exact e ▸ hb⟩
+
+theorem mem_support_optionT_oneOf {gs : List (Unit → OptionT SPMF α)} (hne : gs ≠ []) {w : α} :
+    some w ∈ SPMF.support (OptionT.run (oneOf gs hne))
+      ↔ ∃ g ∈ gs, some w ∈ SPMF.support (OptionT.run (g ())) :=
+  (mem_support_optionT_of_obs (someObs.map_oneOf gs hne)).trans
+    ((Mix.index_angelic gs hne fun g => someObs.spec (g ()) (· = w)).trans
+      (exists_congr fun _ => and_congr_right fun _ =>
+        (mem_support_optionT_of_obs rfl).symm))
+
+theorem mem_support_optionT_frequency {gs : List (Nat × (Unit → OptionT SPMF α))}
+    (h : 0 < (gs.map Prod.fst).sum) {w : α} :
+    some w ∈ SPMF.support (OptionT.run (frequency gs h))
+      ↔ ∃ k g, (k, g) ∈ gs ∧ 0 < k ∧ some w ∈ SPMF.support (OptionT.run (g ())) := by
+  refine (mem_support_optionT_of_obs (someObs.map_frequency gs h)).trans ?_
+  simp only [Obs.select, WP.choose_bind_apply,
+    Obs.selectD_map (fun v : WP Mix.angelic α => v (· = w)), List.map_map]
+  refine (Mix.select_angelic _ (by simp [Function.comp_def]) h _).trans ?_
+  constructor
+  · rintro ⟨_, hp, hk, hw⟩
+    obtain ⟨⟨k, g⟩, hmem, rfl⟩ := List.mem_map.mp hp
+    exact ⟨k, g, hmem, hk, (mem_support_optionT_of_obs rfl).mpr hw⟩
+  · rintro ⟨k, g, hmem, hk, hw⟩
+    exact ⟨_, List.mem_map.mpr ⟨(k, g), hmem, rfl⟩, hk, (mem_support_optionT_of_obs rfl).mp hw⟩
+
 /-! ## `someSupport` agrees with `support` on every *combinator*
 
-Each of these is a one-liner from the two helper lemmas: the `Fail` interpretations differ (`⊥` at
+Each of these is a one-liner from the lemmas above: the `Fail` interpretations differ (`⊥` at
 `SPMF`, `pure none` at `OptionT SPMF`) but agree on `some`-values, and every other combinator is a
-`bind`/`pure`/`choose` composite. The corresponding statement for an *opaque* `g : PGen α` is the
-free theorem `someSupport`'s docstring rules out. -/
+`bind`/`pure`/`choose` composite or a choice `someObs` reads. The corresponding statement for an
+*opaque* `g : PGen α` is the free theorem `someSupport`'s docstring rules out. -/
 
 section Combinators
 
@@ -142,10 +179,10 @@ variable {α β : Type}
     someSupport (PGen.pick x y) = fun a => someSupport x a ∨ someSupport y a := by
   refine someSupport_ext fun w => ?_
   show some w ∈ SPMF.support (OptionT.run
-      (RandomChoice.pick (fun () => x.run) (fun () => y.run) : OptionT SPMF α))
-    ↔ (some w ∈ SPMF.support (OptionT.run (x.run : OptionT SPMF α))
-        ∨ some w ∈ SPMF.support (OptionT.run (y.run : OptionT SPMF α)))
-  exact mem_support_optionT_pick
+      (oneOf [fun () => x.run, fun () => y.run] (by simp) : OptionT SPMF α)) ↔ _
+  simp only [mem_support_optionT_oneOf, List.mem_cons, List.not_mem_nil, or_false,
+    exists_eq_or_imp, exists_eq_left]
+  rfl
 
 @[simp] theorem someSupport_choose {lo hi : Nat} {h : lo ≤ hi} :
     someSupport (PGen.choose lo hi h) = fun a => lo ≤ a ∧ a ≤ hi := by
@@ -177,92 +214,16 @@ end Combinators
 
 These are the combinators the **optimizer** actually emits — a `pick` chain is flattened into a
 `frequency` so that a k-way choice is a function of its weights rather than of how the chain was
-associated. `OptionT.run` does not distribute over `frequency` unconditionally; `run_frequencyAux`
-has the `0 < total` hypothesis that makes it true. -/
-
-
-theorem run_frequencySelect {α} (gs : List (Nat × (Unit → OptionT SPMF α))) (n : Nat) (h) :
-    OptionT.run (frequencySelect gs n h)
-      = frequencySelect (gs.map fun p => (p.1, fun _ => OptionT.run (p.2 ()))) n
-          (by simpa [List.map_map, Function.comp_def] using h) := by
-  induction gs generalizing n with
-  | nil => simp at h
-  | cons g gs ih =>
-    obtain ⟨k, x⟩ := g
-    simp only [frequencySelect, List.map_cons]
-    split <;> simp_all
-
-theorem run_lift_bind {α β} (p : SPMF α) (k : α → OptionT SPMF β) :
-    OptionT.run (OptionT.lift p >>= k) = p >>= fun a => OptionT.run (k a) := by
-  simp only [OptionT.lift, OptionT.mk, OptionT.run, bind, OptionT.bind]
-  rw [SPMF.bind_assoc]
-  congr 1
-  funext a
-  show (SPMF.pure (some a)).bind _ = _
-  rw [SPMF.pure_bind]
-
-theorem run_map_lift {α β} (p : SPMF α) (g : α → β) :
-    OptionT.run (g <$> (OptionT.lift p) : OptionT SPMF β)
-      = OptionT.run (OptionT.lift (g <$> p) : OptionT SPMF β) := by
-  show OptionT.run (OptionT.lift p >>= fun a => pure (g a)) = _
-  rw [run_lift_bind]
-  show SPMF.bind p (fun a => SPMF.pure (some (g a)))
-    = SPMF.bind (SPMF.bind p (fun a => SPMF.pure (g a))) _
-  rw [SPMF.bind_assoc]
-  congr 1
-  funext a
-  rw [SPMF.pure_bind]
-  rfl
-
-theorem run_lift_map_bind {γ δ α} (p : SPMF γ) (g : γ → δ) (k : δ → OptionT SPMF α) :
-    OptionT.run ((g <$> OptionT.lift p : OptionT SPMF δ) >>= k)
-      = SPMF.bind (g <$> p) (fun d => OptionT.run (k d)) := by
-  rw [show (g <$> OptionT.lift p : OptionT SPMF δ) = OptionT.lift (g <$> p) from
-    OptionT.ext (run_map_lift _ _)]
-  exact run_lift_bind _ _
-
-/-- `frequencyAux`'s `else default` branch is unreachable: the index is drawn from
-`[0, total-1]`, so `¬ n < total` contradicts `0 < total`. That matters here because the two
-`default`s are *not* the same term — `OptionT SPMF α`'s `Inhabited` is `pure none` while
-`SPMF (Option α)`'s is its own — so the equation would be false without the bound. -/
-theorem run_frequencyAux {α} (gs : List (Nat × (Unit → OptionT SPMF α)))
-    (total : Nat) (htpos : 0 < total) (ht) (ht') :
-    OptionT.run (frequencyAux gs total ht)
-      = frequencyAux (gs.map fun p => (p.1, fun _ => OptionT.run (p.2 ()))) total ht' := by
-  simp only [frequencyAux]
-  rw [show (RandomChoice.choose 0 (total - 1) (Nat.zero_le _) : OptionT SPMF _)
-      = OptionT.lift (RandomChoice.choose 0 (total - 1) (Nat.zero_le _)) from rfl]
-  rw [run_lift_map_bind]
-  congr 1
-  funext n
-  obtain ⟨hn0, hn1⟩ := n.property
-  split
-  · exact run_frequencySelect _ _ _
-  · omega
-
-theorem run_frequency {α} (gs : List (Nat × (Unit → OptionT SPMF α))) (h) :
-    OptionT.run (frequency gs h)
-      = frequency (gs.map fun p => (p.1, fun _ => OptionT.run (p.2 ())))
-          (by simpa [List.map_map, Function.comp_def] using h) := by
-  have hfst : (List.map Prod.fst (gs.map fun p : Nat × (Unit → OptionT SPMF α) =>
-        ((p.1 : Nat), fun _ : Unit => OptionT.run (p.2 ()))) : List Nat)
-      = List.map Prod.fst gs := by simp [List.map_map, Function.comp_def]
-  show OptionT.run (frequencyAux gs _ rfl) = frequencyAux _ _ rfl
-  simp only [hfst]
-  exact run_frequencyAux _ _ h _ _
+associated. -/
 
 @[simp] theorem someSupport_frequency {α} {gs : List (Nat × PGen α)} (h) :
     someSupport (PGen.frequency gs h)
       = fun a => ∃ w g, (w, g) ∈ gs ∧ 0 < w ∧ someSupport g a := by
   refine someSupport_ext fun a => ?_
-  show some a ∈ SPMF.support _ ↔ _
-  rw [show PGen.totalize (PGen.frequency gs h) (G := SPMF)
-      = OptionT.run (_root_.frequency (gs.map fun p => (p.1, fun _ => p.2.run))
-          (by simpa [List.map_map, Function.comp_def] using h) : OptionT SPMF α) from rfl]
-  rw [run_frequency, SPMF.support_frequency]
-  simp only [Set.mem_ofPred_eq, List.map_map, Function.comp_def]
+  simp only [PGen.totalize, PGen.frequency]
+  rw [mem_support_optionT_frequency]
   exact PGen.Support.exists_mem_map_weighted
-    (m := fun (g : PGen α) (_ : Unit) => OptionT.run (g.run : OptionT SPMF α))
+    (m := fun (g : PGen α) (_ : Unit) => (g.run : OptionT SPMF α))
 
 @[simp] theorem someSupport_oneOf {α} {gs : List (PGen α)} (h) :
     someSupport (PGen.oneOf gs h) = fun a => ∃ g ∈ gs, someSupport g a := by

@@ -22,7 +22,7 @@ lake build                                     # library + tests (what CI runs)
 lake build Palamedes                           # library only
 lake build PalamedesTest                       # tests only
 lake build PalamedesTest.Corpus.Simple.Eq2     # one corpus file, by module path
-lake env lean PalamedesTest/Corpus/Simple/Eq2.lean   # elaborate one file, see all messages
+lake lean PalamedesTest/Corpus/Simple/Eq2.lean # elaborate one file, see all messages
 lake build PalamedesExperiments                # spikes; excluded from the default build
 lake update basalt                             # re-resolve the Basalt release tag set in lakefile.toml
 ```
@@ -32,7 +32,7 @@ generator at elaboration time and fails to compile if synthesis regresses, so `l
 test suite. Many corpus files additionally pin the **emitted term** with `generator_search?`
 under `#guard_msgs`, so a search that still succeeds but finds a *different* generator is a build
 failure rather than a silent change. To regenerate one, edit nothing but the docstring: delete it,
-run `lake env lean <file>`, paste the output back under `info:`.
+run `lake lean <file>`, paste the output back under `info:`.
 
 A pin is only half the contract — the emitted term also has to *re-elaborate* when pasted, which no
 `#guard_msgs` checks. `Corpus/List/IdxOf/` is the one that does, by declaring the pinned text a

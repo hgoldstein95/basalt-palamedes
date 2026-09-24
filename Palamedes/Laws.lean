@@ -26,8 +26,7 @@ theorem isSoundAndComplete_of_total {t : TGen α} {g : PGen α}
     (hw : t.toGen = g) (h : g.support = P) :
     IsSoundAndComplete (t.run (G := SPMF)) P := by
   subst hw
-  intro a
-  exact iff_of_eq (congrFun h a)
+  exact .intro (fun a ha => (congrFun h a).mp ha) (fun a ha => (congrFun h a).mpr ha)
 
 /-- Soundness and completeness for a filtering generator: the values it actually produces are
 exactly `P`.

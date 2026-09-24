@@ -7,10 +7,7 @@ from tqdm import tqdm
 
 NUM_RUNS = 2
 
-BASE_CMD = [
-    "lake",
-    "env",
-    "lean",
+LEAN_FLAGS = [
     "-Dtrace.profiler=true",
     "-Dweak.palamedes.trace=true",
 ]
@@ -144,7 +141,7 @@ iter = tqdm(FILES * NUM_RUNS, dynamic_ncols=True)
 for file in iter:
     iter.set_description(file)
     try:
-        result = subprocess.run(BASE_CMD + [file],
+        result = subprocess.run(["lake", "lean", file, "--", *LEAN_FLAGS],
                                 capture_output=True,
                                 text=True,
                                 check=True)

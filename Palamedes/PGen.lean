@@ -40,7 +40,7 @@ def TGen.toGen (t : TGen α) : PGen α := ⟨fun {_G} _ _ => t.run⟩
 
 /-! ## Basalt's uniform range draw
 
-`chooseNat` is Basalt vocabulary, like `pick` and `frequency` below, rather than a generator
+`chooseNat` is Basalt vocabulary, like `oneOf` and `frequency` below, rather than a generator
 Palamedes defines: `TGen Nat` is exactly the type of a `Gen`-polymorphic `G Nat`, so the failure-free
 view of it costs a `TGen.mk` and nothing else, and the `PGen` view is that coerced.
 
@@ -71,7 +71,7 @@ instance : Monad PGen where
 
 /-- Uniform binary choice. -/
 def pick (x y : PGen α) : PGen α :=
-  ⟨fun {_G} _ _ => RandomChoice.pick (fun () => x.run) (fun () => y.run)⟩
+  ⟨fun {_G} _ _ => _root_.oneOf [fun () => x.run, fun () => y.run]⟩
 
 /-- Weighted n-ary choice. Branch `(wⱼ, gⱼ)` is selected with probability `wⱼ / Σw`. -/
 def frequency (gs : List (Nat × PGen α)) (h : 0 < (gs.map Prod.fst).sum := by simp) : PGen α :=
@@ -295,16 +295,16 @@ theorem support_bind :
 theorem support_pick :
     support (pick x y) = fun a => support x a ∨ support y a := by
   refine support_ext fun a => ?_
-  show a ∈ SPMF.support (RandomChoice.pick (fun () => x.run) (fun () => y.run)) ↔ _
-  simp only [SPMF.support_pick, Set.mem_union]
+  show a ∈ SPMF.support (_root_.oneOf [fun () => x.run, fun () => y.run] (by simp)) ↔ _
+  simp only [SPMF.support_oneOf, List.mem_cons, List.not_mem_nil, or_false, Set.mem_ofPred_eq,
+    exists_eq_or_imp, exists_eq_left]
   rfl
 
 @[simp]
 theorem support_frequency {gs : List (Nat × PGen α)} (h) :
     support (frequency gs h) = fun a => ∃ w g, (w, g) ∈ gs ∧ 0 < w ∧ support g a := by
   refine support_ext fun a => ?_
-  show a ∈ SPMF.support (_root_.frequency (gs.map fun p => (p.1, fun _ => p.2.run))
-      (by simpa [List.map_map, Function.comp_def] using h)) ↔ _
+  simp only [frequency]
   rw [SPMF.support_frequency]
   simp only [Set.mem_ofPred_eq]
   exact exists_mem_map_weighted (m := fun (g : PGen α) (_ : Unit) => (g.run : SPMF α))
@@ -321,7 +321,8 @@ theorem support_choose :
     support (choose lo hi h) = fun a => lo ≤ a ∧ a ≤ hi := by
   refine support_ext fun v => ?_
   show v ∈ SPMF.support (chooseNat lo hi h) ↔ _
-  exact SPMF.mem_support_chooseNat_iff
+  simp only [chooseNat, SPMF.mem_support_map_iff, SPMF.mem_support_choose_iff, true_and]
+  exact ⟨fun ⟨a, e⟩ => e ▸ a.down.property, fun ⟨h1, h2⟩ => ⟨⟨⟨v, h1, h2⟩⟩, rfl⟩⟩
 
 @[simp]
 theorem support_empty :

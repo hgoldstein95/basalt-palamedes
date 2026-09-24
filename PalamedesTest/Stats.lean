@@ -81,9 +81,9 @@ info: (chooseNat 0 10) — 1000 draws (seed 0, fuel 10000)
 info: (BSTFold.genBSTFold 0 10) — 4000 draws (seed 0, fuel 10000)
 
   outcomes    ok 4000 (100.0%)
-  size        mean 4.2   p50 3   p95 13   max 31
-  choices     mean 4.9   p50 3   p95 16   max 33
-  distinct    963 / 4000
+  size        mean 4.2   p50 3   p95 13   max 27
+  choices     mean 4.9   p50 3   p95 16   max 27
+  distinct    961 / 4000
 
   head constructor
     node    50.4%  (2015)
@@ -109,7 +109,7 @@ info: (RBT.genRBT 1 0 10) — 200 draws (seed 0, fuel 10000)
 
   outcomes    ok 200 (100.0%)
   size        mean 1.0   p50 1   p95 1   max 1
-  choices     mean 13.9   p50 13   p95 25   max 35
+  choices     mean 14.0   p50 13   p95 25   max 40
   distinct    180 / 200
 
   head constructor
