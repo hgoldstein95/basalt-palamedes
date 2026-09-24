@@ -232,8 +232,8 @@ def total_dite
   -- reduce until `b` is concrete.
   ⟨⟨fun {_G} _ => if hb : b then (h₁ hb).val.run else (h₂ hb).val.run⟩, by
     by_cases hb : b = true
-    · simp only [dif_pos hb]; exact (h₁ hb).property
-    · simp only [dif_neg hb]; exact (h₂ hb).property⟩
+    · simp only [dite_eq_left hb]; exact (h₁ hb).property
+    · simp only [dite_eq_right hb]; exact (h₂ hb).property⟩
 
 /-- The non-dependent `ite`, which is **not** an instance of `total_dite`: dispatch is by head
 constant, so an `ite` over an arbitrary decidable `Prop` matches no rule of its own, and `totality`
@@ -247,8 +247,8 @@ def total_ite {c : Prop} [Decidable c] {g₁ g₂ : PGen α}
     : total (if c then g₁ else g₂) :=
   ⟨⟨fun {_G} _ => if c then h₁.val.run else h₂.val.run⟩, by
     by_cases hc : c
-    · simp only [if_pos hc]; exact h₁.property
-    · simp only [if_neg hc]; exact h₂.property⟩
+    · simp only [ite_eq_left hc]; exact h₁.property
+    · simp only [ite_eq_right hc]; exact h₂.property⟩
 
 /- Recursion has no generic totality lemma: each datatype's `unfold` gets its own `X.total_unfold`
 in `Palamedes/Data/`, whose witness is that datatype's `unfold` re-run at the failure-free interface
