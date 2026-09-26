@@ -29,7 +29,7 @@ def samplePartial (g : Plausible.Gen (Option α))
   Plausible.Gen.runUntil (some maxAttempts) (ofOption g) size
 
 /-- Like `samplePartial`, but returns `none` when all `maxAttempts` draws fail rather than throwing.
-The `some`/`none` rate over many draws is an empirical acceptance rate (`massSome`). -/
+The `some`/`none` rate over many draws is an empirical acceptance rate. -/
 def samplePartial? (g : Plausible.Gen (Option α))
     (size : Nat := 100) (maxAttempts : Nat := 1000) : IO (Option α) := do
   try

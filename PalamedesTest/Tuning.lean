@@ -103,12 +103,6 @@ info: genLawful — 30 draws (seed 0, fuel 10000)
     [2, 2]
     []
     []
-
-  laws: sound_complete ✓
-        terminates      — (not proved; measured 0/30 divergences)
-        cost_bounded    — (not proved)
-        filter_free     — (not proved)
-        productive      — (not proved)
 -/
 #guard_msgs in
 #genstats (draws := 30) genLawful
@@ -133,12 +127,6 @@ info: (genLawful (SchedulePolicy.moderate.materialize genLawful.sites)) — 30 d
     [2, 2]
     [2, 2]
     []
-
-  laws: sound_complete ✓
-        terminates      — (not proved; measured 0/30 divergences)
-        cost_bounded    — (not proved)
-        filter_free     — (not proved)
-        productive      — (not proved)
 -/
 #guard_msgs in
 #genstats (draws := 30) (genLawful (SchedulePolicy.moderate.materialize genLawful.sites))

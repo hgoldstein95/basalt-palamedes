@@ -214,9 +214,9 @@ constructor fields. A rose tree (`node : List (Tree α) → Tree α`) is the can
 - `@[correct]` ([Synthesizer/Correct.lean](Palamedes/Synthesizer/Correct.lean)) — the tactic stashes
   its proofs in `synthesisExt` (`FrontEnd.lean`); the attribute, at
   `applicationTime := .afterCompilation`, `addDecl`s them as named theorems. The names follow
-  Basalt's `#genstats` law-naming contract (`<gen>.sound_complete` &c., found by name and
-  statement-checked — basalt's `GenStats/Command.lean` owns the list), so the reports pick them up
-  with no registry. It reports what it emitted. **Two constraints on what crosses that
+  Basalt's law-naming convention (`<gen>.sound_complete`; basalt's `WORKFLOW.md` owns it), so a
+  hand-written Basalt proof about a caller finds the law where it expects it. It reports what it
+  emitted. **Two constraints on what crosses that
   boundary**, both silent failures otherwise: the stash must be closed over
   `declBinders` (the tactic-site local context also holds the recursive self-reference, flagged
   `isAuxDecl`), and it must be metavariable-free *including levels* — the attribute runs in a fresh

@@ -107,9 +107,9 @@ witness together with a proof that its coercion is `g`. Equivalently, `g` is def
 projects out — a `Prop`-valued spelling would erase it. `.val` is the witness the synthesizer
 emits from; `.property` is what carries a support fact across to it.
 
-Deliberately *not* Basalt's almost-sure termination (`SPMF.IsPMF`, mass = 1): an assume-free
-recursive `unfold` can still diverge with probability 1 (an always-`cons` body), so a.s. termination
-is a strictly stronger, orthogonal predicate (`IsPMF ∘ run`). -/
+Deliberately *not* Basalt's almost-sure termination (`IsAlmostSurelyTerminating`, mass = 1): an
+assume-free recursive `unfold` can still diverge with probability 1 (an always-`cons` body), so a.s.
+termination is a strictly stronger, orthogonal predicate (`IsAlmostSurelyTerminating ∘ run`). -/
 def total (g : PGen α) : Type 1 := {t : TGen α // t.toGen = g}
 
 def totalList (gs : List (PGen α)) : Type 1 := {ts : List (TGen α) // ts.map TGen.toGen = gs}
